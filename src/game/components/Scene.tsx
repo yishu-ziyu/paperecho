@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { cn } from "@/lib/utils";
+import { useCameraSway } from "../camera";
 import type { Phase } from "../types";
 import { Starfield } from "./Starfield";
 
@@ -43,9 +44,21 @@ export function Scene({ phase, children, className }: { phase: Phase; children: 
   const still = STILL[phase];
   const indoor =
     phase === "orbit" || phase === "mirror" || phase === "compose" || phase === "fold";
+  const sway = phase !== "throw" && phase !== "flight";
+  const camRef = useCameraSway(sway);
   return (
-    <div className={cn("relative isolate h-dvh overflow-hidden bg-navy text-ink", className)}>
-      <div className="pointer-events-none absolute inset-0">
+    <div
+      className={cn("relative isolate h-dvh overflow-hidden bg-navy text-ink", className)}
+      style={sway ? { perspective: "1200px" } : undefined}
+    >
+      <div
+        ref={camRef}
+        className={cn(
+          "pointer-events-none absolute origin-center will-change-transform",
+          sway ? "inset-[-8%]" : "inset-0",
+        )}
+        style={{ transformStyle: "preserve-3d" }}
+      >
         <AnimatePresence initial={false}>
           <motion.div
             key={layerKey(phase, video, still)}
@@ -80,21 +93,21 @@ export function Scene({ phase, children, className }: { phase: Phase; children: 
             ) : null}
           </motion.div>
         </AnimatePresence>
+        <div
+          className={cn(
+            "pointer-events-none absolute inset-0 transition-[background] duration-500 ease-[cubic-bezier(0.2,0,0,1)]",
+            phase === "title"
+              ? "bg-[linear-gradient(180deg,color-mix(in_oklab,var(--color-navy)_18%,transparent)_0%,transparent_38%,color-mix(in_oklab,var(--color-navy)_72%,transparent)_100%)]"
+              : night
+                ? phase === "flight"
+                  ? "bg-[linear-gradient(180deg,color-mix(in_oklab,var(--color-navy)_28%,transparent)_0%,color-mix(in_oklab,var(--color-navy)_18%,transparent)_48%,color-mix(in_oklab,var(--color-navy)_62%,transparent)_100%)]"
+                  : "bg-[linear-gradient(180deg,color-mix(in_oklab,var(--color-navy)_32%,transparent)_0%,color-mix(in_oklab,var(--color-navy)_40%,transparent)_55%,var(--color-navy)_100%)]"
+                : indoor
+                  ? "bg-[linear-gradient(180deg,color-mix(in_oklab,var(--color-navy)_32%,transparent)_0%,color-mix(in_oklab,var(--color-navy)_14%,transparent)_38%,color-mix(in_oklab,var(--color-navy)_52%,transparent)_100%)]"
+                  : "bg-[linear-gradient(180deg,color-mix(in_oklab,var(--color-navy)_22%,transparent)_0%,color-mix(in_oklab,var(--color-navy)_18%,transparent)_40%,color-mix(in_oklab,var(--color-navy)_55%,transparent)_100%)]",
+          )}
+        />
       </div>
-      <div
-        className={cn(
-          "pointer-events-none absolute inset-0 transition-[background] duration-500 ease-[cubic-bezier(0.2,0,0,1)]",
-          phase === "title"
-            ? "bg-[linear-gradient(180deg,color-mix(in_oklab,var(--color-navy)_18%,transparent)_0%,transparent_38%,color-mix(in_oklab,var(--color-navy)_72%,transparent)_100%)]"
-            : night
-              ? phase === "flight"
-                ? "bg-[linear-gradient(180deg,color-mix(in_oklab,var(--color-navy)_28%,transparent)_0%,color-mix(in_oklab,var(--color-navy)_18%,transparent)_48%,color-mix(in_oklab,var(--color-navy)_62%,transparent)_100%)]"
-                : "bg-[linear-gradient(180deg,color-mix(in_oklab,var(--color-navy)_32%,transparent)_0%,color-mix(in_oklab,var(--color-navy)_40%,transparent)_55%,var(--color-navy)_100%)]"
-              : indoor
-                ? "bg-[linear-gradient(180deg,color-mix(in_oklab,var(--color-navy)_12%,transparent)_0%,transparent_40%,color-mix(in_oklab,var(--color-navy)_38%,transparent)_100%)]"
-                : "bg-[linear-gradient(180deg,color-mix(in_oklab,var(--color-navy)_22%,transparent)_0%,color-mix(in_oklab,var(--color-navy)_18%,transparent)_40%,color-mix(in_oklab,var(--color-navy)_55%,transparent)_100%)]",
-        )}
-      />
       {night ? <Starfield /> : null}
       <div className="relative z-10 flex h-dvh min-h-0 flex-col">{children}</div>
     </div>

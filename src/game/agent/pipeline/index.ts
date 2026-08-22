@@ -8,7 +8,8 @@
  *   synthesize（persona.ts）   —— 把一批 Post 整合成 EchoShadow（合成影子）
  *   respond（respond.ts）      —— 对话循环：从素材库取细节开口回应
  *
- * 本目录与 chains.ts 并行存在，不改动任何现有运行时；未来逐步替换。
+ * 游戏运行时：match 的 research 经 `formatCaseHits` 读 LocalPosts
+ *（手写 12 张 + COLLECTED 预采集改写稿）→ synthesize。crawl / live 仍占位。
  */
 import { synthesize } from "./persona";
 import type { EchoShadow } from "./persona";
@@ -18,7 +19,7 @@ import type { TurnOutput } from "./respond";
 import type { Post, PostSource } from "./source";
 import { crawlPosts, crawlPostsFromPath, type CrawlCorpusRecord } from "./sources/crawl";
 import { liveSearch, liveSearchSource, type LiveProvider } from "./sources/live";
-import { localPosts, storyToPost, summarize } from "./sources/local";
+import { archiveStories, localPosts, storyToPost, summarize } from "./sources/local";
 
 // 类型契约
 export type { PlayerProfile } from "./profile";
@@ -32,7 +33,7 @@ export type { TurnContext, TurnOutput } from "./respond";
 export { emotionsOf, makeProfile };
 
 // 搜索层
-export { localPosts, storyToPost, summarize };
+export { localPosts, storyToPost, summarize, archiveStories };
 export { crawlPosts, crawlPostsFromPath };
 export { liveSearch, liveSearchSource };
 

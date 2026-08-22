@@ -14,6 +14,7 @@ export function JudgePanel() {
   const archival = useGame((s) => s.archival);
   const recall = useGame((s) => s.recall);
   const core = useGame((s) => s.core);
+  const exchange = useGame((s) => s.exchange);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -71,6 +72,7 @@ export function JudgePanel() {
       </dl>
       <p className="mt-3 text-xs text-ink/55">
         {echo ? `${echo.name} · ${echo.city}` : "尚未起飞"}
+        {echo ? ` · 纸层 ${exchange.unlocked}` : ""}
       </p>
       <ul className="mt-2 flex flex-wrap gap-1.5">
         {owned.map((f) => (

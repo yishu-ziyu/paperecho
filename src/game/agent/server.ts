@@ -7,6 +7,8 @@ import type {
   RegionId,
   TokenMeter,
 } from "../types";
+import type { ExchangeState } from "./exchange";
+import { initialExchange } from "./exchange";
 import type { NightInput } from "./types";
 
 export interface AgentPayload {
@@ -14,6 +16,7 @@ export interface AgentPayload {
   letter: string;
   region: RegionId;
   mirror: string;
+  playerPersona?: string;
   archival: MemoryRecord[];
   core?: CoreMemory;
   recall?: { who: "you" | "echo"; text: string }[];
@@ -22,6 +25,7 @@ export interface AgentPayload {
   echo?: EchoPerson | null;
   avoidNames?: string[];
   session?: string;
+  exchange?: ExchangeState;
 }
 
 export interface MatchResult {
@@ -32,6 +36,7 @@ export interface MatchResult {
   facts: string[];
   session: string;
   meter: TokenMeter;
+  exchange: ExchangeState;
 }
 
 export interface TurnResult {
@@ -41,6 +46,7 @@ export interface TurnResult {
   facts: string[];
   session: string;
   meter: TokenMeter;
+  exchange: ExchangeState;
 }
 
 export interface SealResult {
@@ -74,6 +80,7 @@ function asNight(data: AgentPayload): NightInput {
     letter: data.letter,
     region: data.region,
     mirror: data.mirror,
+    playerPersona: data.playerPersona,
     archival: data.archival,
     coreHuman: data.core?.human,
     corePersona: data.core?.persona,
@@ -82,6 +89,7 @@ function asNight(data: AgentPayload): NightInput {
     echo: data.echo,
     avoidNames: data.avoidNames,
     session: unpackSession(data.session),
+    exchange: data.exchange ?? initialExchange(),
   };
 }
 
@@ -98,6 +106,7 @@ export const runMatch = createServerFn({ method: "POST" })
       facts: res.facts,
       session: packSession(res.session),
       meter: res.meter,
+      exchange: res.exchange,
     };
   });
 
@@ -113,6 +122,7 @@ export const runTurn = createServerFn({ method: "POST" })
       facts: res.facts,
       session: packSession(res.session),
       meter: res.meter,
+      exchange: res.exchange,
     };
   });
 

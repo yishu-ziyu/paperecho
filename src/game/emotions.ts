@@ -1,5 +1,5 @@
-import type { Emotion, EmotionId, Fingerprint, TokenPos } from "./types";
-import { CENTER, MAX_RADIUS, MIN_RADIUS } from "./types";
+import type { Emotion, EmotionId, Fingerprint, TokenPos } from "./types.ts";
+import { CENTER, MAX_RADIUS, MIN_RADIUS } from "./types.ts";
 
 export const EMOTIONS: Emotion[] = [
   {

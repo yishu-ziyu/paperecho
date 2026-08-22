@@ -1,6 +1,6 @@
-import { EMOTION_MAP, ownedOf } from "../emotions";
-import { regionLabel } from "../stories";
-import type { EmotionId, Fingerprint, MemoryRecord, RegionId } from "../types";
+import { EMOTION_MAP, ownedOf } from "../emotions.ts";
+import { regionLabel } from "../stories.ts";
+import type { EmotionId, Fingerprint, MemoryRecord, RegionId } from "../types.ts";
 
 const KEY = "paper-echo-memory-v2";
 const VERSION = 3;
@@ -59,6 +59,29 @@ export function isInstruction(text: string): boolean {
   return INSTRUCTION.test(text);
 }
 
+function quotesBalanced(t: string): boolean {
+  const pairs: [string, string][] = [
+    ["「", "」"],
+    ["『", "』"],
+    ["“", "”"],
+  ];
+  for (const [open, close] of pairs) {
+    if ((t.split(open).length - 1) !== (t.split(close).length - 1)) return false;
+  }
+  if ((t.match(/"/g) ?? []).length % 2 !== 0) return false;
+  return true;
+}
+
+/** remember 闸门：只收下完整短句。半截、开引号、残句一律丢掉。 */
+export function isCompleteFact(fact: string): boolean {
+  const t = fact.trim();
+  if (t.length < 4) return false;
+  if (isInstruction(t)) return false;
+  if (!quotesBalanced(t)) return false;
+  if (/[的了没着和把被在]$/.test(t) && t.length < 18) return false;
+  return true;
+}
+
 /** Echo is speaking a previous night's fact as 我 — not a 你上次 nod. */
 export function stolenVoice(text: string, records: MemoryRecord[]): boolean {
   const t = text.trim();
@@ -108,8 +131,8 @@ export function keepPlayerFacts(facts: string[], playerTexts: string[]): string[
   const pool = [...new Set(playerTexts.map((t) => t.trim()).filter((t) => t.length >= 4 && t !== GENERIC && !isInstruction(t)))];
   const out: string[] = [];
   const push = (raw: string) => {
-    const t = raw.trim().slice(0, 48);
-    if (!t || t === GENERIC || isInstruction(t) || /玩家靠近|今晚靠近/.test(t)) return;
+    const t = raw.trim().slice(0, 56);
+    if (!t || t === GENERIC || !isCompleteFact(t) || /玩家靠近|今晚靠近/.test(t)) return;
     if (out.some((x) => x === t || jaccard(tokensOf(x), tokensOf(t)) >= 0.48)) return;
     out.push(t);
   };
@@ -151,9 +174,8 @@ export function applyFacts(
   let next = [...existing];
   for (const raw of facts) {
     const fact = raw.trim();
-    if (fact.length < 4) continue;
+    if (!isCompleteFact(fact)) continue;
     if (/玩家靠近|想被看见 \d|疲惫 \d/.test(fact)) continue;
-    if (isInstruction(fact)) continue;
     const ft = tokensOf(fact);
     let bestI = -1;
     let best = 0;
@@ -195,12 +217,14 @@ export function perceptionOf(
   letter: string,
   mirror: string,
   region: string,
+  persona = "",
 ): string {
   const owned = ownedOf(fp, 0.3)
     .slice(0, 4)
     .map((f) => `${EMOTION_MAP[f.id].label} ${(f.closeness * 100).toFixed(0)}%`);
   const bits = [`今晚靠近：${owned.join("，") || "不明"}`];
-  if (mirror) bits.push(`认领过一句：${mirror}`);
+  if (mirror) bits.push(`他写下的一句：${mirror}`);
+  if (persona) bits.push(`他今晚更像：${persona}`);
   if (letter) bits.push(`他折进来的原话：${letter}`);
   bits.push(`飞向：${regionLabel(region)}`);
   return bits.join("。");

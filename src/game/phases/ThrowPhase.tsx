@@ -36,7 +36,6 @@ export function ThrowPhase() {
   const region = useGame((s) => s.region);
   const pickRegion = useGame((s) => s.pickRegion);
   const launch = useGame((s) => s.launch);
-  const echo = useGame((s) => s.echo);
   const reduce = useReducedMotion();
   const start = useRef<{ x: number; y: number } | null>(null);
   const last = useRef({ p: 0, x: 0, y: 0 });
@@ -260,12 +259,8 @@ export function ThrowPhase() {
     <motion.div className="relative flex min-h-0 flex-1 flex-col px-4" style={{ y: punch }}>
       <Guide
         tone="night"
-        title={echo ? `飞向 ${echo.city}` : "转地球，拉飞机"}
-        body={
-          echo
-            ? `${echo.name} 在窗边等。按住飞机往下拉，松手投出。`
-            : "转到那个地方。没有按钮，拉满再放。"
-        }
+        title="转地球，拉飞机"
+        body="转到那个地方。没有按钮，拉满再放。夜里会找一个也说过类似话的人。"
       />
       <motion.div
         ref={globeRef}
@@ -282,9 +277,7 @@ export function ThrowPhase() {
       </motion.div>
       <p className="min-h-6 text-center text-sm text-paper/80">
         {region && place
-          ? echo
-            ? `${place.city} · ${echo.name}`
-            : `飞向 ${place.city}`
+          ? `飞向 ${place.city}`
           : place
             ? `对着 ${place.city}，拉飞机`
             : "转一转，找到一个亮点"}

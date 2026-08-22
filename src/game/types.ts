@@ -13,7 +13,6 @@ export type Phase =
 /** Ritual steps shown as quiet wayfinding dots. Archive is an exit, not a step. */
 export const JOURNEY: Phase[] = [
   "orbit",
-  "mirror",
   "compose",
   "fold",
   "throw",
@@ -22,7 +21,7 @@ export const JOURNEY: Phase[] = [
   "return",
 ];
 
-export const CAN_BACK: Phase[] = ["orbit", "mirror", "compose", "fold", "throw", "archive"];
+export const CAN_BACK: Phase[] = ["orbit", "compose", "fold", "throw", "archive"];
 
 export type Shape = "circle" | "square" | "diamond" | "pill";
 
@@ -81,6 +80,8 @@ export interface Story {
   opening: string;
   lines: [string, string];
   returnLetter: string;
+  /** 手写核心池默认缺省；预采集改写稿为 "collected"。不进对话上下文。 */
+  source?: "handwritten" | "collected";
 }
 
 export interface EchoPerson {

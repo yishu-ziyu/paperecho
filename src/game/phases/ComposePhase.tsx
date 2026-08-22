@@ -13,7 +13,6 @@ export function ComposePhase() {
   const removeChip = useGame((s) => s.removeChip);
   const setExtra = useGame((s) => s.setExtra);
   const startFold = useGame((s) => s.startFold);
-  const echo = useGame((s) => s.echo);
   const [wantLine, setWantLine] = useState(Boolean(extra));
 
   const drag = useWellDrag<string>((chip) => {
@@ -24,8 +23,8 @@ export function ComposePhase() {
   return (
     <div className="flex flex-1 flex-col px-4">
       <Guide
-        title={echo ? `写给 ${echo.name}` : "把碎片拼进这张纸"}
-        body={echo ? `飞向 ${echo.city}。碎片放到纸上，再把纸往上送。` : "按住碎片，拖到纸上。纸往上拉，就开始折。"}
+        title="把碎片拼进这张纸"
+        body="按住碎片，拖到纸上。纸往上拉，就开始折。"
       />
       <PullCommit
         testId="compose"
@@ -45,9 +44,7 @@ export function ComposePhase() {
             animate={{ rotate: -0.6, scale: drag.over ? 1.02 : 1 }}
             transition={{ type: "spring", stiffness: 280, damping: 22 }}
           >
-            <p className="mb-3 text-xs tracking-[0.18em] text-ink/40">
-              {echo ? `写给 ${echo.name}  ·  ${echo.city}` : "今晚的一张"}
-            </p>
+            <p className="mb-3 text-xs tracking-[0.18em] text-ink/40">今晚的一张</p>
             <ul className="flex min-h-20 flex-wrap content-start gap-2">
               {letterChips.length === 0 ? (
                 <li className="text-sm text-ink/35">{drag.over ? "松开，放进来" : "把下面的碎片拖上来。也可以直接把纸往上送。"}</li>

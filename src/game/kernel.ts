@@ -1,12 +1,12 @@
-import { ownedOf } from "./emotions";
-import { matchStory, storyToEcho } from "./stories";
+import { ownedOf } from "./emotions.ts";
+import { matchStory, storyToEcho } from "./stories.ts";
 import type {
   EchoPerson,
   EmotionId,
   Fingerprint,
   Journey,
   RegionId,
-} from "./types";
+} from "./types.ts";
 
 export function letterFromChips(chips: string[], extra: string): string {
   const body = chips.filter(Boolean).join("，");

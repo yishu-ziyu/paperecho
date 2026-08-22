@@ -4,10 +4,12 @@ export function Guide({
   title,
   body,
   tone = "day",
+  className,
 }: {
   title: string;
   body?: string;
   tone?: "day" | "night";
+  className?: string;
 }) {
   const night = tone === "night";
   return (
@@ -17,6 +19,7 @@ export function Guide({
         night
           ? "rounded-2xl bg-navy/55 text-paper"
           : "clay-sm rounded-2xl",
+        className,
       )}
     >
       <h2

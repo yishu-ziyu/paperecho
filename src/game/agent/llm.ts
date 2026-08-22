@@ -1,5 +1,5 @@
-import type { TokenMeter } from "../types";
-import { LLM_CONFIG } from "./config";
+import type { TokenMeter } from "../types.ts";
+import { LLM_CONFIG } from "./config.ts";
 
 const MODEL = LLM_CONFIG.modelId;
 

@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { initialExchange, type ExchangeState } from "./agent/exchange";
 import { applyFacts, factsOf, keepPlayerFacts, loadArchival, ownLine, persistArchival } from "./agent/memory";
 import { runMatch, runSeal, runTurn } from "./agent/server";
 import type { AgentPayload } from "./agent/server";
@@ -13,11 +14,10 @@ import {
 } from "./emotions";
 import { buildJourney, fallbackEcho, letterFromChips } from "./kernel";
 import { loadJourneys, persistJourneys } from "./save";
-import { matchStoriesTagged, storyToEcho, foreignPlace } from "./stories";
+import { foreignPlace } from "./stories";
 import type {
   CoreMemory,
   EchoPerson,
-  EmotionId,
   Fingerprint,
   Journey,
   MemoryRecord,
@@ -34,8 +34,9 @@ interface GameState {
   tokens: TokenPos[];
   fingerprint: Fingerprint[];
   candidates: Story[];
-  matchedBy: Partial<Record<string, EmotionId>>;
+  matchedBy: Partial<Record<string, import("./types").EmotionId>>;
   selectedMirror: string | null;
+  personaHint: string;
   chips: string[];
   letterChips: string[];
   extraLine: string;
@@ -61,9 +62,13 @@ interface GameState {
   waitingEcho: boolean;
   session: string;
   scorch: 0 | 1 | 2;
+  exchange: ExchangeState;
   setTokens: (tokens: TokenPos[]) => void;
   commitOrbit: () => void;
   pickMirror: (storyId: string) => void;
+  writeMirror: (text: string) => void;
+  commitListen: (text: string, persona?: string) => void;
+  setPersonaHint: (hint: string) => void;
   addChip: (chip: string) => void;
   removeChip: (chip: string) => void;
   setExtra: (line: string) => void;
@@ -105,6 +110,7 @@ function agentPayload(
     extraLine: string;
     region: RegionId | null;
     selectedMirror: string | null;
+    personaHint?: string;
     archival: MemoryRecord[];
     core: CoreMemory;
     recall: { who: "you" | "echo"; text: string }[];
@@ -112,6 +118,7 @@ function agentPayload(
     echo: EchoPerson | null;
     journeys: Journey[];
     session?: string;
+    exchange?: ExchangeState;
   },
   extra: { playerLine?: string } = {},
 ): AgentPayload {
@@ -120,6 +127,7 @@ function agentPayload(
     letter: letterFromChips(s.letterChips, s.extraLine),
     region: s.region ?? "east",
     mirror: s.selectedMirror ?? "",
+    playerPersona: s.personaHint ?? "",
     archival: s.archival,
     core: s.core,
     recall: s.recall,
@@ -128,6 +136,7 @@ function agentPayload(
     echo: s.echo,
     avoidNames: s.journeys.map((j) => j.echo.name).filter(Boolean).slice(0, 8),
     session: s.session ?? "",
+    exchange: s.exchange ?? initialExchange(),
   };
 }
 
@@ -139,6 +148,7 @@ export const useGame = create<GameState>((set, get) => ({
   candidates: [],
   matchedBy: {},
   selectedMirror: null,
+  personaHint: "",
   chips: [],
   letterChips: [],
   extraLine: "",
@@ -164,36 +174,46 @@ export const useGame = create<GameState>((set, get) => ({
   waitingEcho: false,
   session: "",
   scorch: 0,
+  exchange: initialExchange(),
 
   setTokens: (tokens) => set({ tokens, fingerprint: fingerprintOf(tokens) }),
 
   commitOrbit: () => {
     const fp = fingerprintOf(get().tokens);
-    const feels = ownedOf(fp, 0.42).map((f) => f.id);
-    const avoid = get().journeys.map((j) => j.echo.name).filter(Boolean);
-    const tagged = matchStoriesTagged(feels, 3, avoid);
     set({
       fingerprint: fp,
-      candidates: tagged.map((t) => t.story),
-      matchedBy: Object.fromEntries(tagged.map((t) => [t.story.id, t.matchedBy])),
       chips: chipPool(fp),
       replies: replyPool(fp),
-      phase: "mirror",
     });
   },
 
-  pickMirror: (storyId) => {
-    const story = get().candidates.find((s) => s.id === storyId);
-    if (!story) return;
+  pickMirror: () => {
+    /* 倾听同屏后不再走选卡镜认。文件仍留着，避免 Scene Record 崩。 */
+  },
+
+  writeMirror: (text) => {
+    get().commitListen(text, get().personaHint);
+  },
+
+  setPersonaHint: (hint) => set({ personaHint: hint }),
+
+  commitListen: (text, persona) => {
+    const line = text.trim().slice(0, 56);
+    if (line.length < 4) return;
+    const fp = fingerprintOf(get().tokens);
+    const hint = (persona ?? get().personaHint).trim();
     set({
-      selectedMirror: story.opening,
-      region: story.region,
-      echo: storyToEcho(story),
-      chips: chipPool(get().fingerprint),
-      replies: [story.lines[0], story.lines[1], story.opening],
+      fingerprint: fp,
+      selectedMirror: line,
+      personaHint: hint,
+      echo: null,
+      chips: chipPool(fp),
+      replies: replyPool(fp),
       letterChips: [],
       extraLine: "",
       folds: 0,
+      candidates: [],
+      matchedBy: {},
       phase: "compose",
     });
   },
@@ -218,15 +238,12 @@ export const useGame = create<GameState>((set, get) => ({
     const s = get();
     const dest = s.region ?? "east";
     const archival = loadArchival();
-    const pinned = s.echo;
     set({
       throwPower: power,
       phase: "flight",
       searching: true,
-      searchNote: pinned
-        ? `飞向 ${pinned.name} · ${pinned.city}`
-        : "在夜里找一个也说过类似话的人",
-      echo: pinned,
+      searchNote: "在夜里找一个也说过类似话的人",
+      echo: null,
       archival,
       recall: [],
       scorch: 0,
@@ -234,16 +251,17 @@ export const useGame = create<GameState>((set, get) => ({
       hits: [],
       waitingEcho: false,
       session: "",
+      exchange: initialExchange(),
     });
     const letter = letterFromChips(s.letterChips, s.extraLine);
-    const local = pinned ?? fallbackEcho(s.fingerprint, dest);
+    const local = fallbackEcho(s.fingerprint, dest);
     void Promise.race([
       runMatch({
         data: {
-          ...agentPayload({ ...s, archival, session: "" }),
+          ...agentPayload({ ...s, archival, session: "", echo: null }),
           letter,
           region: dest,
-          echo: pinned,
+          echo: null,
         },
       }),
       new Promise<never>((_, reject) =>
@@ -254,32 +272,21 @@ export const useGame = create<GameState>((set, get) => ({
         if (get().phase !== "flight") return;
         sfxMatch();
         const live = res.echo;
-        const stay = pinned
-          ? {
-              name: pinned.name,
-              city: pinned.city,
-              felt: live.felt || pinned.felt,
-              greeting: pinned.greeting,
-              replies: pinned.replies,
-              returnLetter: pinned.returnLetter,
-              source: live.source,
-            }
-          : live;
-        const rawGreet = live.greeting || stay.greeting;
-        const greeting =
-          pinned && (foreignPlace(rawGreet, pinned.name, pinned.city) || !rawGreet)
-            ? pinned.greeting
-            : ownLine(rawGreet, [stay.greeting, ...stay.replies], get().archival);
+        const rawGreet = live.greeting || local.greeting;
+        const greeting = foreignPlace(rawGreet, live.name, live.city)
+          ? local.greeting
+          : ownLine(rawGreet, [live.greeting, ...live.replies, local.greeting], get().archival);
         set({
-          echo: { ...stay, greeting },
+          echo: { ...live, greeting },
           core: res.core,
           suggestions: playerHand(s.fingerprint, s.chips, [greeting, letter, s.extraLine, ...s.letterChips]),
           hits: res.hits,
           meter: res.meter,
           session: res.session,
+          exchange: res.exchange ?? initialExchange(),
           recall: [{ who: "echo", text: greeting }],
           searching: false,
-          searchNote: `到了 ${stay.city}，${stay.name} 读完了你的信`,
+          searchNote: `到了 ${live.city}，${live.name} 读完了你的信`,
         });
       })
       .catch(() => {
@@ -372,6 +379,7 @@ export const useGame = create<GameState>((set, get) => ({
           hits: res.hits,
           meter: res.meter,
           session: res.session,
+          exchange: res.exchange ?? get().exchange,
           recall: [...get().recall, { who: "echo", text: spoken }],
           waitingEcho: false,
         });
@@ -443,8 +451,7 @@ export const useGame = create<GameState>((set, get) => ({
     }
     const prev: Partial<Record<Phase, Phase>> = {
       orbit: "title",
-      mirror: "orbit",
-      compose: "mirror",
+      compose: "orbit",
       fold: "compose",
       throw: "fold",
     };
@@ -452,7 +459,7 @@ export const useGame = create<GameState>((set, get) => ({
     if (!next) return;
     set({
       phase: next,
-      folds: next === "mirror" ? 0 : s.folds,
+      folds: next === "orbit" ? 0 : s.folds,
     });
   },
 
@@ -466,6 +473,7 @@ export const useGame = create<GameState>((set, get) => ({
       candidates: [],
       matchedBy: {},
       selectedMirror: null,
+      personaHint: "",
       chips: [],
       letterChips: [],
       extraLine: "",
@@ -488,6 +496,7 @@ export const useGame = create<GameState>((set, get) => ({
       waitingEcho: false,
       session: "",
       scorch: 0,
+      exchange: initialExchange(),
     });
   },
   openJourney: (j) => set({ reading: j, phase: "archive" }),

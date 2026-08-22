@@ -1,4 +1,4 @@
-import type { EmotionId, RegionId, Story } from "./types";
+import type { EmotionId, RegionId, Story } from "./types.ts";
 
 export const REGIONS: {
   id: RegionId;
@@ -237,7 +237,7 @@ export function storyToEcho(story: Story): import("./types").EchoPerson {
   return {
     name: story.name,
     city: story.city,
-    felt: story.feels.join(","),
+    felt: story.opening,
     greeting: story.opening,
     replies: [story.opening, story.lines[0], story.lines[1]],
     returnLetter: story.returnLetter,
@@ -245,8 +245,31 @@ export function storyToEcho(story: Story): import("./types").EchoPerson {
   };
 }
 
+const PLACE_ALIASES: Record<string, string[]> = {
+  杭州: ["杭州", "西湖", "钱塘"],
+  成都: ["成都", "锦里", "宽窄巷"],
+  Lisbon: ["Lisbon", "里斯本", "Belem", "贝伦"],
+  Chicago: ["Chicago", "芝加哥", "密歇根湖"],
+  Nairobi: ["Nairobi", "内罗毕"],
+  Auckland: ["Auckland", "奥克兰"],
+  Tromsø: ["Tromsø", "Tromso", "特罗姆瑟"],
+  Paris: ["Paris", "巴黎", "塞纳"],
+  台北: ["台北", "淡水"],
+  爱丁堡: ["爱丁堡", "Edinburgh", "Leith", "皇家英里"],
+  墨西哥城: ["墨西哥城", "Mexico"],
+};
+
+/** 身份落在哪座城，说的事就长在哪座城。辞典名/城 + 辞典外地标都算穿帮。 */
 export function foreignPlace(text: string, name: string, city: string): boolean {
   const t = text.trim();
   if (!t) return false;
-  return STORIES.some((s) => (s.name !== name && t.includes(s.name)) || (s.city !== city && t.includes(s.city)));
+  if (STORIES.some((s) => (s.name !== name && t.includes(s.name)) || (s.city !== city && t.includes(s.city)))) {
+    return true;
+  }
+  const home = new Set((PLACE_ALIASES[city] ?? [city]).map((x) => x.toLowerCase()));
+  for (const [place, aliases] of Object.entries(PLACE_ALIASES)) {
+    if (place === city || home.has(place.toLowerCase())) continue;
+    if (aliases.some((a) => a && t.includes(a))) return true;
+  }
+  return false;
 }

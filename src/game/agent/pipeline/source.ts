@@ -4,8 +4,8 @@
  * 搜索层的可插拔数据源契约。任何实现 `PostSource` 的对象都能接进流水线，
  * 换语料只换源，不动 Profile / Persona 两段。
  */
-import type { EmotionId } from "../../types";
-import type { PlayerProfile } from "./profile";
+import type { EmotionId } from "../../types.ts";
+import type { PlayerProfile } from "./profile.ts";
 
 /** 一条「帖子」——搜索层产出、回应层消费的最小单位。 */
 export interface Post {

@@ -5,10 +5,10 @@
  * 它代表「跟你同频的那群人」，不绑定任何具体真人：名字抽象、声音融合、带素材库。
  * 本阶段只做确定性/启发式聚合；真正的 LLM 融合留 TODO。
  */
-import { EMOTION_MAP } from "../../emotions";
-import type { EmotionId } from "../../types";
-import type { PlayerProfile } from "./profile";
-import type { Post } from "./source";
+import { EMOTION_MAP } from "../../emotions.ts";
+import type { EmotionId } from "../../types.ts";
+import type { PlayerProfile } from "./profile.ts";
+import type { Post } from "./source.ts";
 
 /**
  * 合成影子 —— 一批同频帖子的化身。

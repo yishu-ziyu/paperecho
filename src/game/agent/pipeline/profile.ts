@@ -4,8 +4,8 @@
  * 把玩家在游戏里留下的结构化数据合成为「玩家画像」，供搜索层匹配。
  * 三段流水线：Profile（倾听）→ PostSource（搜索）→ synthesize（整合成合成影子）。
  */
-import { ownedOf } from "../../emotions";
-import type { EmotionId, Fingerprint } from "../../types";
+import { ownedOf } from "../../emotions.ts";
+import type { EmotionId, Fingerprint } from "../../types.ts";
 
 /**
  * 玩家画像 —— 搜索层唯一关心的输入。

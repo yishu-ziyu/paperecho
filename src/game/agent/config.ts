@@ -6,7 +6,7 @@
 import { createProvider, envApiKeyAuth } from "@earendil-works/pi-ai";
 import { openAICompletionsApi } from "@earendil-works/pi-ai/api/openai-completions.lazy";
 import type { Model } from "@earendil-works/pi-ai";
-import type { LlmConfig } from "./types";
+import type { LlmConfig } from "./types.ts";
 
 export const LLM_CONFIG: LlmConfig = {
   providerId: "ai-ping",
