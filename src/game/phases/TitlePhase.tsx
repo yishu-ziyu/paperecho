@@ -1,8 +1,10 @@
-import { useRef } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { motion } from "motion/react";
 import { startPad, unlockAudio } from "../audio";
+import { PaperSheet } from "../components/PaperSheet";
 import type { CardRect } from "../components/TitleDive";
-import { Craft, PullCommit } from "../continuum";
+import { PullCommit } from "../continuum";
+import { flowPoints } from "../paperFlow";
 import { useGame } from "../store";
 
 export function TitlePhase({
@@ -10,11 +12,27 @@ export function TitlePhase({
   onLaunch,
 }: {
   diving?: boolean;
-  onLaunch: (from: CardRect) => void;
+  onLaunch: (from: CardRect, u: number) => void;
 }) {
   const goArchive = useGame((s) => s.goArchive);
   const journeys = useGame((s) => s.journeys);
   const cardRef = useRef<HTMLDivElement>(null);
+  const pullRef = useRef(0);
+  const [pull, setPull] = useState(0);
+  const [box, setBox] = useState({ w: 320, h: 352 });
+
+  useLayoutEffect(() => {
+    const el = cardRef.current;
+    if (!el) return;
+    const apply = () => {
+      const r = el.getBoundingClientRect();
+      setBox({ w: r.width, h: r.height });
+    };
+    apply();
+    const ro = new ResizeObserver(apply);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   function enter() {
     const r = cardRef.current?.getBoundingClientRect();
@@ -24,8 +42,12 @@ export function TitlePhase({
       useGame.getState().startNew();
       return;
     }
-    onLaunch({ x: r.left, y: r.top, w: r.width, h: r.height });
+    onLaunch({ x: r.left, y: r.top, w: r.width, h: r.height }, pullRef.current * 0.4);
   }
+
+  const u = pull * 0.4;
+  const local: CardRect = { x: 10, y: 8, w: Math.max(40, box.w - 20), h: Math.max(40, box.h - 16) };
+  const points = flowPoints(u, local, local.x + local.w / 2, local.y + local.h + 48);
 
   return (
     <div className="flex flex-1 flex-col items-center px-5 pt-8 text-center">
@@ -36,19 +58,29 @@ export function TitlePhase({
         threshold={56}
         hint="松开，进房间"
         commitBehavior="morph"
+        onProgress={(t) => {
+          pullRef.current = t;
+          setPull(t);
+        }}
         onCommit={enter}
         className="relative w-[min(92%,22rem)]"
       >
-        <div ref={cardRef} className="relative">
-          <Craft
-            layout={false}
-            className="h-[22rem] w-full rounded-3xl bg-paper/85 clay"
-            style={{ opacity: diving ? 0 : 1 }}
-          />
+        <div ref={cardRef} className="relative h-[22rem] w-full overflow-visible">
+          {!diving ? (
+            <svg
+              width={box.w}
+              height={box.h + 80}
+              viewBox={`0 0 ${box.w} ${box.h + 80}`}
+              className="pointer-events-none absolute top-0 left-0 overflow-visible"
+              aria-hidden
+            >
+              <PaperSheet points={points} u={u} />
+            </svg>
+          ) : null}
           <motion.div
             className="absolute inset-0 flex flex-col items-center justify-center px-6 py-8"
-            animate={{ opacity: diving ? 0 : 1 }}
-            transition={{ duration: 0.12 }}
+            animate={{ opacity: diving ? 0 : Math.max(0, 1 - pull * 1.35) }}
+            transition={{ duration: 0.1 }}
           >
             <h1
               className="font-latin text-[clamp(2.6rem,13vw,4.4rem)] font-bold leading-[0.84] tracking-wide text-ink"

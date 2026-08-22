@@ -27,6 +27,7 @@ export function GameShell() {
   const startNew = useGame((s) => s.startNew);
   const reduce = useReducedMotion();
   const [diveFrom, setDiveFrom] = useState<CardRect | null>(null);
+  const [seedU, setSeedU] = useState(0);
   const diving = Boolean(diveFrom);
 
   useEffect(() => {
@@ -34,13 +35,14 @@ export function GameShell() {
   }, []);
 
   const launch = useCallback(
-    (from: CardRect) => {
+    (from: CardRect, u: number) => {
       unlockAudio();
       startPad();
       if (reduce) {
         startNew();
         return;
       }
+      setSeedU(u);
       setDiveFrom(from);
     },
     [reduce, startNew],
@@ -80,7 +82,7 @@ export function GameShell() {
             {phase === "archive" && <ArchivePhase />}
           </motion.div>
         </AnimatePresence>
-        {diveFrom ? <TitleDive from={diveFrom} onCovered={cover} onDone={finish} /> : null}
+        {diveFrom ? <TitleDive from={diveFrom} seedU={seedU} onCovered={cover} onDone={finish} /> : null}
       </div>
     </Scene>
   );
