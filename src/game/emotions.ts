@@ -9,6 +9,7 @@ export const EMOTIONS: Emotion[] = [
     color: "#5B7C99",
     ink: "#F4EFE6",
     shape: "square",
+    face: { eyes: "downcast", mouth: "flat" },
     mirrors: [
       "我好像一直在往前走，可谁也没有回头看我一眼。",
       "不是大哭的那种难受，是说不出口、也卸不下来。",
@@ -27,6 +28,7 @@ export const EMOTIONS: Emotion[] = [
     color: "#C47A7A",
     ink: "#F4EFE6",
     shape: "circle",
+    face: { eyes: "round", mouth: "frown" },
     mirrors: [
       "我把最好的那面都给出去了，换来的是一句还好。",
       "我想解释，可一开口就觉得自己很小气。",
@@ -45,6 +47,7 @@ export const EMOTIONS: Emotion[] = [
     color: "#D0894B",
     ink: "#243044",
     shape: "diamond",
+    face: { eyes: "round", mouth: "wave", blink: true },
     mirrors: [
       "我在预演还没发生的失败，已经失败了好几轮。",
       "想停下来，手却停不下来。",
@@ -63,6 +66,7 @@ export const EMOTIONS: Emotion[] = [
     color: "#7A8F6A",
     ink: "#F4EFE6",
     shape: "pill",
+    face: { eyes: "half", mouth: "open" },
     mirrors: [
       "不是想放弃，是电池已经闪红灯。",
       "我还在运转，可里面的人已经坐在地上了。",
@@ -81,6 +85,7 @@ export const EMOTIONS: Emotion[] = [
     color: "#6B5B7A",
     ink: "#F4EFE6",
     shape: "circle",
+    face: { eyes: "side", mouth: "none" },
     mirrors: [
       "灯开着。房间里的声音都是我自己的。",
       "我把对话框打开又划掉。最后还是一个人看天花板。",
@@ -99,6 +104,7 @@ export const EMOTIONS: Emotion[] = [
     color: "#C45C4A",
     ink: "#F4EFE6",
     shape: "square",
+    face: { eyes: "brow", mouth: "bite" },
     mirrors: [
       "我把怒气折进衣领里，假装那只是天气。",
       "他们说我太敏感。牙关是热的。",
@@ -117,6 +123,7 @@ export const EMOTIONS: Emotion[] = [
     color: "#7A9AA8",
     ink: "#243044",
     shape: "pill",
+    face: { eyes: "closed", mouth: "smile" },
     mirrors: [
       "我还好。还好里面有一块想被轻轻说出来的地方。",
       "雨停了。我还坐着。",
@@ -135,6 +142,7 @@ export const EMOTIONS: Emotion[] = [
     color: "#C9A46A",
     ink: "#243044",
     shape: "diamond",
+    face: { eyes: "wide", mouth: "open" },
     mirrors: [
       "我改到凌晨的那几页，没有人记得。",
       "已读。可那句认真的还停在那里。",
@@ -151,29 +159,33 @@ export const EMOTIONS: Emotion[] = [
 export const EMOTION_MAP = Object.fromEntries(EMOTIONS.map((e) => [e.id, e])) as Record<EmotionId, Emotion>;
 
 export function clampToRing(x: number, y: number, id: EmotionId): TokenPos {
-  const dx = x - CENTER.x;
-  const dy = y - CENTER.y;
-  const d = Math.hypot(dx, dy);
-  if (d < 0.01) {
-    return { id, x: CENTER.x, y: CENTER.y + MIN_RADIUS };
-  }
+  const dx0 = x - CENTER.x;
+  const dy0 = y - CENTER.y;
+  let d = Math.hypot(dx0, dy0);
+  const nx = d < 0.01 ? 0 : dx0 / d;
+  const ny = d < 0.01 ? 1 : dy0 / d;
+  if (d < 0.01) d = MIN_RADIUS;
+  d = Math.max(MIN_RADIUS, Math.min(MAX_RADIUS, d));
+  let px = CENTER.x + nx * d;
+  let py = CENTER.y + ny * d;
+  px = Math.max(10, Math.min(90, px));
+  py = Math.max(8, Math.min(92, py));
+  const dx = px - CENTER.x;
+  const dy = py - CENTER.y;
+  d = Math.hypot(dx, dy);
   if (d < MIN_RADIUS) {
-    const s = MIN_RADIUS / d;
+    const s = MIN_RADIUS / Math.max(d, 0.01);
     return { id, x: CENTER.x + dx * s, y: CENTER.y + dy * s };
   }
   if (d > MAX_RADIUS) {
     const s = MAX_RADIUS / d;
     return { id, x: CENTER.x + dx * s, y: CENTER.y + dy * s };
   }
-  return {
-    id,
-    x: Math.max(12, Math.min(88, x)),
-    y: Math.max(14, Math.min(84, y)),
-  };
+  return { id, x: px, y: py };
 }
 
 export function seedTokens(): TokenPos[] {
-  const r = 42;
+  const r = 40;
   return EMOTIONS.map((e, i) => {
     const a = (Math.PI * 2 * i) / EMOTIONS.length - Math.PI / 2;
     return clampToRing(CENTER.x + Math.cos(a) * r, CENTER.y + Math.sin(a) * r, e.id);
@@ -190,8 +202,8 @@ export function untangle(tokens: TokenPos[]): TokenPos[] {
         const dx = b.x - a.x;
         const dy = b.y - a.y;
         const d = Math.hypot(dx, dy);
-        if (d >= 20 || d < 0.01) continue;
-        const push = (20 - d) / 2;
+        if (d >= 22 || d < 0.01) continue;
+        const push = (22 - d) / 2;
         const nx = dx / d;
         const ny = dy / d;
         a.x -= nx * push;
@@ -231,17 +243,6 @@ export function mixBlobColor(fp: Fingerprint[]): string {
   const top = ownedOf(fp, 0.35).slice(0, 2);
   if (!top.length) return "#C9B8A4";
   return EMOTION_MAP[top[0]!.id].color;
-}
-
-export function mirrorLines(fp: Fingerprint[]): string[] {
-  const owned = ownedOf(fp);
-  const lines: string[] = [];
-  for (const f of owned.slice(0, 2)) {
-    lines.push(...EMOTION_MAP[f.id].mirrors);
-  }
-  const unique = [...new Set(lines)];
-  while (unique.length < 3) unique.push("今晚我想把一句说不出口的话折起来。");
-  return unique.slice(0, 3);
 }
 
 export function chipPool(fp: Fingerprint[]): string[] {

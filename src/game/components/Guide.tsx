@@ -16,12 +16,12 @@ export function Guide({
         "pointer-events-none mx-auto max-w-md px-4 py-2 text-center",
         night
           ? "rounded-2xl bg-navy/55 text-paper"
-          : "rounded-2xl bg-paper/92 text-ink shadow-[0_10px_28px_rgba(36,48,68,0.08)]",
+          : "clay-sm rounded-2xl",
       )}
     >
       <h2
         className={cn(
-          "font-display text-[clamp(1.05rem,3vw,1.35rem)] font-normal leading-snug tracking-[0.1em] break-keep",
+          "font-display text-[clamp(1.05rem,3vw,1.4rem)] font-semibold leading-snug tracking-[0.06em] break-keep",
           night ? "text-paper" : "text-ink",
         )}
       >

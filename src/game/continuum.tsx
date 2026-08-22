@@ -1,6 +1,7 @@
-import { type PointerEvent as ReactPointerEvent, type ReactNode, useEffect, useRef, useState } from "react";
+import { type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode, useEffect, useRef, useState } from "react";
 import { animate, motion, useMotionValue, useReducedMotion } from "motion/react";
 import { cn } from "@/lib/utils";
+import { sfxCharge, unlockAudio } from "./audio";
 import { hideGhost, landGhost, moveGhost } from "./follow";
 import { spring } from "./motion";
 
@@ -11,17 +12,21 @@ export function Craft({
   children,
   className,
   layout = true,
+  style,
 }: {
   children?: ReactNode;
   className?: string;
   layout?: boolean;
+  style?: CSSProperties;
 }) {
   return (
     <motion.div
       layoutId={layout ? CRAFT_ID : undefined}
       data-craft=""
       className={className}
+      style={style}
       transition={spring.settle}
+      exit={{ opacity: 1 }}
     >
       {children}
     </motion.div>
@@ -52,6 +57,7 @@ export function PullCommit({
   className,
   testId,
   disabledHint,
+  commitBehavior = "fly",
 }: {
   enabled: boolean;
   axis?: "x" | "y";
@@ -64,20 +70,26 @@ export function PullCommit({
   children: ReactNode;
   className?: string;
   testId: string;
+  commitBehavior?: "fly" | "morph";
 }) {
   const reduce = useReducedMotion();
   const x = useMotionValue(0);
   const y = useMotionValue(0);
+  const progress = useMotionValue(0);
+  const hintOpacity = progress;
   const start = useRef<{ x: number; y: number } | null>(null);
   const locked = useRef(false);
   const dragging = useRef(false);
+  const armedOnce = useRef(false);
   const [armed, setArmed] = useState(false);
   const commitRef = useRef(onCommit);
   const progressRef = useRef(onProgress);
   const enabledRef = useRef(enabled);
+  const behaviorRef = useRef(commitBehavior);
   commitRef.current = onCommit;
   progressRef.current = onProgress;
   enabledRef.current = enabled;
+  behaviorRef.current = commitBehavior;
 
   useEffect(() => {
     function onMove(e: PointerEvent) {
@@ -94,8 +106,16 @@ export function PullCommit({
         y.set(dy * 0.1);
       }
       const t = Math.min(1, mapped / threshold);
+      progress.set(t);
       progressRef.current?.(t);
-      setArmed(mapped > threshold);
+      const nextArmed = mapped > threshold;
+      if (nextArmed && !armedOnce.current && enabledRef.current) {
+        armedOnce.current = true;
+        sfxCharge();
+        navigator.vibrate?.(10);
+      }
+      if (!nextArmed) armedOnce.current = false;
+      setArmed(nextArmed);
     }
     function onUp() {
       if (!dragging.current) return;
@@ -106,12 +126,21 @@ export function PullCommit({
       if (enabledRef.current && dist > threshold) {
         locked.current = true;
         setArmed(false);
-        const fly = threshold * 2.6 * sign;
-        void animate(axis === "y" ? y : x, fly, spring.launch);
-        window.setTimeout(() => commitRef.current(), 240);
+        if (behaviorRef.current === "morph") {
+          commitRef.current();
+          void animate(x, 0, spring.settle);
+          void animate(y, 0, spring.settle);
+          progress.set(0);
+        } else {
+          const fly = threshold * 2.6 * sign;
+          void animate(axis === "y" ? y : x, fly, spring.launch);
+          window.setTimeout(() => commitRef.current(), 240);
+        }
         return;
       }
       setArmed(false);
+      armedOnce.current = false;
+      progress.set(0);
       progressRef.current?.(0);
       void animate(x, 0, spring.snap);
       void animate(y, 0, spring.snap);
@@ -124,7 +153,7 @@ export function PullCommit({
       window.removeEventListener("pointerup", onUp, { capture: true });
       window.removeEventListener("pointercancel", onUp, { capture: true });
     };
-  }, [axis, sign, threshold, x, y]);
+  }, [axis, sign, threshold, x, y, progress]);
 
   return (
     <motion.div
@@ -139,6 +168,7 @@ export function PullCommit({
         if (e.button != null && e.button !== 0) return;
         if (locked.current) return;
         e.preventDefault();
+        unlockAudio();
         (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
         x.stop();
         y.stop();
@@ -161,11 +191,15 @@ export function PullCommit({
       }}
     >
       {children}
-      {armed ? (
-        <span className="pointer-events-none absolute -bottom-6 left-1/2 -translate-x-1/2 whitespace-nowrap text-[0.65rem] tracking-[0.18em] text-coral">
-          {enabled ? hint ?? "松开" : disabledHint ?? "还不行"}
-        </span>
-      ) : null}
+      <motion.span
+        className={cn(
+          "pointer-events-none absolute -bottom-6 left-1/2 -translate-x-1/2 whitespace-nowrap text-[0.65rem] tracking-[0.18em]",
+          armed ? "text-coral" : "text-paper/70",
+        )}
+        style={{ opacity: hintOpacity }}
+      >
+        {enabled ? hint ?? "松开" : disabledHint ?? "还不行"}
+      </motion.span>
     </motion.div>
   );
 }
@@ -235,4 +269,3 @@ export function useWellDrag<T>(onDrop: (value: T) => void, opts?: { floor?: bool
 
   return { wellRef, ghostRef, holding, over, grab };
 }
-

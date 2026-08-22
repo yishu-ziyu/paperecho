@@ -204,6 +204,17 @@ export function matchStories(feels: EmotionId[], n = 3, avoid: string[] = []): S
   return out.slice(0, n);
 }
 
+export function matchStoriesTagged(
+  feels: EmotionId[],
+  n = 3,
+  avoid: string[] = [],
+): { story: Story; matchedBy: EmotionId }[] {
+  return matchStories(feels, n, avoid).map((story) => ({
+    story,
+    matchedBy: story.feels.find((f) => feels.includes(f)) ?? story.feels[0]!,
+  }));
+}
+
 export function matchStory(
   feels: EmotionId[],
   region: RegionId,

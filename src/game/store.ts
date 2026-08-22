@@ -13,10 +13,11 @@ import {
 } from "./emotions";
 import { buildJourney, fallbackEcho, letterFromChips } from "./kernel";
 import { loadJourneys, persistJourneys } from "./save";
-import { matchStories, storyToEcho, foreignPlace } from "./stories";
+import { matchStoriesTagged, storyToEcho, foreignPlace } from "./stories";
 import type {
   CoreMemory,
   EchoPerson,
+  EmotionId,
   Fingerprint,
   Journey,
   MemoryRecord,
@@ -33,6 +34,7 @@ interface GameState {
   tokens: TokenPos[];
   fingerprint: Fingerprint[];
   candidates: Story[];
+  matchedBy: Partial<Record<string, EmotionId>>;
   selectedMirror: string | null;
   chips: string[];
   letterChips: string[];
@@ -58,6 +60,7 @@ interface GameState {
   hits: string[];
   waitingEcho: boolean;
   session: string;
+  scorch: 0 | 1 | 2;
   setTokens: (tokens: TokenPos[]) => void;
   commitOrbit: () => void;
   pickMirror: (storyId: string) => void;
@@ -78,6 +81,7 @@ interface GameState {
   startFold: () => void;
   goThrow: () => void;
   arrive: () => void;
+  markScorch: () => void;
 }
 
 const emptyMeter = (): TokenMeter => ({
@@ -133,6 +137,7 @@ export const useGame = create<GameState>((set, get) => ({
   tokens: seedTokens(),
   fingerprint: [],
   candidates: [],
+  matchedBy: {},
   selectedMirror: null,
   chips: [],
   letterChips: [],
@@ -158,6 +163,7 @@ export const useGame = create<GameState>((set, get) => ({
   hits: [],
   waitingEcho: false,
   session: "",
+  scorch: 0,
 
   setTokens: (tokens) => set({ tokens, fingerprint: fingerprintOf(tokens) }),
 
@@ -165,9 +171,11 @@ export const useGame = create<GameState>((set, get) => ({
     const fp = fingerprintOf(get().tokens);
     const feels = ownedOf(fp, 0.42).map((f) => f.id);
     const avoid = get().journeys.map((j) => j.echo.name).filter(Boolean);
+    const tagged = matchStoriesTagged(feels, 3, avoid);
     set({
       fingerprint: fp,
-      candidates: matchStories(feels, 3, avoid),
+      candidates: tagged.map((t) => t.story),
+      matchedBy: Object.fromEntries(tagged.map((t) => [t.story.id, t.matchedBy])),
       chips: chipPool(fp),
       replies: replyPool(fp),
       phase: "mirror",
@@ -215,10 +223,13 @@ export const useGame = create<GameState>((set, get) => ({
       throwPower: power,
       phase: "flight",
       searching: true,
-      searchNote: pinned ? `飞向 ${pinned.name} · ${pinned.city}` : "在夜里找一个也说过类似话的人",
+      searchNote: pinned
+        ? `飞向 ${pinned.name} · ${pinned.city}`
+        : "在夜里找一个也说过类似话的人",
       echo: pinned,
       archival,
       recall: [],
+      scorch: 0,
       suggestions: [],
       hits: [],
       waitingEcho: false,
@@ -283,7 +294,7 @@ export const useGame = create<GameState>((set, get) => ({
           meter: emptyMeter(),
           recall: [{ who: "echo", text: local.greeting }],
           searching: false,
-          searchNote: "线路不稳，改从信柜里取一封相近的旧信",
+          searchNote: "线路不稳，改从本地故事里取一封相近的信",
         });
       });
   },
@@ -453,6 +464,7 @@ export const useGame = create<GameState>((set, get) => ({
       tokens,
       fingerprint: fingerprintOf(tokens),
       candidates: [],
+      matchedBy: {},
       selectedMirror: null,
       chips: [],
       letterChips: [],
@@ -467,6 +479,7 @@ export const useGame = create<GameState>((set, get) => ({
       replies: [],
       chosenReplies: [],
       reading: null,
+      meter: emptyMeter(),
       core: cabinetCore(),
       archival: loadArchival(),
       recall: [],
@@ -474,6 +487,7 @@ export const useGame = create<GameState>((set, get) => ({
       hits: [],
       waitingEcho: false,
       session: "",
+      scorch: 0,
     });
   },
   openJourney: (j) => set({ reading: j, phase: "archive" }),
@@ -482,4 +496,5 @@ export const useGame = create<GameState>((set, get) => ({
   startFold: () => set({ phase: "fold", folds: 0 }),
   goThrow: () => set({ phase: "throw" }),
   arrive: () => set({ phase: "encounter", round: 0 }),
+  markScorch: () => set({ scorch: Math.min(2, get().scorch + 1) as 0 | 1 | 2 }),
 }));

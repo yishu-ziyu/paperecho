@@ -16,8 +16,9 @@ import { TitlePhase } from "./phases/TitlePhase";
 import { useGame } from "./store";
 
 /**
- * Continuum: chrome crossfades, the craft (paper/plane) morphs via layoutId.
- * Never wait-mode — that would leave a hole between the hand and the object.
+ * Continuum: chrome may overlap, the craft morphs via layoutId.
+ * Overlay the phases (absolute) so sync-presence cannot split the column
+ * and layoutId always interpolates in the same viewport box.
  */
 export function GameShell() {
   const phase = useGame((s) => s.phase);
@@ -30,27 +31,29 @@ export function GameShell() {
     <Scene phase={phase}>
       {phase !== "title" ? <Hud /> : null}
       <JudgePanel />
-      <AnimatePresence mode="sync" initial={false}>
-        <motion.div
-          key={phase}
-          className="flex min-h-0 flex-1 flex-col overflow-hidden"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1, pointerEvents: "auto" }}
-          exit={{ opacity: 0, pointerEvents: "none" }}
-          transition={{ duration: 0.28, ease: [0.2, 0, 0, 1] }}
-        >
-          {phase === "title" && <TitlePhase />}
-          {phase === "orbit" && <OrbitPhase />}
-          {phase === "mirror" && <MirrorPhase />}
-          {phase === "compose" && <ComposePhase />}
-          {phase === "fold" && <FoldPhase />}
-          {phase === "throw" && <ThrowPhase />}
-          {phase === "flight" && <FlightPhase />}
-          {phase === "encounter" && <EncounterPhase />}
-          {phase === "return" && <ReturnPhase />}
-          {phase === "archive" && <ArchivePhase />}
-        </motion.div>
-      </AnimatePresence>
+      <div className="relative min-h-0 flex-1">
+        <AnimatePresence mode="sync" initial={false}>
+          <motion.div
+            key={phase}
+            className="absolute inset-0 flex min-h-0 flex-col overflow-hidden"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1, pointerEvents: "auto" }}
+            exit={{ opacity: 0, pointerEvents: "none" }}
+            transition={{ duration: 0.2, ease: [0.2, 0, 0, 1] }}
+          >
+            {phase === "title" && <TitlePhase />}
+            {phase === "orbit" && <OrbitPhase />}
+            {phase === "mirror" && <MirrorPhase />}
+            {phase === "compose" && <ComposePhase />}
+            {phase === "fold" && <FoldPhase />}
+            {phase === "throw" && <ThrowPhase />}
+            {phase === "flight" && <FlightPhase />}
+            {phase === "encounter" && <EncounterPhase />}
+            {phase === "return" && <ReturnPhase />}
+            {phase === "archive" && <ArchivePhase />}
+          </motion.div>
+        </AnimatePresence>
+      </div>
     </Scene>
   );
 }

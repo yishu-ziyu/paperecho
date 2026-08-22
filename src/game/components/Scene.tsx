@@ -5,20 +5,23 @@ import type { Phase } from "../types";
 import { Starfield } from "./Starfield";
 
 const STILL: Record<Phase, string | null> = {
-  title: null,
+  title: "/scenes/title.jpg",
   orbit: "/scenes/room.jpg",
   mirror: "/scenes/room.jpg",
   compose: "/scenes/room.jpg",
   fold: "/scenes/room.jpg",
-  throw: null,
-  flight: null,
+  throw: "/scenes/sky.jpg",
+  flight: "/scenes/sky.jpg",
   encounter: "/scenes/echo.jpg",
   return: "/scenes/echo.jpg",
   archive: "/scenes/drawer.jpg",
 };
 
 const VIDEO: Partial<Record<Phase, string>> = {
-  title: "/scenes/room.mp4",
+  orbit: "/scenes/room.mp4",
+  mirror: "/scenes/room.mp4",
+  compose: "/scenes/room.mp4",
+  fold: "/scenes/room.mp4",
   flight: "/scenes/flight.mp4",
 };
 
@@ -27,7 +30,7 @@ function layerKey(phase: Phase, video?: string, still?: string | null) {
 }
 
 export function Scene({ phase, children, className }: { phase: Phase; children: ReactNode; className?: string }) {
-  const night = phase === "flight" || phase === "throw";
+  const night = phase === "flight" || phase === "throw" || phase === "title";
   const [allowVideo, setAllowVideo] = useState(true);
   useEffect(() => {
     const q = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -59,7 +62,7 @@ export function Scene({ phase, children, className }: { phase: Phase; children: 
                 muted
                 loop
                 playsInline
-                poster={phase === "flight" ? "/scenes/sky.jpg" : "/scenes/room.jpg"}
+                poster={phase === "flight" ? "/scenes/sky.jpg" : still || "/scenes/room.jpg"}
                 className="absolute inset-0 h-full w-full object-cover"
               />
             ) : still ? (
@@ -69,7 +72,9 @@ export function Scene({ phase, children, className }: { phase: Phase; children: 
                 crossOrigin="anonymous"
                 className={cn(
                   "absolute inset-0 h-full w-full object-cover",
-                  indoor && "object-[center_82%]",
+                  indoor && "object-[center_42%]",
+                  phase === "title" && "object-[center_58%]",
+                  phase === "encounter" && "object-[center_28%]",
                 )}
               />
             ) : null}
@@ -79,13 +84,15 @@ export function Scene({ phase, children, className }: { phase: Phase; children: 
       <div
         className={cn(
           "pointer-events-none absolute inset-0 transition-[background] duration-500 ease-[cubic-bezier(0.2,0,0,1)]",
-          night
-            ? phase === "flight"
-              ? "bg-[linear-gradient(180deg,color-mix(in_oklab,var(--color-navy)_35%,transparent)_0%,color-mix(in_oklab,var(--color-navy)_25%,transparent)_50%,color-mix(in_oklab,var(--color-navy)_70%,transparent)_100%)]"
-              : "bg-[linear-gradient(180deg,color-mix(in_oklab,var(--color-navy)_42%,transparent)_0%,color-mix(in_oklab,var(--color-navy)_55%,transparent)_55%,var(--color-navy)_100%)]"
-            : phase === "title"
-              ? "bg-[linear-gradient(180deg,color-mix(in_oklab,var(--color-paper)_55%,transparent)_0%,color-mix(in_oklab,var(--color-paper)_18%,transparent)_42%,color-mix(in_oklab,var(--color-paper)_72%,transparent)_100%)]"
-              : "bg-[linear-gradient(180deg,color-mix(in_oklab,var(--color-paper)_84%,transparent)_0%,color-mix(in_oklab,var(--color-paper)_62%,transparent)_42%,color-mix(in_oklab,var(--color-paper)_88%,transparent)_100%)]",
+          phase === "title"
+            ? "bg-[linear-gradient(180deg,color-mix(in_oklab,var(--color-navy)_18%,transparent)_0%,transparent_38%,color-mix(in_oklab,var(--color-navy)_72%,transparent)_100%)]"
+            : night
+              ? phase === "flight"
+                ? "bg-[linear-gradient(180deg,color-mix(in_oklab,var(--color-navy)_28%,transparent)_0%,color-mix(in_oklab,var(--color-navy)_18%,transparent)_48%,color-mix(in_oklab,var(--color-navy)_62%,transparent)_100%)]"
+                : "bg-[linear-gradient(180deg,color-mix(in_oklab,var(--color-navy)_32%,transparent)_0%,color-mix(in_oklab,var(--color-navy)_40%,transparent)_55%,var(--color-navy)_100%)]"
+              : indoor
+                ? "bg-[linear-gradient(180deg,color-mix(in_oklab,var(--color-navy)_12%,transparent)_0%,transparent_40%,color-mix(in_oklab,var(--color-navy)_38%,transparent)_100%)]"
+                : "bg-[linear-gradient(180deg,color-mix(in_oklab,var(--color-navy)_22%,transparent)_0%,color-mix(in_oklab,var(--color-navy)_18%,transparent)_40%,color-mix(in_oklab,var(--color-navy)_55%,transparent)_100%)]",
         )}
       />
       {night ? <Starfield /> : null}
