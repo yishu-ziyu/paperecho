@@ -18,6 +18,7 @@ export function BloubBot({
   state = "idle",
   paper = "#f0e6d2",
   look = null,
+  tight = true,
   title,
   className,
 }: {
@@ -28,6 +29,8 @@ export function BloubBot({
   state?: StateId;
   paper?: string;
   look?: { x: number; y: number } | null;
+  /** Crop the ring margin. Idle faces don't need the 158-unit orbit box. */
+  tight?: boolean;
   title?: string | null;
   className?: string;
 }) {
@@ -87,7 +90,7 @@ export function BloubBot({
     return () => cancelAnimationFrame(raf);
   }, [frozenAt]);
 
-  const vb = DEMI_VIEWBOX;
+  const vb = tight ? 122 : DEMI_VIEWBOX;
   const ink = color;
   const label = title === undefined ? "bot" : title;
 
