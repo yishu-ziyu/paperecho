@@ -2,9 +2,8 @@ import { useRef, useState, type RefObject } from "react";
 import { useDrag } from "@use-gesture/react";
 import { cn } from "@/lib/utils";
 import { sfxDrop, sfxPickup } from "../audio";
-import { Blob } from "../components/Blob";
+import { EmotionCreature } from "../components/EmotionCreature";
 import { Guide } from "../components/Guide";
-import { TokenFace } from "../components/TokenFace";
 import { Craft, PullCommit } from "../continuum";
 import { closenessOf, clampToRing, EMOTION_MAP, mixBlobColor, nearOf, untangle } from "../emotions";
 import { rafThrottle, writePct } from "../follow";
@@ -22,10 +21,9 @@ export function OrbitPhase() {
   const [gaze, setGaze] = useState<{ x: number; y: number } | null>(null);
   const owned = nearOf(fp, 0.42);
   const color = mixBlobColor(fp.length ? fp : tokens.map((t) => ({ id: t.id, closeness: closenessOf(t) })));
-  const mood = owned[0]?.closeness ?? 0.4;
   const heldToken = held ? tokens.find((t) => t.id === held) : null;
   const heldClose = heldToken ? closenessOf(heldToken) : 0;
-  const pad = (MIN_RADIUS + 3) * 2;
+  const pad = (MIN_RADIUS + 4) * 2;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -82,7 +80,15 @@ export function OrbitPhase() {
               onCommit={commitOrbit}
               className="relative"
             >
-              <Blob color={color} size={52} mood={mood} label="你" />
+              <EmotionCreature
+                id="you"
+                color={color}
+                awake={owned.length > 0}
+                gather={gather}
+                size={58}
+                label="你"
+                title="你"
+              />
             </PullCommit>
           </div>
           {tokens.map((t) => (
@@ -180,47 +186,25 @@ function Token({
   const gy = (CENTER.y - token.y) * g * 0.22;
   const scale = near ? 1 - gather * 0.12 : 1 - gather * 0.04;
   const awake = close >= 0.42;
-  const diamond = e.shape === "diamond";
 
   return (
     <button
       type="button"
       aria-label={e.label}
       {...bind()}
-      className={cn("absolute z-10 flex w-11 touch-none flex-col items-center", active && "z-40")}
+      className={cn("absolute z-10 flex w-14 touch-none flex-col items-center", active && "z-40")}
       style={{
         left: `${token.x}%`,
         top: `${token.y}%`,
         opacity: near ? 1 : 0.92 - gather * 0.35,
         transform: `translate(-50%, -50%) translate(${gx}%, ${gy}%) scale(${active ? 1.08 : scale})`,
+        filter: near
+          ? `drop-shadow(0 0 10px color-mix(in oklab, ${e.color} 55%, transparent))`
+          : undefined,
       }}
     >
-      <span
-        className={cn(
-          "grid size-11 place-items-center",
-          !active && !diamond && gather < 0.08 && "token-float",
-        )}
-        style={{
-          background: e.color,
-          color: e.ink,
-          borderRadius: e.shape === "circle" || e.shape === "pill" ? "999px" : "12px",
-          transform: diamond ? "rotate(45deg)" : undefined,
-          boxShadow: near
-            ? `0 0 0 2px var(--color-paper), 0 0 0 5px color-mix(in oklab, ${e.color} 55%, transparent), 0 6px 0 color-mix(in oklab, ${e.color} 65%, #1a2744)`
-            : "0 0 0 2px var(--color-paper), 0 5px 0 #cbbda3, 0 10px 16px rgba(12,20,40,0.28)",
-        }}
-      >
-        <span
-          className="grid size-8 place-items-center rounded-full bg-paper text-ink"
-          style={{
-            transform: diamond ? "rotate(-45deg)" : undefined,
-            ["--face-hole" as string]: "var(--color-paper)",
-          }}
-        >
-          <TokenFace id={token.id} awake={awake} held={active} gaze={gaze} blink={Boolean(e.face.blink)} size={30} />
-        </span>
-      </span>
-      <span className="pointer-events-none absolute top-[calc(100%+4px)] left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-paper/92 px-1.5 py-0.5 text-[10px] leading-none text-ink shadow-sm">
+      <EmotionCreature id={token.id} awake={awake} held={active} gather={g} gaze={gaze} size={active ? 58 : 52} />
+      <span className="pointer-events-none absolute top-[calc(100%+2px)] left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-paper/92 px-1.5 py-0.5 text-[10px] leading-none text-ink shadow-sm">
         {e.label}
       </span>
     </button>

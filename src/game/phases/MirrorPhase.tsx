@@ -2,7 +2,7 @@ import { motion } from "motion/react";
 import { cn } from "@/lib/utils";
 import { sfxPaper } from "../audio";
 import { Guide } from "../components/Guide";
-import { TokenFace } from "../components/TokenFace";
+import { EmotionCreature } from "../components/EmotionCreature";
 import { Craft, useWellDrag } from "../continuum";
 import { EMOTION_MAP, ownedOf } from "../emotions";
 import { spring } from "../motion";
@@ -32,16 +32,10 @@ export function MirrorPhase() {
               initial={{ y: -16, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               transition={spring.settle}
-              className="grid size-9 place-items-center rounded-full"
-              style={{ background: e.color, color: e.ink }}
+              className="grid place-items-center"
               title={e.label}
             >
-              <span
-                className="grid size-6 place-items-center rounded-full bg-paper text-ink"
-                style={{ ["--face-hole" as string]: "var(--color-paper)" }}
-              >
-                <TokenFace id={f.id} awake size={22} />
-              </span>
+              <EmotionCreature id={f.id} awake size={34} title={e.label} />
             </motion.li>
           );
         })}

@@ -99,6 +99,13 @@
   animation: token-float 3.2s ease-in-out infinite;
 }
 
+.emotion-creature {
+  overflow: visible;
+  filter:
+    drop-shadow(0 7px 0 color-mix(in oklab, currentColor 42%, #1a2744))
+    drop-shadow(0 14px 16px rgba(12, 20, 40, 0.3));
+}
+
 .cloud {
   will-change: transform;
 }
