@@ -47,7 +47,7 @@ export function TitlePhase({
 
   const u = pull * 0.4;
   const local: CardRect = { x: 10, y: 8, w: Math.max(40, box.w - 20), h: Math.max(40, box.h - 16) };
-  const points = flowPoints(u, local, local.x + local.w / 2, local.y + local.h + 48);
+  const points = flowPoints(u, local);
 
   return (
     <div className="flex flex-1 flex-col items-center px-5 pt-8 text-center">
