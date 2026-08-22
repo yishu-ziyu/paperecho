@@ -23,14 +23,17 @@
 ```bash
 npm install
 cp .env.example .env
-# 填入 XAI_API_KEY 后，夜里会去找一个也说过类似话的人
+# 填入 AI_PING_API_KEY 后，夜里会去找一个也说过类似话的人
 npm run dev
 ```
 
-浏览器打开提示的地址。没有 API key 时，会从信柜里取一封相近的旧信。
+浏览器打开提示的地址。没有 API key / 请求超时时，自动回退到本地故事卡，旅程仍可完整走完。
+
+Agent 由 AI PING 提供（`https://aiping.cn/api/v1`），模型为 `DeepSeek-V4-Flash-0731`。
 
 ## 技术
 
 - React 19 · TanStack Start · Vite · Tailwind v4
 - Motion 弹簧跟手 · Cobe 地球
-- Pi-style agent harness（工具循环直到不再调用）
+- Pi Agent 驱动三步 Prompt Chain（match / turn / seal），确定性检索 → 单工具 LLM 步 → 校验闸门
+- AI 输出永远被规则夹住：禁止安慰词、禁偷玩家原话、禁串城；离线也能完整完成一局

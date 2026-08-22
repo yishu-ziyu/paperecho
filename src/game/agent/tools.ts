@@ -3,47 +3,6 @@ import { STORIES } from "../stories";
 import type { EmotionId, Fingerprint, MemoryRecord, RegionId } from "../types";
 import { isInstruction, searchArchival } from "./memory";
 
-export const AGENT_TOOLS = [
-  {
-    type: "function" as const,
-    function: {
-      name: "search_archive",
-      description: "从信柜里搜这个玩家以前留下的短事实。开口前若可能见过他，先查。",
-      parameters: {
-        type: "object",
-        properties: { query: { type: "string", description: "几个关键词或原话" } },
-        required: ["query"],
-      },
-    },
-  },
-  {
-    type: "function" as const,
-    function: {
-      name: "search_cases",
-      description: "从世界档案里搜相似夜晚的人：名字、城市、他们自己说过的具体事。",
-      parameters: {
-        type: "object",
-        properties: {
-          query: { type: "string", description: "情绪或具体事，如 改到凌晨 委屈" },
-        },
-        required: ["query"],
-      },
-    },
-  },
-  {
-    type: "function" as const,
-    function: {
-      name: "remember",
-      description: "把一条关于玩家的具体事实写进信柜。必须是事或原话，不要情绪标签。",
-      parameters: {
-        type: "object",
-        properties: { fact: { type: "string", description: "≤18字的具体事实" } },
-        required: ["fact"],
-      },
-    },
-  },
-];
-
 export interface ToolCtx {
   archival: MemoryRecord[];
   fingerprint: Fingerprint[];

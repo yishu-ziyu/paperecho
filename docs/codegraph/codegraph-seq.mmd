@@ -1,0 +1,36 @@
+sequenceDiagram
+    participant U as 玩家(手势)
+    participant ST as store.ts
+    participant SV as server.ts(ServerFn)
+    participant CH as chains.ts(echoChain)
+    participant LLM as AI PING(DeepSeek)
+
+    U->>ST: Orbit 拖情绪 token → fingerprintOf
+    U->>ST: Mirror 认领 → selectedMirror
+    U->>ST: Compose chips → letter
+    ST->>ST: agentPayload() 打包 NightInput
+    ST->>SV: runMatch(payload)  [22s race]
+    SV->>CH: echoChain.match(asNight)
+    CH->>CH: researchStep(search_cases + search_archive)
+    CH->>LLM: decidePersona(仅 arrive 工具)
+    CH->>LLM: writeGreeting(零工具，≤28 字)
+    CH->>CH: validate(ownLine/stolenVoice/foreignPlace)
+    CH-->>SV: NightResult{echo, greeting, suggestions, hits}
+    SV-->>ST: MatchResult
+    ST-->>U: 进入 Encounter，展示回声第一句 + 建议卡
+    loop 每轮对话（≤3 轮）
+        U->>ST: reply(一句)
+        ST->>SV: runTurn(payload)  [12s]
+        SV->>CH: echoChain.turn
+        CH->>CH: researchStep
+        CH->>LLM: rememberPlayer(仅 remember 工具)
+        CH->>LLM: reply(仅 arrive 工具)
+        CH->>CH: validate
+        CH-->>ST: TurnResult{spoken, suggestions}
+    end
+    U->>ST: 第 3 轮 → seal
+    ST->>SV: runSeal  [14s]
+    SV->>CH: echoChain.seal → writeReturnLetter(零工具，≤48 字)
+    CH-->>ST: SealResult{returnLetter, facts}
+    ST->>ST: saveReturn()：keepPlayerFacts + applyFacts 写回信柜
+    ST-->>U: 归档；这段记忆下次旅程被 search_archive 引用

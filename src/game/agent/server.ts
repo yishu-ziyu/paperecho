@@ -1,6 +1,13 @@
 import { createServerFn } from "@tanstack/react-start";
-import type { CoreMemory, EchoPerson, Fingerprint, MemoryRecord, RegionId, TokenMeter } from "../types";
-import type { NightInput } from "./pi-echo";
+import type {
+  CoreMemory,
+  EchoPerson,
+  Fingerprint,
+  MemoryRecord,
+  RegionId,
+  TokenMeter,
+} from "../types";
+import type { NightInput } from "./types";
 
 export interface AgentPayload {
   fingerprint: Fingerprint[];
@@ -71,6 +78,7 @@ function asNight(data: AgentPayload): NightInput {
     coreHuman: data.core?.human,
     corePersona: data.core?.persona,
     playerLine: data.playerLine,
+    recall: data.recall,
     echo: data.echo,
     avoidNames: data.avoidNames,
     session: unpackSession(data.session),
@@ -80,8 +88,8 @@ function asNight(data: AgentPayload): NightInput {
 export const runMatch = createServerFn({ method: "POST" })
   .validator((input: AgentPayload) => input)
   .handler(async ({ data }): Promise<MatchResult> => {
-    const { runNight } = await import("./pi-echo");
-    const res = await runNight("match", asNight(data));
+    const { echoChain } = await import("./chains");
+    const res = await echoChain.match(asNight(data));
     return {
       echo: res.echo,
       core: { human: res.human, persona: res.persona },
@@ -96,8 +104,8 @@ export const runMatch = createServerFn({ method: "POST" })
 export const runTurn = createServerFn({ method: "POST" })
   .validator((input: AgentPayload) => input)
   .handler(async ({ data }): Promise<TurnResult> => {
-    const { runNight } = await import("./pi-echo");
-    const res = await runNight("turn", asNight(data));
+    const { echoChain } = await import("./chains");
+    const res = await echoChain.turn(asNight(data));
     return {
       spoken: res.spoken,
       suggestions: res.suggestions,
@@ -111,8 +119,8 @@ export const runTurn = createServerFn({ method: "POST" })
 export const runSeal = createServerFn({ method: "POST" })
   .validator((input: AgentPayload) => input)
   .handler(async ({ data }): Promise<SealResult> => {
-    const { runNight } = await import("./pi-echo");
-    const res = await runNight("seal", asNight(data));
+    const { echoChain } = await import("./chains");
+    const res = await echoChain.seal(asNight(data));
     return {
       returnLetter: res.echo.returnLetter,
       facts: res.facts,

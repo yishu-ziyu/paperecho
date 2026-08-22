@@ -35,7 +35,9 @@ export function JudgePanel() {
         </button>
       </div>
       <p className="mb-3 text-xs leading-relaxed text-ink/55">
-        LangGraph 状态图 · Letta 三层记忆 · Mem0 抽取
+        Prompt Chain · match / turn / seal 三链
+        <br />
+        每链：确定性检索 → 单工具 LLM 步 → 校验闸门
       </p>
       <dl className="grid grid-cols-2 gap-3 font-mono text-sm tabular-nums">
         <div>
@@ -44,7 +46,7 @@ export function JudgePanel() {
         </div>
         <div>
           <dt className="text-xs text-ink/50">路径</dt>
-          <dd>{meter?.via === "live" ? "实时图" : "本地信柜"}</dd>
+          <dd>{meter?.via === "live" ? "实时链" : "本地信柜"}</dd>
         </div>
         <div>
           <dt className="text-xs text-ink/50">模型</dt>
@@ -90,7 +92,7 @@ export function JudgePanel() {
           ))}
         </ul>
       ) : null}
-      <p className="mt-3 text-xs text-ink/45">按 J 开关。图跑不通时改用本地故事卡。</p>
+      <p className="mt-3 text-xs text-ink/45">按 J 开关。无 API Key / 超时自动回退本地故事卡。</p>
     </aside>
   );
 }

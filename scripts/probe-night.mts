@@ -1,6 +1,6 @@
-import { runNight } from "../src/game/agent/pi-echo.ts";
+import { echoChain } from "../src/game/agent/chains.ts";
 
-const res = await runNight("match", {
+const res = await echoChain.match({
   fingerprint: [
     { id: "unseen", closeness: 0.9 },
     { id: "tired", closeness: 0.6 },

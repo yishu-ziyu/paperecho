@@ -206,8 +206,6 @@ export function perceptionOf(
   return bits.join("。");
 }
 
-export const buildCoreHuman = perceptionOf;
-
 export function factsOf(records: MemoryRecord[]): string[] {
   return records
     .map((r) => {
@@ -226,15 +224,4 @@ export function renderBlocks(persona: string, facts: string[]): string {
     ? `这是玩家留下的事，不是你的人生。禁止把这些句子改成「我……」。\n${facts.map((f) => `- ${f}`).join("\n")}`
     : "- （还没有记下的事）";
   return `# Persona\n${persona || "身份未定。arrive 时落下。"}\n\n# Human\n${human}`;
-}
-
-export function heuristicFacts(
-  fp: Fingerprint[],
-  letter: string,
-  echoName: string,
-): string[] {
-  const facts: string[] = [];
-  if (letter.trim() && letter.trim() !== GENERIC) facts.push(letter.trim().slice(0, 48));
-  if (echoName) facts.push(`曾与${echoName}对过一次`);
-  return facts;
 }

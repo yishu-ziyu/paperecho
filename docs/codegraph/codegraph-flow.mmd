@@ -1,0 +1,47 @@
+flowchart TD
+    subgraph G["① 捕捉 · 把没被说出口的情绪变成可计算信号（src/game）"]
+        O["OrbitPhase 拖拽 8 种情绪 token 靠近「你」"] --> FP["fingerprintOf / closenessOf / ownedOf<br/>emotions.ts → Fingerprint[]（id + closeness 排序）"]
+        M["MirrorPhase · pickMirror<br/>matchStories 认领最像今晚的一句 + 锁定 region"] --> S["store.ts 状态机"]
+        C["ComposePhase · chips 拼信<br/>letterFromChips + 手写 extraLine"] --> S
+        FP --> S
+    end
+
+    subgraph S2["② 组装 · 统一契约"]
+        AP["agentPayload() → NightInput / AgentPayload<br/>fingerprint + letter + mirror + region + archival + recall"]
+        ACT["launch()=runMatch · reply()=runTurn · 第3轮 seal()=runSeal<br/>Promise.race 超时 22s / 12s / 14s"]
+        AP --> ACT
+    end
+    S --> AP
+
+    subgraph SV["③ 服务边界 · server.ts（Server Functions）"]
+        FN["runMatch / runTurn / runSeal<br/>createServerFn → asNight() → echoChain"]
+    end
+    ACT --> FN
+
+    subgraph CH["④ AI 识别 + 回应 · chains.ts（Prompt Chaining）"]
+        direction TB
+        PC["感知块 perceptionOf →「今晚靠近 / 认领过 / 折进来 / 飞向」<br/>常驻块 renderBlocks → Persona + Human"]
+        RS["researchStep（确定性，不调 LLM）<br/>search_cases 世界档案 + search_archive 玩家信柜（Jaccard）"]
+        M1["match: research → decidePersona(arrive) → writeGreeting → validate"]
+        T1["turn: research → rememberPlayer(remember) → reply(arrive) → validate"]
+        SL["seal: research → rememberFacts(remember) → writeReturnLetter → validate"]
+        PC --> M1 & T1 & SL
+        RS --> M1 & T1 & SL
+    end
+    FN --> CH
+
+    subgraph BASE["⑤ 基座 · 单工具短命 Pi Agent + 校验闸门 + 回退"]
+        STEP["step()：短命 Pi Agent<br/>每步只暴露一个工具 · thinkingLevel off"]
+        TOOL["runAgentTool：search_cases / search_archive / remember<br/>+ arrive（身份落桌，锁名锁城）"]
+        GATE["validate 闸门：ownLine(禁重复) · stolenVoice(禁偷玩家原话) · foreignPlace(禁串城)"]
+        MEM["memory.ts 记忆管线：keepPlayerFacts → applyFacts(写入信柜) → factsOf → 下次注入"]
+        FB["hasXai() 门控 · fallbackEcho(kernel.ts) 离线兜底"]
+        LLM["config.ts：AI PING + DeepSeek-V4-Flash-0731"]
+        CH --> STEP
+        STEP --> TOOL & GATE
+        MEM --> CH
+        LLM --> STEP
+        FB --> CH
+    end
+
+    GATE -->|"安全输出 spoken/returnLetter"| S
