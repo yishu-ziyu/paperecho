@@ -17,72 +17,72 @@ function smooth(t: number) {
   return x * x * (3 - 2 * x);
 }
 
-/** Slow at the top (thick paper), faster through the waist, settle as a dart. */
-export function flowEase(t: number) {
-  const x = Math.max(0, Math.min(1, t));
-  if (x < 0.45) return 0.55 * (x / 0.45) ** 1.65;
-  const r = (x - 0.45) / 0.55;
-  return 0.55 + 0.45 * (1 - (1 - r) ** 2);
+function dist(a: Pt, b: Pt) {
+  return Math.hypot(b.x - a.x, b.y - a.y);
 }
 
+export function flowEase(t: number) {
+  const x = Math.max(0, Math.min(1, t));
+  if (x < 0.5) return 0.4 * (x / 0.5) ** 1.25;
+  const r = (x - 0.5) / 0.5;
+  return 0.4 + 0.6 * (1 - (1 - r) ** 1.55);
+}
+
+/**
+ * 8 points, mirrored pairs: 0-1 top, 2-7 upper sides, 3-6 lower sides, 4-5 bottom.
+ * 4 and 5 meet at the nose.
+ */
 function cardPts(r: CardRect): Pt[] {
   const { x, y, w, h } = r;
-  const cx = x + w / 2;
+  const rad = Math.min(22, w / 6, h / 8);
   return [
-    { x: x + 24, y },
-    { x: cx, y },
-    { x: x + w - 24, y },
-    { x: x + w, y: y + 26 },
-    { x: x + w, y: y + h * 0.64 },
-    { x: x + w - 20, y: y + h },
-    { x: cx, y: y + h },
-    { x: x + 20, y: y + h },
-    { x: x, y: y + h * 0.64 },
-    { x: x, y: y + 26 },
+    { x: x + rad, y },
+    { x: x + w - rad, y },
+    { x: x + w, y: y + rad },
+    { x: x + w, y: y + h - rad },
+    { x: x + w - rad, y: y + h },
+    { x: x + rad, y: y + h },
+    { x: x, y: y + h - rad },
+    { x: x, y: y + rad },
   ];
 }
 
 function glassPts(r: CardRect): Pt[] {
   const { x, y, w, h } = r;
   const cx = x + w / 2;
-  const neck = Math.max(11, w * 0.045);
-  const drip = h * 0.28;
+  const inset = w * 0.07;
+  const waist = w * 0.23;
+  const foot = w * 0.38;
   return [
-    { x: x + w * 0.28, y: y + 10 },
-    { x: cx, y: y + 6 },
-    { x: x + w * 0.72, y: y + 10 },
-    { x: x + w * 0.7, y: y + h * 0.3 },
-    { x: cx + neck, y: y + h * 0.58 },
-    { x: cx + 30, y: y + h + drip * 0.42 },
-    { x: cx, y: y + h + drip },
-    { x: cx - 30, y: y + h + drip * 0.42 },
-    { x: cx - neck, y: y + h * 0.58 },
-    { x: x + w * 0.3, y: y + h * 0.3 },
+    { x: x + inset, y: y + 6 },
+    { x: x + w - inset, y: y + 6 },
+    { x: x + w - inset, y: y + h * 0.2 },
+    { x: cx + waist, y: y + h * 0.5 },
+    { x: cx + foot, y: y + h + 12 },
+    { x: cx - foot, y: y + h + 12 },
+    { x: cx - waist, y: y + h * 0.5 },
+    { x: x + inset, y: y + h * 0.2 },
   ];
 }
 
 function dartPts(cx: number, cy: number): Pt[] {
-  const w = 78;
-  const h = 98;
   return [
-    { x: cx - 8, y: cy - h / 2 + 12 },
-    { x: cx, y: cy - h / 2 },
-    { x: cx + 8, y: cy - h / 2 + 12 },
-    { x: cx + 10, y: cy - h * 0.1 },
-    { x: cx + w / 2, y: cy - 2 },
-    { x: cx + 15, y: cy + h * 0.2 },
-    { x: cx, y: cy + h / 2 },
-    { x: cx - 15, y: cy + h * 0.2 },
-    { x: cx - w / 2, y: cy - 2 },
-    { x: cx - 10, y: cy - h * 0.1 },
+    { x: cx - 3, y: cy - 36 },
+    { x: cx + 3, y: cy - 36 },
+    { x: cx + 30, y: cy + 0 },
+    { x: cx + 28, y: cy + 6 },
+    { x: cx + 1, y: cy + 40 },
+    { x: cx - 1, y: cy + 40 },
+    { x: cx - 28, y: cy + 6 },
+    { x: cx - 30, y: cy + 0 },
   ];
 }
 
 export function destOf(u: number, from: CardRect, view: { w: number; h: number }) {
-  const t = smooth(Math.max(0, (u - 0.18) / 0.82));
+  const t = smooth(Math.max(0, (u - 0.28) / 0.72));
   return {
     x: lerp(from.x + from.w / 2, view.w / 2, t),
-    y: lerp(from.y + from.h + 36, view.h - 70, t),
+    y: lerp(from.y + from.h + 18, view.h - 72, t),
   };
 }
 
@@ -95,22 +95,55 @@ export function flowPoints(u: number, from: CardRect, destX: number, destY: numb
   return mix(glass, dart, smooth((t - 0.4) / 0.6));
 }
 
-export function pointsToPath(pts: Pt[], tension = 6): string {
+export function cornerRadius(u: number) {
+  return lerp(22, 0, Math.max(0, Math.min(1, u * 1.15)));
+}
+
+export function pointsToPath(pts: Pt[], radius: number): string {
   const n = pts.length;
   if (n < 3) return "";
-  let d = `M ${pts[0]!.x} ${pts[0]!.y}`;
-  for (let i = 0; i < n; i++) {
-    const p0 = pts[(i - 1 + n) % n]!;
-    const p1 = pts[i]!;
-    const p2 = pts[(i + 1) % n]!;
-    const p3 = pts[(i + 2) % n]!;
-    d += ` C ${p1.x + (p2.x - p0.x) / tension} ${p1.y + (p2.y - p0.y) / tension} ${p2.x - (p3.x - p1.x) / tension} ${p2.y - (p3.y - p1.y) / tension} ${p2.x} ${p2.y}`;
+  if (radius < 0.85) {
+    return `M ${pts[0]!.x} ${pts[0]!.y} ${pts
+      .slice(1)
+      .map((p) => `L ${p.x} ${p.y}`)
+      .join(" ")} Z`;
   }
-  return `${d} Z`;
+  const parts: string[] = [];
+  for (let i = 0; i < n; i++) {
+    const prev = pts[(i - 1 + n) % n]!;
+    const curr = pts[i]!;
+    const next = pts[(i + 1) % n]!;
+    const d1 = dist(curr, prev) || 1;
+    const d2 = dist(curr, next) || 1;
+    const rad = Math.min(radius, d1 * 0.4, d2 * 0.4);
+    const a = {
+      x: curr.x + ((prev.x - curr.x) / d1) * rad,
+      y: curr.y + ((prev.y - curr.y) / d1) * rad,
+    };
+    const b = {
+      x: curr.x + ((next.x - curr.x) / d2) * rad,
+      y: curr.y + ((next.y - curr.y) / d2) * rad,
+    };
+    if (i === 0) parts.push(`M ${a.x} ${a.y}`);
+    else parts.push(`L ${a.x} ${a.y}`);
+    parts.push(`Q ${curr.x} ${curr.y} ${b.x} ${b.y}`);
+  }
+  return `${parts.join(" ")} Z`;
 }
 
 export function creaseOf(pts: Pt[]): string {
-  const top = pts[1]!;
-  const nose = pts[6]!;
+  const top = { x: (pts[0]!.x + pts[1]!.x) / 2, y: (pts[0]!.y + pts[1]!.y) / 2 };
+  const nose = { x: (pts[4]!.x + pts[5]!.x) / 2, y: (pts[4]!.y + pts[5]!.y) / 2 };
   return `M ${top.x} ${top.y} L ${nose.x} ${nose.y}`;
+}
+
+export function wingFolds(pts: Pt[]): [string, string] {
+  const mid = {
+    x: (pts[0]!.x + pts[1]!.x + pts[4]!.x + pts[5]!.x) / 4,
+    y: (pts[0]!.y + pts[1]!.y + pts[4]!.y + pts[5]!.y) / 4,
+  };
+  return [
+    `M ${pts[2]!.x} ${pts[2]!.y} L ${mid.x} ${mid.y}`,
+    `M ${pts[7]!.x} ${pts[7]!.y} L ${mid.x} ${mid.y}`,
+  ];
 }
