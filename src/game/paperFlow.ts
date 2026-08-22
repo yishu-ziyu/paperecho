@@ -55,32 +55,32 @@ function cardPts(r: CardRect): Pt[] {
   ];
 }
 
-/** Wide top, pointed foot — a shield, not an hourglass. */
+/** Wide M-top, pointed foot — a dart starting to fold, not a pennant. */
 function foldPts(r: CardRect): Pt[] {
   const { x, y, w, h } = r;
   const cx = x + w / 2;
   return [
-    { x: cx - w * 0.1, y: y + 8 },
-    { x: cx + w * 0.1, y: y + 8 },
-    { x: x + w - w * 0.03, y: y + 10 },
-    { x: x + w - w * 0.12, y: y + h * 0.34 },
-    { x: cx + w * 0.16, y: y + h * 0.68 },
+    { x: cx - w * 0.08, y: y + h * 0.12 },
+    { x: cx + w * 0.08, y: y + h * 0.12 },
+    { x: x + w - w * 0.02, y: y + 2 },
+    { x: x + w - w * 0.06, y: y + h * 0.26 },
+    { x: cx + w * 0.2, y: y + h * 0.6 },
     { x: cx + 2.4, y: y + h + 18 },
     { x: cx - 2.4, y: y + h + 18 },
-    { x: cx - w * 0.16, y: y + h * 0.68 },
-    { x: x + w * 0.12, y: y + h * 0.34 },
-    { x: x + w * 0.03, y: y + 10 },
+    { x: cx - w * 0.2, y: y + h * 0.6 },
+    { x: x + w * 0.06, y: y + h * 0.26 },
+    { x: x + w * 0.02, y: y + 2 },
   ];
 }
 
 function dartPts(box: DartBox): Pt[] {
   const { cx, top, bot, hw } = box;
   const h = Math.max(1, bot - top);
-  const notch = h * 0.11;
-  const wingY = top + h * 0.2;
-  const stepY = top + h * 0.42;
-  const stepW = hw * 0.36;
-  const vW = Math.max(4, hw * 0.07);
+  const notch = h * 0.14;
+  const wingY = top + h * 0.22;
+  const stepY = top + h * 0.38;
+  const stepW = hw * 0.3;
+  const vW = Math.max(5, hw * 0.08);
   return [
     { x: cx - vW, y: top + notch },
     { x: cx + vW, y: top + notch },

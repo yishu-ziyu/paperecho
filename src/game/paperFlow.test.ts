@@ -36,6 +36,7 @@ test("card stays a wide rectangle", () => {
 test("hold fold tapers to a point, no second lobe", () => {
   const pts = flowPoints(0.4, card);
   assertMirror(pts);
+  assert.ok(pts[0]!.y > pts[9]!.y, "V already sits below the peaks");
   assert.ok(halfW(pts, 2, 9) >= halfW(pts, 3, 8) - 1);
   assert.ok(halfW(pts, 3, 8) >= halfW(pts, 4, 7) - 1);
   assert.ok(halfW(pts, 4, 7) > halfW(pts, 5, 6));
