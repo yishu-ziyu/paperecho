@@ -5,7 +5,7 @@ import { BLOB_SILHOUETTES } from "../faces/blob-silhouettes";
 import { CursorAvatar, type CursorState } from "./CursorAvatar";
 
 const NEAR_STATE: Record<EmotionId, CursorState> = {
-  gloom: "sad",
+  gloom: "thinking",
   wronged: "shy",
   anxious: "curious",
   tired: "drowsy",
@@ -55,7 +55,7 @@ function creatureState(
   held: boolean,
   gather: number,
 ): CursorState {
-  if (id === "you") return gather > 0.18 ? "waking" : awake ? "idle" : "listening";
+  if (id === "you") return gather > 0.18 ? "waking" : awake ? "happy" : "idle";
   if (held) return "dragging";
   if (!awake) return FAR_STATE[id];
   if (gather > 0.25) return "humming";
@@ -100,6 +100,8 @@ export function EmotionCreature({
         silhouette={BLOB_SILHOUETTES[id]}
         gradient={clayGradient(paint)}
         eyeColor="#F4EFE6"
+        eyeScale={1.12}
+        mouthStroke={8.2}
         gaze={looking ? { x: clamp(gaze.x, -1, 1), y: clamp(gaze.y, -1, 1) } : undefined}
         turn={looking ? gaze.x * 14 : 0}
         lookAround={held ? 0 : awake ? 0.42 : 0.12}

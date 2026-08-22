@@ -23,7 +23,7 @@ export function OrbitPhase() {
   const color = mixBlobColor(fp.length ? fp : tokens.map((t) => ({ id: t.id, closeness: closenessOf(t) })));
   const heldToken = held ? tokens.find((t) => t.id === held) : null;
   const heldClose = heldToken ? closenessOf(heldToken) : 0;
-  const pad = (MIN_RADIUS + 4) * 2;
+  const pad = (MIN_RADIUS - 4) * 2;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -85,7 +85,7 @@ export function OrbitPhase() {
                 color={color}
                 awake={owned.length > 0}
                 gather={gather}
-                size={58}
+                size={62}
                 label="你"
                 title="你"
               />
@@ -203,7 +203,7 @@ function Token({
           : undefined,
       }}
     >
-      <EmotionCreature id={token.id} awake={awake} held={active} gather={g} gaze={gaze} size={active ? 58 : 52} />
+      <EmotionCreature id={token.id} awake={awake} held={active} gather={g} gaze={gaze} size={active ? 64 : 56} />
       <span className="pointer-events-none absolute top-[calc(100%+2px)] left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-paper/92 px-1.5 py-0.5 text-[10px] leading-none text-ink shadow-sm">
         {e.label}
       </span>

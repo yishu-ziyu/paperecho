@@ -240,7 +240,7 @@ export function ownedOf(fp: Fingerprint[], min = 0.42): Fingerprint[] {
 }
 
 export function mixBlobColor(fp: Fingerprint[]): string {
-  const top = ownedOf(fp, 0.35).slice(0, 2);
+  const top = nearOf(fp, 0.35);
   if (!top.length) return "#C9B8A4";
   return EMOTION_MAP[top[0]!.id].color;
 }
