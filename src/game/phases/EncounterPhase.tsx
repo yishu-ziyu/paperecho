@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { cn } from "@/lib/utils";
 import { sfxDrop } from "../audio";
+import { LetterPop } from "../components/LetterPop";
 import { Plane } from "../components/Plane";
 import { Craft, useWellDrag } from "../continuum";
 import { isNewPersonalDetail } from "../agent/exchange";
@@ -30,6 +31,8 @@ export function EncounterPhase() {
   const listRef = useRef<HTMLUListElement>(null);
   const composing = useRef(false);
   const lastPlaced = useRef(0);
+  const firstEchoSeen = useRef(false);
+  const [waitOut, setWaitOut] = useState(false);
 
   const drag = useWellDrag<string>((text) => place(text));
 
@@ -66,11 +69,31 @@ export function EncounterPhase() {
     el.scrollTo({ top: el.scrollHeight, behavior: reduce ? "auto" : "smooth" });
   }, [recall, waiting, reduce]);
 
+  const firstEchoIndex = recall.findIndex((t) => t.who === "echo");
+  const sealing = waiting && round >= 3;
+  const showWait = waiting && !sealing && firstEchoIndex < 0;
+
+  useLayoutEffect(() => {
+    if (firstEchoIndex < 0) {
+      firstEchoSeen.current = false;
+      setWaitOut(false);
+      return;
+    }
+    if (firstEchoSeen.current || reduce) {
+      firstEchoSeen.current = true;
+      setWaitOut(false);
+      return;
+    }
+    firstEchoSeen.current = true;
+    setWaitOut(true);
+    const t = window.setTimeout(() => setWaitOut(false), 240);
+    return () => window.clearTimeout(t);
+  }, [firstEchoIndex, reduce]);
+
   if (!echo) return null;
 
   const used = [extra, ...letterChips, ...recall.map((t) => t.text)];
   const options = (suggestions.length ? suggestions : playerHand(fingerprint, chips, used)).slice(0, 3);
-  const sealing = waiting && round >= 3;
   const canSpeak = bloom && !waiting && !sealing;
   const priorYou = recall.filter((t) => t.who === "you").map((t) => t.text);
   const lastEcho = recall.filter((t) => t.who === "echo").at(-1)?.text ?? "";
@@ -89,9 +112,11 @@ export function EncounterPhase() {
       <header className="mx-auto w-full max-w-md px-1 pt-1 text-center">
         <p className="text-[0.65rem] tracking-[0.22em] text-paper/55">今晚对上的人</p>
         <h2 className="mt-1 font-display text-[clamp(1.15rem,3.2vw,1.55rem)] font-semibold tracking-[0.06em] text-paper">
-          {echo.name}
+          <LetterPop text={echo.name} />
           <span className="mx-2 text-paper/35">·</span>
-          <span className="font-sans text-[0.92em] font-medium tracking-normal text-paper/80">{echo.city}</span>
+          <span className="font-sans text-[0.92em] font-medium tracking-normal text-paper/80">
+            <LetterPop text={echo.city} start={echo.name.length + 1} />
+          </span>
         </h2>
         {echo.felt ? <p className="mt-1 text-sm leading-relaxed text-paper/70">{echo.felt}</p> : null}
         <ol className="mt-2 flex items-center justify-center gap-1.5" aria-hidden>
@@ -130,27 +155,53 @@ export function EncounterPhase() {
               <Plane className="h-full w-full" scorched={scorch} />
             </div>
             <ul ref={listRef} className="mt-auto flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto pb-2 pt-8">
-              {recall.map((t, i) => (
-                <motion.li
-                  key={`${i}-${t.who}`}
-                  initial={{ opacity: 0, y: 16 }}
-                  animate={{ opacity: 1, y: 0, rotate: TILT[i % TILT.length]! * (t.who === "you" ? 1 : -1) }}
-                  transition={spring.settle}
-                  className={cn(
-                    "clay-sm w-[86%] px-4 py-3 text-sm leading-relaxed",
-                    t.who === "you" ? "self-end" : "self-start",
-                  )}
+              {recall.map((t, i) => {
+                const firstSpoken = t.who === "echo" && i === firstEchoIndex;
+                const popIn = firstSpoken && !reduce;
+                const tilt = TILT[i % TILT.length]! * (t.who === "you" ? 1 : -1);
+                const card = (
+                  <>
+                    {t.who === "echo" ? (
+                      <p className="mb-1 text-[0.65rem] tracking-[0.18em] text-ink/35">{echo.name}</p>
+                    ) : (
+                      <p className="mb-1 text-right text-[0.65rem] tracking-[0.18em] text-ink/35">你</p>
+                    )}
+                    {t.text}
+                  </>
+                );
+                if (popIn) {
+                  return (
+                    <li key={`${i}-${t.who}`} className="relative w-[86%] self-start" style={{ rotate: `${tilt}deg` }}>
+                      {waitOut ? (
+                        <span className="enc-slot enc-wait is-out pointer-events-none absolute left-0 top-0 w-32 bg-paper/85 px-4 py-4 shadow-sm">
+                          <span className="mb-2 block h-1 w-16 bg-ink/15" />
+                          <span className="block h-1 w-10 bg-ink/10" />
+                        </span>
+                      ) : null}
+                      <div className="enc-slot enc-spoken clay-sm px-4 py-3 text-sm leading-relaxed">{card}</div>
+                    </li>
+                  );
+                }
+                return (
+                  <motion.li
+                    key={`${i}-${t.who}`}
+                    initial={{ opacity: 0, y: 16 }}
+                    animate={{ opacity: 1, y: 0, rotate: tilt }}
+                    transition={spring.settle}
+                    className={cn(
+                      "clay-sm w-[86%] px-4 py-3 text-sm leading-relaxed",
+                      t.who === "you" ? "self-end" : "self-start",
+                    )}
+                  >
+                    {card}
+                  </motion.li>
+                );
+              })}
+              {showWait ? (
+                <li
+                  className={cn("enc-slot w-32 self-start bg-paper/85 px-4 py-4 shadow-sm", !reduce && "enc-wait")}
+                  style={{ rotate: "-1.6deg" }}
                 >
-                  {t.who === "echo" ? (
-                    <p className="mb-1 text-[0.65rem] tracking-[0.18em] text-ink/35">{echo.name}</p>
-                  ) : (
-                    <p className="mb-1 text-right text-[0.65rem] tracking-[0.18em] text-ink/35">你</p>
-                  )}
-                  {t.text}
-                </motion.li>
-              ))}
-              {waiting && !sealing ? (
-                <li className="w-32 self-start bg-paper/85 px-4 py-4 shadow-sm" style={{ rotate: "-1.6deg" }}>
                   <span className="mb-2 block h-1 w-16 bg-ink/15" />
                   <span className="block h-1 w-10 bg-ink/10" />
                 </li>

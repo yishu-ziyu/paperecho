@@ -1,6 +1,7 @@
 import { useLayoutEffect, useRef, useState } from "react";
-import { motion } from "motion/react";
+import { motion, useReducedMotion } from "motion/react";
 import { startPad, unlockAudio } from "../audio";
+import { LetterPop } from "../components/LetterPop";
 import { PaperSheet } from "../components/PaperSheet";
 import type { CardRect } from "../components/TitleDive";
 import { PullCommit } from "../continuum";
@@ -16,6 +17,7 @@ export function TitlePhase({
 }) {
   const goArchive = useGame((s) => s.goArchive);
   const journeys = useGame((s) => s.journeys);
+  const reduce = useReducedMotion();
   const cardRef = useRef<HTMLDivElement>(null);
   const pullRef = useRef(0);
   const [pull, setPull] = useState(0);
@@ -86,10 +88,16 @@ export function TitlePhase({
               className="font-latin text-[clamp(2.6rem,13vw,4.4rem)] font-bold leading-[0.84] tracking-wide text-ink"
               style={{ textShadow: "0 2px 0 #d9ccb4, 0 5px 0 #cbbda3, 0 12px 18px rgba(26,39,68,0.2)" }}
             >
-              PAPER
-              <span className="block">ECHO</span>
+              <span className="block">
+                <LetterPop text="PAPER" />
+              </span>
+              <span className="block">
+                <LetterPop text="ECHO" start={5} />
+              </span>
             </h1>
-            <p className="mt-4 font-display text-[1.05rem] tracking-[0.28em] text-ink/70">纸上的回声</p>
+            <p className="clip-up-mask mt-4 font-display text-[1.05rem] tracking-[0.28em] text-ink/70">
+              <span className={reduce ? undefined : "clip-up"}>纸上的回声</span>
+            </p>
             <p className="mx-auto mt-4 max-w-[16rem] text-[0.82rem] font-medium leading-relaxed tracking-[0.04em] text-ink/55">
               把靠近你的留下来，折成会回来的纸飞机。
             </p>

@@ -271,6 +271,89 @@
   }
 }
 
+.letter-pop {
+  display: inline-block;
+  transform-origin: 50% 80%;
+  animation: letter-pop 560ms cubic-bezier(0.34, 1.35, 0.64, 1) both;
+  animation-delay: calc(var(--i) * 55ms);
+}
+
+.clip-up-mask {
+  overflow: hidden;
+}
+
+.clip-up {
+  display: block;
+  animation: clip-up 520ms var(--ease-enter) 420ms both;
+}
+
+.enc-slot {
+  position: relative;
+  transform-origin: 18% 50%;
+}
+
+.enc-wait {
+  animation: slot-in 400ms cubic-bezier(0.34, 1.35, 0.64, 1) both;
+}
+
+.enc-wait.is-out {
+  animation: slot-out 240ms cubic-bezier(0.75, 0.01, 0.24, 0.98) both;
+}
+
+.enc-spoken {
+  animation: slot-in 480ms cubic-bezier(0.34, 1.35, 0.64, 1) 60ms both;
+}
+
+@keyframes letter-pop {
+  0% {
+    opacity: 0;
+    transform: translateY(42%) scale(0.72, 1.18);
+  }
+  62% {
+    opacity: 1;
+    transform: translateY(-6%) scale(1.05, 0.94);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes clip-up {
+  from {
+    transform: translateY(110%);
+  }
+  to {
+    transform: none;
+  }
+}
+
+@keyframes slot-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.22);
+  }
+  72% {
+    opacity: 1;
+    transform: scale(1.08);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes slot-out {
+  0% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.18);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .blob-breathe,
   .cloud,
@@ -278,7 +361,11 @@
   .token-float,
   .plane-charge,
   .face-blink,
-  .bolt-warn {
+  .bolt-warn,
+  .letter-pop,
+  .clip-up,
+  .enc-wait,
+  .enc-spoken {
     animation: none;
   }
 }
