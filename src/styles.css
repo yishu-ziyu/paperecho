@@ -1,0 +1,205 @@
+@import "tailwindcss";
+
+@theme {
+  --color-paper: #f4efe6;
+  --color-ink: #243044;
+  --color-coral: #e07a5f;
+  --color-sage: #3d9b8f;
+  --color-navy: #1b365d;
+  --color-sun: #f4c95d;
+  --font-sans: "Noto Sans SC", "Nunito", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Ma Shan Zheng", "Fraunces", "Songti SC", serif;
+  --font-latin: "Fraunces", ui-serif, serif;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+  --motion-quick: 150ms;
+  --motion-fast: 250ms;
+  --motion-enter: 400ms;
+  --motion-exit: 200ms;
+  --motion-emphasis: 500ms;
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-emphasized: cubic-bezier(0.2, 0, 0, 1);
+  --ease-enter: cubic-bezier(0.05, 0.7, 0.1, 1);
+  --ease-exit: cubic-bezier(0.3, 0, 0.8, 0.15);
+}
+
+@layer base {
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+
+  html,
+  body,
+  #app {
+    min-height: 100dvh;
+    background: var(--color-paper);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-weight: 400;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    overscroll-behavior: none;
+  }
+
+  body {
+    margin: 0;
+  }
+}
+
+@utility font-display {
+  font-family: var(--font-display);
+  font-weight: 400;
+}
+
+@utility font-latin {
+  font-family: var(--font-latin);
+}
+
+.blob-breathe {
+  animation: blob-breathe 3.6s ease-in-out infinite;
+  transform-origin: 50% 80%;
+}
+
+.token-float {
+  animation: token-float 3.2s ease-in-out infinite;
+}
+
+.plane-fly {
+  animation: plane-fly 5.5s var(--ease-out) infinite;
+}
+
+.cloud {
+  will-change: transform;
+}
+
+.star {
+  position: absolute;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--color-paper) 90%, transparent);
+  animation: star-twinkle 3.4s ease-in-out infinite;
+}
+
+.plane-trail {
+  position: absolute;
+  right: 86%;
+  top: 42%;
+  height: 2px;
+  width: 42px;
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in oklab, var(--color-paper) 55%, transparent)
+  );
+}
+
+.plane-charge {
+  position: absolute;
+  inset: -10px;
+  border-radius: 999px;
+  background: radial-gradient(
+    circle,
+    color-mix(in oklab, var(--color-coral) 42%, transparent) 0%,
+    transparent 70%
+  );
+  animation: charge-pulse 0.9s var(--ease-emphasized) infinite;
+  pointer-events: none;
+}
+
+.sling-band {
+  fill: none;
+  stroke: var(--color-coral);
+  stroke-width: 2.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  filter: drop-shadow(0 0 5px color-mix(in oklab, var(--color-coral) 70%, transparent));
+}
+
+.sling-post {
+  fill: var(--color-coral);
+  opacity: 0.78;
+}
+
+.globe-canvas {
+  display: block;
+  border-radius: 999px;
+}
+
+@keyframes blob-breathe {
+  0%,
+  100% {
+    transform: scale(1, 1);
+  }
+  50% {
+    transform: scale(1.03, 0.97);
+  }
+}
+
+@keyframes token-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-5px);
+  }
+}
+
+@keyframes plane-fly {
+  0% {
+    transform: translate(0, 0) rotate(-8deg);
+  }
+  50% {
+    transform: translate(55%, -18px) rotate(6deg);
+  }
+  100% {
+    transform: translate(110%, 6px) rotate(-4deg);
+  }
+}
+
+@keyframes cloud-drift {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(40%);
+  }
+}
+
+@keyframes star-twinkle {
+  0%,
+  100% {
+    opacity: 0.25;
+    transform: scale(0.8);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.15);
+  }
+}
+
+@keyframes charge-pulse {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scale(0.92);
+  }
+  50% {
+    opacity: 0.7;
+    transform: scale(1.08);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .blob-breathe,
+  .plane-fly,
+  .cloud,
+  .star,
+  .token-float,
+  .plane-charge {
+    animation: none;
+  }
+}
