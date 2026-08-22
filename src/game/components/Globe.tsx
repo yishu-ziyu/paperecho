@@ -4,9 +4,9 @@ import { cn } from "@/lib/utils";
 import { REGIONS } from "../stories";
 import type { RegionId } from "../types";
 
-const CORAL: [number, number, number] = [0.88, 0.48, 0.37];
-const LAND: [number, number, number] = [0.22, 0.38, 0.48];
-const GLOW: [number, number, number] = [0.55, 0.7, 0.88];
+const CORAL: [number, number, number] = [0.83, 0.47, 0.35];
+const LAND: [number, number, number] = [0.5, 0.61, 0.43];
+const GLOW: [number, number, number] = [0.94, 0.89, 0.76];
 const ORIGIN: [number, number] = [31.2, 121.5];
 
 function lerpAngle(a: number, b: number, t: number) {
@@ -89,11 +89,11 @@ export function Globe({
       height: width * 2,
       phi,
       theta,
-      dark: 1,
-      diffuse: 1.2,
+      dark: 0.15,
+      diffuse: 1.45,
       mapSamples: 16000,
-      mapBrightness: 7.2,
-      mapBaseBrightness: 0.05,
+      mapBrightness: 3.4,
+      mapBaseBrightness: 0.28,
       baseColor: LAND,
       markerColor: CORAL,
       glowColor: GLOW,
@@ -167,10 +167,10 @@ export function Globe({
       globe.update({
         phi,
         theta,
-        dark: 1,
-        diffuse: 1.25,
-        mapBrightness: 6.5 + charged * 0.8,
-        mapBaseBrightness: 0.12,
+        dark: 0.18,
+        diffuse: 1.5,
+        mapBrightness: 3.2 + charged * 0.7,
+        mapBaseBrightness: 0.3,
         baseColor: LAND,
         markerColor: CORAL,
         glowColor: GLOW,

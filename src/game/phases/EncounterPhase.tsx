@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { motion } from "motion/react";
 import { cn } from "@/lib/utils";
 import { Guide } from "../components/Guide";
+import { Plane } from "../components/Plane";
 import { Craft, useWellDrag } from "../continuum";
 import { playerHand } from "../emotions";
 import { spring } from "../motion";
@@ -21,6 +22,7 @@ export function EncounterPhase() {
   const suggestions = useGame((s) => s.suggestions);
   const waiting = useGame((s) => s.waitingEcho);
   const recall = useGame((s) => s.recall);
+  const scorch = useGame((s) => s.scorch);
   const [own, setOwn] = useState("");
   const [wantOwn, setWantOwn] = useState(false);
   const [bloom, setBloom] = useState(false);
@@ -64,7 +66,7 @@ export function EncounterPhase() {
         }
       />
       <div className="mx-auto mt-2 flex w-full max-w-md flex-1 flex-col">
-        <Craft className="flex min-h-0 flex-1 flex-col">
+        <Craft className="relative flex min-h-0 flex-1 flex-col">
           <div
             ref={drag.wellRef}
             data-drop="encounter"
@@ -73,6 +75,9 @@ export function EncounterPhase() {
               drag.over ? "bg-coral/15 shadow-[inset_0_0_0_2px_var(--color-coral)]" : "bg-paper/35",
             )}
           >
+            <div className="pointer-events-none absolute right-3 top-3 h-8 w-14 opacity-80">
+              <Plane className="h-full w-full" scorched={scorch} />
+            </div>
             <ul className="mt-auto flex flex-col gap-2 pb-2">
               {recall.map((t, i) => (
                 <motion.li
@@ -81,7 +86,7 @@ export function EncounterPhase() {
                   animate={{ opacity: 1, y: 0, rotate: TILT[i % TILT.length]! * (t.who === "you" ? 1 : -1) }}
                   transition={spring.settle}
                   className={cn(
-                    "w-[86%] bg-paper px-4 py-3 text-sm leading-relaxed text-ink shadow-md",
+                    "clay-sm w-[86%] px-4 py-3 text-sm leading-relaxed",
                     t.who === "you" ? "self-end" : "self-start",
                   )}
                 >
@@ -109,7 +114,7 @@ export function EncounterPhase() {
                   key={o}
                   type="button"
                   className={cn(
-                    "echo-opt min-h-11 touch-none bg-paper px-4 py-3 text-left text-sm text-ink shadow-sm",
+                    "echo-opt clay-sm min-h-11 touch-none px-4 py-3 text-left text-sm",
                     i % 2 === 0 ? "-rotate-1" : "rotate-1",
                     drag.holding === o && "scale-[1.02] shadow-md",
                   )}

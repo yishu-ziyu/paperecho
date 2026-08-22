@@ -13,11 +13,11 @@ export function Hud() {
   const phase = useGame((s) => s.phase);
   const leftFrom = useGame((s) => s.leftFrom);
   const journeys = useGame((s) => s.journeys);
-  const night = phase === "throw" || phase === "flight";
+  const night = true;
   const finished = phase === "archive" && !leftFrom && journeys.length > 0;
   const step = finished ? JOURNEY.length : JOURNEY.indexOf(phase);
   const showBack = CAN_BACK.includes(phase);
-  const quiet = night ? "text-paper/70" : "text-ink/45";
+  const quiet = "text-paper/75";
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

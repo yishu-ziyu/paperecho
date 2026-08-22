@@ -33,6 +33,7 @@ export function ComposePhase() {
         sign={-1}
         threshold={52}
         hint="松开，开始折"
+        commitBehavior="morph"
         onCommit={startFold}
         className="relative mx-auto mt-4 w-full max-w-md flex-1"
       >
@@ -40,7 +41,7 @@ export function ComposePhase() {
           <motion.div
             ref={drag.wellRef}
             data-drop="compose"
-            className="h-full min-h-44 rounded-2xl bg-paper p-5 shadow-[0_20px_50px_rgba(36,48,68,0.12)]"
+            className="clay h-full min-h-44 rounded-2xl p-5"
             animate={{ rotate: -0.6, scale: drag.over ? 1.02 : 1 }}
             transition={{ type: "spring", stiffness: 280, damping: 22 }}
           >
@@ -95,7 +96,7 @@ export function ComposePhase() {
               key={c}
               type="button"
               disabled={letterChips.includes(c)}
-              className="touch-none rounded-full bg-paper/80 px-3 py-2 text-sm text-ink disabled:opacity-30"
+              className="touch-none rounded-full clay-sm px-3 py-2 text-sm disabled:opacity-30"
               onPointerDown={(e) => {
                 if (letterChips.includes(c)) return;
                 sfxPickup();

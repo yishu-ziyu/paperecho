@@ -1,19 +1,21 @@
 @import "tailwindcss";
 
 @theme {
-  --color-paper: #f4efe6;
-  --color-ink: #243044;
-  --color-coral: #e07a5f;
-  --color-sage: #3d9b8f;
-  --color-navy: #1b365d;
-  --color-sun: #f4c95d;
-  --font-sans: "Noto Sans SC", "Nunito", ui-sans-serif, system-ui, sans-serif;
-  --font-display: "Ma Shan Zheng", "Fraunces", "Songti SC", serif;
-  --font-latin: "Fraunces", ui-serif, serif;
-  --radius-sm: 8px;
-  --radius-md: 12px;
-  --radius-lg: 16px;
-  --radius-xl: 24px;
+  --color-paper: #f0e6d2;
+  --color-ink: #1a2744;
+  --color-coral: #d4785a;
+  --color-sage: #7a9a68;
+  --color-navy: #1a2744;
+  --color-sun: #e8c56b;
+  --color-clay: #c56a4a;
+  --color-teal: #6ba8a0;
+  --font-sans: "Nunito", "Noto Sans SC", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Fredoka", "Noto Sans SC", ui-rounded, sans-serif;
+  --font-latin: "Fredoka", ui-rounded, sans-serif;
+  --radius-sm: 10px;
+  --radius-md: 16px;
+  --radius-lg: 22px;
+  --radius-xl: 28px;
   --motion-quick: 150ms;
   --motion-fast: 250ms;
   --motion-enter: 400ms;
@@ -35,10 +37,10 @@
   body,
   #app {
     min-height: 100dvh;
-    background: var(--color-paper);
-    color: var(--color-ink);
+    background: var(--color-navy);
+    color: var(--color-paper);
     font-family: var(--font-sans);
-    font-weight: 400;
+    font-weight: 500;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     overscroll-behavior: none;
@@ -51,11 +53,41 @@
 
 @utility font-display {
   font-family: var(--font-display);
-  font-weight: 400;
+  font-weight: 600;
 }
 
 @utility font-latin {
   font-family: var(--font-latin);
+  font-weight: 700;
+}
+
+@utility type-clay {
+  font-family: var(--font-latin);
+  font-weight: 700;
+  color: var(--color-paper);
+  letter-spacing: 0.02em;
+  text-shadow:
+    0 2px 0 #d5c7ab,
+    0 4px 0 #c3b394,
+    0 10px 18px rgba(10, 16, 32, 0.45);
+}
+
+@utility clay {
+  background-color: var(--color-paper);
+  color: var(--color-ink);
+  box-shadow:
+    0 1px 0 rgba(255, 248, 238, 0.9),
+    0 10px 0 #cbbda3,
+    0 22px 36px rgba(12, 20, 40, 0.32);
+}
+
+@utility clay-sm {
+  background-color: var(--color-paper);
+  color: var(--color-ink);
+  box-shadow:
+    0 1px 0 rgba(255, 248, 238, 0.85),
+    0 4px 0 #d2c4aa,
+    0 12px 20px rgba(12, 20, 40, 0.2);
 }
 
 .blob-breathe {
@@ -82,14 +114,36 @@
   position: absolute;
   right: 86%;
   top: 42%;
-  height: 2px;
-  width: 42px;
+  height: 3px;
+  width: 48px;
   border-radius: 999px;
   background: linear-gradient(
     90deg,
     transparent,
     color-mix(in oklab, var(--color-paper) 55%, transparent)
   );
+}
+
+.vox-plane {
+  filter:
+    drop-shadow(0 0 0.6px #1a2744)
+    drop-shadow(0 3px 0 #cbbda3)
+    drop-shadow(0 12px 14px rgba(10, 16, 32, 0.5));
+}
+
+.clay-cloud {
+  background: color-mix(in oklab, var(--color-paper) 78%, var(--color-navy));
+  box-shadow:
+    0 1px 0 rgba(255, 248, 238, 0.55),
+    0 8px 0 color-mix(in oklab, var(--color-paper) 55%, #8a7a62),
+    0 18px 28px rgba(8, 14, 28, 0.35);
+}
+
+.clay-window {
+  border-radius: 3px 3px 2px 2px;
+  box-shadow:
+    0 0 16px color-mix(in oklab, var(--color-sun) 55%, transparent),
+    0 3px 0 #cbbda3;
 }
 
 .plane-charge {
@@ -107,21 +161,22 @@
 
 .sling-band {
   fill: none;
-  stroke: var(--color-coral);
+  stroke: var(--color-paper);
   stroke-width: 2.8;
   stroke-linecap: round;
   stroke-linejoin: round;
-  filter: drop-shadow(0 0 5px color-mix(in oklab, var(--color-coral) 70%, transparent));
+  filter: drop-shadow(0 0 6px color-mix(in oklab, var(--color-paper) 55%, transparent));
 }
 
 .sling-post {
-  fill: var(--color-coral);
+  fill: var(--color-paper);
   opacity: 0.78;
 }
 
 .globe-canvas {
   display: block;
   border-radius: 999px;
+  filter: drop-shadow(0 18px 28px rgba(8, 14, 28, 0.45));
 }
 
 @keyframes blob-breathe {
@@ -177,12 +232,48 @@
   }
 }
 
+.bolt-warn {
+  animation: bolt-warn 0.6s ease-in-out infinite;
+}
+
+.bolt-strike {
+  filter: drop-shadow(0 0 10px color-mix(in oklab, var(--color-paper) 80%, var(--color-sun)));
+}
+
+@keyframes bolt-warn {
+  0%,
+  100% {
+    opacity: 0.18;
+  }
+  50% {
+    opacity: 0.75;
+  }
+}
+
+.face-blink {
+  animation: eye-blink 1.2s ease-in-out infinite;
+  transform-box: fill-box;
+}
+
+@keyframes eye-blink {
+  0%,
+  86%,
+  100% {
+    transform: scaleY(1);
+  }
+  90% {
+    transform: scaleY(0.12);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .blob-breathe,
   .cloud,
   .star,
   .token-float,
-  .plane-charge {
+  .plane-charge,
+  .face-blink,
+  .bolt-warn {
     animation: none;
   }
 }

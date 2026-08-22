@@ -51,6 +51,11 @@ export interface Emotion {
   color: string;
   ink: string;
   shape: Shape;
+  face: {
+    eyes: "closed" | "half" | "downcast" | "round" | "wide" | "side" | "brow";
+    mouth: "flat" | "frown" | "wave" | "open" | "none" | "smile" | "bite";
+    blink?: boolean;
+  };
   mirrors: [string, string];
   chips: string[];
   replies: string[];
@@ -127,5 +132,5 @@ export interface MemoryRecord {
 }
 
 export const CENTER = { x: 50, y: 48 };
-export const MIN_RADIUS = 26;
-export const MAX_RADIUS = 44;
+export const MIN_RADIUS = 28;
+export const MAX_RADIUS = 46;

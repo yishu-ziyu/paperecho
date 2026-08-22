@@ -29,10 +29,8 @@ import type { RegionId } from "../types";
 /**
  * Slingshot throw — continuous dynamic motion, not a timed clip.
  *
- * Pull maps to the finger (Apple Dynamic Motion A). Past the charge line,
- * iOS rubber-band resistance grows. Release projects momentum into the
- * launch spring (FaceTime PIP), so a flick flies faster than a slow pull.
- * Weak pulls snap back with ~80% damping — the gesture had leftover energy.
+ * C4: plane drops in from the window (top) onto the bands.
+ * C5: layoutId stays on this plane through launch so flight is the same craft.
  */
 export function ThrowPhase() {
   const region = useGame((s) => s.region);
@@ -48,13 +46,15 @@ export function ThrowPhase() {
   const chargeRef = useRef(0);
   const draggingRef = useRef(false);
   const thrownRef = useRef(false);
+  const enteredRef = useRef(false);
   const restRef = useRef<HTMLDivElement>(null);
   const globeRef = useRef<HTMLDivElement>(null);
   const [dragging, setDragging] = useState(false);
   const [thrown, setThrown] = useState(false);
+  const [entered, setEntered] = useState(Boolean(reduce));
   const [facing, setFacing] = useState<RegionId | null>(null);
   const [full, setFull] = useState(false);
-  const y = useMotionValue(0);
+  const y = useMotionValue(reduce ? 0 : -120);
   const x = useMotionValue(0);
   const rot = useMotionValue(0);
   const power = useMotionValue(0);
@@ -76,6 +76,23 @@ export function ThrowPhase() {
   const destRef = useRef<RegionId | null>(null);
   destRef.current = region ?? facing;
 
+  useEffect(() => {
+    if (reduce) {
+      enteredRef.current = true;
+      setEntered(true);
+      return;
+    }
+    const t = window.setTimeout(() => {
+      enteredRef.current = true;
+      setEntered(true);
+    }, 480);
+    void animate(y, 0, spring.parent).then(() => {
+      enteredRef.current = true;
+      setEntered(true);
+    });
+    return () => window.clearTimeout(t);
+  }, [reduce, y]);
+
   useMotionValueEvent(power, "change", (v) => {
     chargeRef.current = v;
     const next = v >= FULL_THRESHOLD;
@@ -89,7 +106,7 @@ export function ThrowPhase() {
   });
 
   useEffect(() => {
-    if (reduce || thrown || dragging || !aimed || hinted.current) return;
+    if (reduce || thrown || dragging || !aimed || hinted.current || !entered) return;
     hintTimer.current = window.setTimeout(() => {
       if (Math.abs(y.get()) > 2 || start.current || thrownRef.current) return;
       hinted.current = true;
@@ -98,7 +115,7 @@ export function ThrowPhase() {
       });
     }, 1600);
     return () => window.clearTimeout(hintTimer.current);
-  }, [reduce, thrown, dragging, aimed, y]);
+  }, [reduce, thrown, dragging, aimed, y, entered]);
 
   useEffect(() => {
     function onMove(e: PointerEvent) {
@@ -120,6 +137,7 @@ export function ThrowPhase() {
   }, []);
 
   function arm(clientX: number, clientY: number) {
+    if (!enteredRef.current || thrownRef.current) return;
     y.stop();
     x.stop();
     rot.stop();
@@ -199,7 +217,6 @@ export function ThrowPhase() {
       void animate(y, aim.y, { ...spring.launch, velocity: launchVel });
       void animate(x, aim.x, { ...spring.launch, velocity: incomingX * 0.55 });
       void animate(rot, 18 + last.current.x * -0.08, spring.launch);
-      void animate(fade, 0.2, { duration: 0.55, ease: [0.3, 0, 0.8, 0.15], delay: 0.22 });
       void animate(globeScale, 1.05, spring.parent);
       void animate(globeY, -8, spring.parent);
       void animate(punch, 0, { type: "spring", stiffness: 420, damping: 22, velocity: 150 });
@@ -229,13 +246,15 @@ export function ThrowPhase() {
 
   const cue = thrown
     ? "在飞"
-    : full
-      ? "松手"
-      : reduce && aimed
-        ? "点飞机投出"
-        : aimed
-          ? "拉满再放"
-          : "先转地球";
+    : !entered
+      ? "接住"
+      : full
+        ? "松手"
+        : reduce && aimed
+          ? "点飞机投出"
+          : aimed
+            ? "拉满再放"
+            : "先转地球";
 
   return (
     <motion.div className="relative flex min-h-0 flex-1 flex-col px-4" style={{ y: punch }}>
@@ -274,7 +293,7 @@ export function ThrowPhase() {
         data-throw-well
         className="relative mx-auto mt-1 h-40 w-full max-w-md touch-none overflow-visible"
         onPointerDown={(e) => {
-          if (thrownRef.current) return;
+          if (thrownRef.current || !enteredRef.current) return;
           e.preventDefault();
           (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
           arm(e.clientX, e.clientY);
@@ -299,10 +318,10 @@ export function ThrowPhase() {
         ) : null}
         <motion.div
           ref={restRef}
-          layoutId={thrown ? undefined : CRAFT_ID}
+          layoutId={CRAFT_ID}
           data-craft=""
-          className="absolute left-1/2 top-2 h-14 w-24 will-change-transform"
-          style={{ x, y, rotate: rot, scaleX, scaleY: stretch, opacity: fade, marginLeft: -48 }}
+          className="absolute left-1/2 top-2 h-16 w-28 will-change-transform"
+          style={{ x, y, rotate: rot, scaleX, scaleY: stretch, opacity: fade, marginLeft: -56 }}
         >
           <Plane className="h-full w-full" charged={full && !thrown} />
         </motion.div>
@@ -354,8 +373,8 @@ function Trail({
   const ghost = useTransform(fade, (v) => v * opacity);
   return (
     <motion.div
-      className="pointer-events-none absolute left-1/2 top-2 h-14 w-24"
-      style={{ x, y: trailed, rotate: rot, scaleX, scaleY: stretch, opacity: ghost, marginLeft: -48 }}
+      className="pointer-events-none absolute left-1/2 top-2 h-16 w-28"
+      style={{ x, y: trailed, rotate: rot, scaleX, scaleY: stretch, opacity: ghost, marginLeft: -56 }}
     >
       <Plane className="h-full w-full" />
     </motion.div>
