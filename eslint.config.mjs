@@ -15,7 +15,7 @@ export default tseslint.config(
       ".nitro/**",
       "node_modules/**",
       "src/routeTree.gen.ts",
-      "src/game/components/CursorAvatar.tsx",
+      "src/game/bloub/**",
     ],
   },
   js.configs.recommended,
