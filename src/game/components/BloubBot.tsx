@@ -1,21 +1,10 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { NOTIF_BLUE } from "../bloub/decor";
 import { BotEngine, type BotFrame, type Look } from "../bloub/engine";
-import { EXPRESSION_BY_ID, type BotExpression } from "../bloub/expressions";
+import { EXPRESSION_BY_ID } from "../bloub/expressions";
 import { DEMI_VIEWBOX, RAYON } from "../bloub/repere";
 import { SHAPE_BY_ID, mixHex } from "../bloub/skins";
-import { POSES, type EyeCfg, type StateId } from "../bloub/states";
-
-/** Ring tokens are ~60px. Catalogue eyes were measured on a ~320px ball. */
-function enlargeEyes(expr: BotExpression): BotExpression {
-  const bump = (eye: EyeCfg): EyeCfg => ({
-    ...eye,
-    w: Math.max(eye.w * 1.85, 0.28),
-    h: Math.max(eye.h * 1.85, 0.28),
-    open: Math.max(eye.open, 0.78),
-  });
-  return { ...expr, eyes: [bump(expr.eyes[0]), bump(expr.eyes[1])] };
-}
+import { POSES, type StateId } from "../bloub/states";
 
 /**
  * React host for the bloub engine.
@@ -54,11 +43,7 @@ export function BloubBot({
   );
 
   const radii = SHAPE_BY_ID.get(shape)?.radii ?? null;
-  const expr = useMemo(() => {
-    const base = EXPRESSION_BY_ID.get(expression) ?? null;
-    if (!base || !tight) return base;
-    return enlargeEyes(base);
-  }, [expression, tight]);
+  const expr = EXPRESSION_BY_ID.get(expression) ?? null;
   const frozenAt = reduce ? (POSES[state] ?? 1) : null;
 
   const engine = useRef<BotEngine | null>(null);

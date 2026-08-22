@@ -35,7 +35,7 @@ export function MirrorPhase() {
               className="grid place-items-center"
               title={e.label}
             >
-              <EmotionCreature id={f.id} awake size={44} title={e.label} />
+              <EmotionCreature id={f.id} awake size={38} title={e.label} />
             </motion.li>
           );
         })}

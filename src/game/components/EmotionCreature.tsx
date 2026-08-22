@@ -5,7 +5,7 @@ import { EMOTION_MAP } from "../emotions";
 import type { EmotionId } from "../types";
 import { BloubBot } from "./BloubBot";
 
-/** Official bloub skins — not invented silhouettes. */
+/** Catalogue skins. Each mood keeps its own measured eye geometry. */
 const SKIN: Record<EmotionId | "you", { shape: ShapeId; mood: ExpressionId }> = {
   gloom: { shape: "galet", mood: "triste" },
   wronged: { shape: "goutte", mood: "timide" },
@@ -20,7 +20,6 @@ const SKIN: Record<EmotionId | "you", { shape: ShapeId; mood: ExpressionId }> = 
 
 function faceOf(id: EmotionId | "you", awake: boolean, gather: number): ExpressionId {
   if (id === "you") return awake || gather > 0.18 ? "heureux" : "neutre";
-  if (!awake) return "somnolent";
   return SKIN[id].mood;
 }
 

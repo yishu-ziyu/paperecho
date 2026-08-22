@@ -85,7 +85,7 @@ export function OrbitPhase() {
                 color={color}
                 awake={owned.length > 0}
                 gather={gather}
-                size={70}
+                size={64}
                 label="你"
                 title="你"
               />
@@ -203,7 +203,7 @@ function Token({
           : undefined,
       }}
     >
-      <EmotionCreature id={token.id} awake={awake} held={active} gather={g} gaze={gaze} size={active ? 72 : 64} />
+      <EmotionCreature id={token.id} awake={awake} held={active} gather={g} gaze={gaze} size={active ? 62 : 56} />
       <span className="pointer-events-none absolute top-[calc(100%+2px)] left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-paper/92 px-1.5 py-0.5 text-[10px] leading-none text-ink shadow-sm">
         {e.label}
       </span>
