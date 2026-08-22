@@ -283,7 +283,7 @@ export const useGame = create<GameState>((set, get) => ({
           meter: emptyMeter(),
           recall: [{ who: "echo", text: local.greeting }],
           searching: false,
-          searchNote: "线路不稳，改从信柜里取一封相近的旧信",
+          searchNote: "线路不稳，改从本地故事里取一封相近的信",
         });
       });
   },
@@ -467,6 +467,7 @@ export const useGame = create<GameState>((set, get) => ({
       replies: [],
       chosenReplies: [],
       reading: null,
+      meter: emptyMeter(),
       core: cabinetCore(),
       archival: loadArchival(),
       recall: [],

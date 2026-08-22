@@ -233,17 +233,6 @@ export function mixBlobColor(fp: Fingerprint[]): string {
   return EMOTION_MAP[top[0]!.id].color;
 }
 
-export function mirrorLines(fp: Fingerprint[]): string[] {
-  const owned = ownedOf(fp);
-  const lines: string[] = [];
-  for (const f of owned.slice(0, 2)) {
-    lines.push(...EMOTION_MAP[f.id].mirrors);
-  }
-  const unique = [...new Set(lines)];
-  while (unique.length < 3) unique.push("今晚我想把一句说不出口的话折起来。");
-  return unique.slice(0, 3);
-}
-
 export function chipPool(fp: Fingerprint[]): string[] {
   const owned = ownedOf(fp, 0.3);
   const chips: string[] = [];

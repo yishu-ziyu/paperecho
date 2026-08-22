@@ -67,10 +67,6 @@
   animation: token-float 3.2s ease-in-out infinite;
 }
 
-.plane-fly {
-  animation: plane-fly 5.5s var(--ease-out) infinite;
-}
-
 .cloud {
   will-change: transform;
 }
@@ -148,18 +144,6 @@
   }
 }
 
-@keyframes plane-fly {
-  0% {
-    transform: translate(0, 0) rotate(-8deg);
-  }
-  50% {
-    transform: translate(55%, -18px) rotate(6deg);
-  }
-  100% {
-    transform: translate(110%, 6px) rotate(-4deg);
-  }
-}
-
 @keyframes cloud-drift {
   from {
     transform: translateX(0);
@@ -195,7 +179,6 @@
 
 @media (prefers-reduced-motion: reduce) {
   .blob-breathe,
-  .plane-fly,
   .cloud,
   .star,
   .token-float,

@@ -20,7 +20,7 @@
  * `process.env`, which is why the merge has to happen before Vite starts.
  */
 import { spawn } from "node:child_process";
-import { readFileSync, realpathSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { constants as osConstants } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -104,12 +104,29 @@ export function isMainModule(moduleUrl) {
   }
 }
 
+/**
+ * Load the local `.env` file (gitignored) before starting Vite.
+ * Server-side secrets like AI_PING_API_KEY live there.
+ * Existing process environment entries always win.
+ */
+function loadLocalDotEnv(root) {
+  if (typeof process.loadEnvFile !== "function") return;
+  const envPath = join(root, ".env");
+  if (!existsSync(envPath)) return;
+  const before = { ...process.env };
+  process.loadEnvFile(envPath);
+  for (const key of Object.keys(before)) {
+    if (before[key] === undefined) delete process.env[key];
+  }
+}
+
 function main(argv) {
   const [command, ...args] = argv;
   if (!command) {
     console.error("usage: node scripts/with-app-env.mjs <command> [args…]");
     process.exit(2);
   }
+  loadLocalDotEnv(projectRoot());
   const env = mergeAppEnv(readAppEnv(projectRoot()), process.env);
   const child = spawn(command, args, { stdio: "inherit", env });
   // The dev server is long-running and is stopped by signalling this wrapper.

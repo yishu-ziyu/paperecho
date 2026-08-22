@@ -2,16 +2,14 @@ import { cn } from "@/lib/utils";
 
 export function Plane({
   className,
-  flying,
   charged,
 }: {
   className?: string;
-  flying?: boolean;
   charged?: boolean;
 }) {
   return (
     <div
-      className={cn("pointer-events-none relative", flying && "plane-fly", className)}
+      className={cn("pointer-events-none relative", className)}
       aria-hidden
     >
       {charged ? <span className="plane-charge" /> : null}

@@ -110,13 +110,13 @@ export interface TokenMeter {
   node: string;
 }
 
-/** Letta/MemGPT core block — always in the prompt window. */
+/** Core block — kept in every prompt window（本轮人格与人设基线）。 */
 export interface CoreMemory {
   human: string;
   persona: string;
 }
 
-/** Mem0 archival record. Lexical search stands in for embeddings (xAI has no embed API here). */
+/** 信柜档案记录。词法检索（Jaccard）代替向量嵌入，玩家设备上直接跑。 */
 export interface MemoryRecord {
   id: string;
   memory: string;
