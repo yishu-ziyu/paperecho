@@ -1,26 +1,37 @@
+import { useRef } from "react";
 import { motion } from "motion/react";
 import { startPad, unlockAudio } from "../audio";
+import type { CardRect } from "../components/TitleDive";
 import { Craft, PullCommit } from "../continuum";
 import { useGame } from "../store";
 
-export function TitlePhase() {
-  const phase = useGame((s) => s.phase);
-  const startNew = useGame((s) => s.startNew);
+export function TitlePhase({
+  diving = false,
+  onLaunch,
+}: {
+  diving?: boolean;
+  onLaunch: (from: CardRect) => void;
+}) {
   const goArchive = useGame((s) => s.goArchive);
   const journeys = useGame((s) => s.journeys);
-  const gone = phase !== "title";
+  const cardRef = useRef<HTMLDivElement>(null);
 
   function enter() {
-    unlockAudio();
-    startPad();
-    startNew();
+    const r = cardRef.current?.getBoundingClientRect();
+    if (!r) {
+      unlockAudio();
+      startPad();
+      useGame.getState().startNew();
+      return;
+    }
+    onLaunch({ x: r.left, y: r.top, w: r.width, h: r.height });
   }
 
   return (
     <div className="flex flex-1 flex-col items-center px-5 pt-8 text-center">
       <PullCommit
         testId="title"
-        enabled
+        enabled={!diving}
         sign={1}
         threshold={56}
         hint="松开，进房间"
@@ -28,12 +39,16 @@ export function TitlePhase() {
         onCommit={enter}
         className="relative w-[min(92%,22rem)]"
       >
-        <div className="relative">
-          <Craft className="h-[22rem] w-full rounded-3xl bg-paper/85 clay" />
+        <div ref={cardRef} className="relative">
+          <Craft
+            layout={false}
+            className="h-[22rem] w-full rounded-3xl bg-paper/85 clay"
+            style={{ opacity: diving ? 0 : 1 }}
+          />
           <motion.div
             className="absolute inset-0 flex flex-col items-center justify-center px-6 py-8"
-            animate={{ opacity: gone ? 0 : 1 }}
-            transition={{ duration: 0.15 }}
+            animate={{ opacity: diving ? 0 : 1 }}
+            transition={{ duration: 0.12 }}
           >
             <h1
               className="font-latin text-[clamp(2.6rem,13vw,4.4rem)] font-bold leading-[0.84] tracking-wide text-ink"
@@ -53,7 +68,7 @@ export function TitlePhase() {
       {journeys.length ? (
         <PullCommit
           testId="title-drawer"
-          enabled
+          enabled={!diving}
           sign={1}
           threshold={36}
           hint="松开，开信柜"
