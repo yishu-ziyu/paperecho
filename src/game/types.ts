@@ -2,7 +2,6 @@ export type Phase =
   | "title"
   | "orbit"
   | "mirror"
-  | "compose"
   | "fold"
   | "throw"
   | "flight"
@@ -13,7 +12,6 @@ export type Phase =
 /** Ritual steps shown as quiet wayfinding dots. Archive is an exit, not a step. */
 export const JOURNEY: Phase[] = [
   "orbit",
-  "compose",
   "fold",
   "throw",
   "flight",
@@ -21,7 +19,7 @@ export const JOURNEY: Phase[] = [
   "return",
 ];
 
-export const CAN_BACK: Phase[] = ["orbit", "compose", "fold", "throw", "archive"];
+export const CAN_BACK: Phase[] = ["orbit", "fold", "throw", "archive"];
 
 export type Shape = "circle" | "square" | "diamond" | "pill";
 

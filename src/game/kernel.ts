@@ -8,11 +8,11 @@ import type {
   RegionId,
 } from "./types.ts";
 
-export function letterFromChips(chips: string[], extra: string): string {
+export function letterFromChips(chips: string[], extra: string, mirror = ""): string {
   const body = chips.filter(Boolean).join("，");
   const line = extra.trim();
   if (body && line) return `${body}。${line}`;
-  return body || line || "今晚我想把一句说不出口的话折起来。";
+  return body || line || mirror.trim() || "今晚我想把一句说不出口的话折起来。";
 }
 
 export function fallbackEcho(

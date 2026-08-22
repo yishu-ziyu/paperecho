@@ -83,7 +83,6 @@ interface GameState {
   openJourney: (j: Journey) => void;
   setMutedFlag: (v: boolean) => void;
   toggleJudge: () => void;
-  startFold: () => void;
   goThrow: () => void;
   arrive: () => void;
   markScorch: () => void;
@@ -124,7 +123,7 @@ function agentPayload(
 ): AgentPayload {
   return {
     fingerprint: s.fingerprint,
-    letter: letterFromChips(s.letterChips, s.extraLine),
+    letter: letterFromChips(s.letterChips, s.extraLine, s.selectedMirror ?? ""),
     region: s.region ?? "east",
     mirror: s.selectedMirror ?? "",
     playerPersona: s.personaHint ?? "",
@@ -214,7 +213,7 @@ export const useGame = create<GameState>((set, get) => ({
       folds: 0,
       candidates: [],
       matchedBy: {},
-      phase: "compose",
+      phase: "fold",
     });
   },
 
@@ -253,7 +252,7 @@ export const useGame = create<GameState>((set, get) => ({
       session: "",
       exchange: initialExchange(),
     });
-    const letter = letterFromChips(s.letterChips, s.extraLine);
+    const letter = letterFromChips(s.letterChips, s.extraLine, s.selectedMirror ?? "");
     const local = fallbackEcho(s.fingerprint, dest);
     void Promise.race([
       runMatch({
@@ -403,7 +402,7 @@ export const useGame = create<GameState>((set, get) => ({
   saveReturn: () => {
     const s = get();
     if (!s.echo || !s.region) return;
-    const letter = letterFromChips(s.letterChips, s.extraLine);
+    const letter = letterFromChips(s.letterChips, s.extraLine, s.selectedMirror ?? "");
     const journey = buildJourney({
       fingerprint: ownedOf(s.fingerprint),
       mirror: s.selectedMirror ?? "",
@@ -451,8 +450,7 @@ export const useGame = create<GameState>((set, get) => ({
     }
     const prev: Partial<Record<Phase, Phase>> = {
       orbit: "title",
-      compose: "orbit",
-      fold: "compose",
+      fold: "orbit",
       throw: "fold",
     };
     const next = prev[s.phase];
@@ -502,7 +500,6 @@ export const useGame = create<GameState>((set, get) => ({
   openJourney: (j) => set({ reading: j, phase: "archive" }),
   setMutedFlag: (v) => set({ muted: v }),
   toggleJudge: () => set({ judgeOpen: !get().judgeOpen }),
-  startFold: () => set({ phase: "fold", folds: 0 }),
   goThrow: () => set({ phase: "throw" }),
   arrive: () => set({ phase: "encounter", round: 0 }),
   markScorch: () => set({ scorch: Math.min(2, get().scorch + 1) as 0 | 1 | 2 }),

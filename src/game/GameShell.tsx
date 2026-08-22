@@ -6,7 +6,6 @@ import { JudgePanel } from "./components/JudgePanel";
 import { Scene } from "./components/Scene";
 import { TitleDive, type CardRect } from "./components/TitleDive";
 import { ArchivePhase } from "./phases/ArchivePhase";
-import { ComposePhase } from "./phases/ComposePhase";
 import { EncounterPhase } from "./phases/EncounterPhase";
 import { FlightPhase } from "./phases/FlightPhase";
 import { FoldPhase } from "./phases/FoldPhase";
@@ -73,7 +72,6 @@ export function GameShell() {
             {phase === "title" && <TitlePhase diving={diving} onLaunch={launch} />}
             {phase === "orbit" && <OrbitPhase />}
             {phase === "mirror" && <MirrorPhase />}
-            {phase === "compose" && <ComposePhase />}
             {phase === "fold" && <FoldPhase />}
             {phase === "throw" && <ThrowPhase />}
             {phase === "flight" && <FlightPhase />}

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { mkdirSync } from "node:fs";
 import { chromium } from "playwright";
-import { dragToken, dropOnto, pull } from "./play-gestures.mjs";
+import { dragToken, pull } from "./play-gestures.mjs";
 
 const url = process.env.PLAY_URL || "http://127.0.0.1:8080/";
 const out = "/workspace/screenshots/audit";
@@ -33,21 +33,8 @@ await shot("01-orbit");
 await dragToken(page, "郁闷", 0.5, 0.52);
 await page.waitForTimeout(200);
 await shot("01b-orbit-near");
-await pull(page, "you", 0, 90);
-await page.locator('[data-drop="mirror"]').waitFor({ timeout: 5000 });
-await shot("02-mirror");
-
-const card = page.locator("ul button").first();
-await dropOnto(page, card, page.locator('[data-drop="mirror"]').first());
-await page.locator('[data-drop="compose"]').waitFor({ timeout: 5000 });
-await shot("03-compose");
-
-const chip = page.locator(".flex.flex-wrap.gap-2 button").first();
-if (await chip.count()) {
-  await dropOnto(page, chip, page.locator('[data-drop="compose"]').first());
-}
-await shot("03b-compose-chip");
-await pull(page, "compose", 0, -90);
+await page.locator("textarea").fill("群里只回了收到，灯还开着。");
+await page.locator("[data-listen-go]").click();
 await page.locator('[data-pull="fold"]').waitFor({ timeout: 5000 });
 await page.waitForTimeout(400);
 await shot("04-fold");

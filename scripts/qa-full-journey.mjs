@@ -50,26 +50,8 @@ await dragToken(page, "郁闷", 0.5, 0.52);
 await dragToken(page, "疲惫", 0.48, 0.5);
 await page.waitForTimeout(200);
 await shot("01b-faces");
-await pull(page, "you", 0, 90);
-await page.locator('[data-drop="mirror"]').waitFor({ timeout: 5000 });
-await shot("02-mirror");
-
-const card = page.locator("ul button").first();
-await dropOnto(page, card, page.locator('[data-drop="mirror"]').first());
-await page.locator('[data-drop="compose"]').waitFor({ timeout: 5000 });
-await shot("03-compose");
-
-await pull(page, "compose", 0, -90);
-await page.locator('[data-pull="fold"]').waitFor({ timeout: 5000 });
-await shot("04-fold-empty");
-
-await page.locator("[data-hud-back], [aria-label='返回']").first().click();
-await page.locator('[data-drop="compose"]').waitFor({ timeout: 5000 });
-const chip = page.locator(".flex.flex-wrap.gap-2 button").first();
-if (await chip.count()) {
-  await dropOnto(page, chip, page.locator('[data-drop="compose"]').first());
-}
-await pull(page, "compose", 0, -90);
+await page.locator("textarea").fill("群里只回了收到，灯还开着。");
+await page.locator("[data-listen-go]").click();
 await page.locator('[data-pull="fold"]').waitFor({ timeout: 5000 });
 await shot("04-fold-written");
 

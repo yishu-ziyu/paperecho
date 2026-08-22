@@ -32,8 +32,7 @@ export function FoldPhase() {
   const creaseY = useTransform(crease, (c) => Math.min(28, c * 0.15));
   const cornerBg = useTransform(pull, (v) => `color-mix(in oklab, var(--color-coral) ${20 + v * 80}%, transparent)`);
   const hintOpacity = useTransform(pull, [0, 0.42, 1], [0.1, 1, 1]);
-  const empty = letterChips.length === 0 && !extraLine.trim();
-  const body = empty ? mirror : extraLine.trim() || letterChips.slice(0, 3).join(" · ") || mirror;
+  const body = extraLine.trim() || letterChips.slice(0, 3).join(" · ") || mirror;
 
   useEffect(() => {
     function onMove(e: PointerEvent) {
@@ -175,12 +174,10 @@ export function FoldPhase() {
                 animate={{ opacity: 1 }}
                 transition={{ duration: 0.15 }}
               >
-                {empty ? (
-                  <p className="italic text-ink/45">
-                    {mirror ? `你捡到的：${mirror}` : "一张空白。也可以寄出。"}
-                  </p>
-                ) : (
+                {body ? (
                   <p className="text-ink/70">{body}</p>
+                ) : (
+                  <p className="italic text-ink/45">一张空白。也可以寄出。</p>
                 )}
               </motion.div>
               <motion.span

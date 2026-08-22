@@ -132,31 +132,8 @@ async function night(page, persona, index, previous) {
   for (const label of persona.near) await dragToken(page, label, 0.5, 0.52);
   for (const label of persona.far) await dragToken(page, label, 0.12, 0.18);
   await shot(page, `${persona.id}-orbit`);
-  await pull(page, "you", 0, 90);
-  await page.locator('[data-drop="mirror"]').waitFor({ timeout: 6000 });
-  log.phases.push("mirror");
-  await shot(page, `${persona.id}-mirror`);
-
-  const cards = page.locator("ul button");
-  await dropOnto(page, cards.nth(persona.pick), page.locator('[data-drop="mirror"]').first());
-  await page.locator('[data-drop="compose"]').waitFor({ timeout: 6000 });
-  log.phases.push("compose");
-  log.picked = (await state(page))?.echo?.name || "";
-
-  const chips = page.locator(".flex.flex-wrap.gap-2 button");
-  const n = await chips.count();
-  const paper = page.locator('[data-drop="compose"]').first();
-  for (let i = 0; i < Math.min(persona.chips, n); i++) {
-    if (await chips.nth(i).isEnabled()) await dropOnto(page, chips.nth(i), paper);
-  }
-  if (persona.extra) {
-    const extra = page.getByRole("button", { name: "再写一句只有你能写的" });
-    if (await extra.count()) await extra.click();
-    const input = page.locator("input").first();
-    if (await input.count()) await input.fill(persona.extra);
-  }
-  await shot(page, `${persona.id}-compose`);
-  await pull(page, "compose", 0, -90);
+  await page.locator("textarea").fill(persona.extra || "群里只回了收到，灯还开着。");
+  await page.locator("[data-listen-go]").click();
   await page.locator('[data-pull="fold"]').waitFor({ timeout: 6000 });
   log.phases.push("fold");
   await page.waitForTimeout(350);
