@@ -3,11 +3,13 @@ import { describe, it } from "node:test";
 import { COLLECTED } from "../collect.ts";
 import { foreignPlace, STORIES } from "../stories.ts";
 import { isCompleteFact } from "./memory.ts";
-import { synthesize } from "./pipeline/persona.ts";
+import { libraryFirstMaterials, synthesize } from "./pipeline/persona.ts";
+import type { Post } from "./pipeline/source.ts";
 import { makeProfile } from "./pipeline/profile.ts";
 import { archiveStories, storyToPost } from "./pipeline/sources/local.ts";
+import { queriesOf } from "./pipeline/sources/live.ts";
 import { cleanOneLine } from "./chains.ts";
-import { runAgentTool, type ToolCtx } from "./tools.ts";
+import { formatCaseHits, formatCaseHitsLive, runAgentTool, type ToolCtx } from "./tools.ts";
 
 describe("match research via PostSource", () => {
   it("feeds synthesize materials, not locked story names", () => {
@@ -76,5 +78,104 @@ describe("foreignPlace extra-lexicon", () => {
 
   it("lets Chicago keep its own lake", () => {
     assert.equal(foreignPlace("密歇根湖风很大，清单还亮着。", "Jonah", "Chicago"), false);
+  });
+});
+
+describe("match research library-first", () => {
+  it("formatCaseHits is the library path and stays name-free", () => {
+    const ctx: ToolCtx = {
+      archival: [],
+      fingerprint: [
+        { id: "tired", closeness: 0.9 },
+        { id: "unseen", closeness: 0.8 },
+      ],
+      region: "east",
+      remembered: [],
+      story: "我改到很晚，群里只回了收到。",
+    };
+    const blob = formatCaseHits(ctx);
+    assert.match(blob, /跟你一样/);
+    assert.equal(/search_cases|Firecrawl|AnySearch/.test(blob), false);
+    for (const story of [...STORIES, ...COLLECTED]) {
+      assert.equal(blob.includes(`${story.name} · ${story.city}`), false);
+    }
+  });
+
+  it("formatCaseHitsLive still returns the library when live is off", async () => {
+    const ctx: ToolCtx = {
+      archival: [],
+      fingerprint: [
+        { id: "tired", closeness: 0.9 },
+        { id: "unseen", closeness: 0.8 },
+      ],
+      region: "east",
+      remembered: [],
+      story: "我改到很晚，群里只回了收到。",
+    };
+    const blob = await formatCaseHitsLive(ctx);
+    const lib = formatCaseHits(ctx);
+    assert.match(blob, /跟你一样/);
+    assert.equal(blob.split("\n")[0], lib.split("\n")[0]);
+    assert.ok(blob.split("---").length >= 2);
+    assert.equal(/search_cases|Firecrawl|AnySearch/.test(blob), false);
+  });
+});
+
+describe("live query", () => {
+  it("builds a first-person public-page query from emotions and the written line", () => {
+    const qs = queriesOf(makeProfile(["tired", "unseen"], "我改到很晚，群里只回了收到。"));
+    assert.ok(qs.length >= 1);
+    assert.match(qs.join("\n"), /日记/);
+    assert.equal(/Firecrawl|AnySearch/.test(qs.join("")), false);
+  });
+});
+
+describe("library occupies five materials", () => {
+  it("keeps library posts even when live overlap is higher", () => {
+    const profile = makeProfile(["tired", "unseen"]);
+    const local: Post[] = Array.from({ length: 5 }, (_, i) => ({
+      platform: "archive",
+      content: `库里第${i + 1}夜我改到很晚群里只回了收到。`,
+      emotion: ["tired" as const],
+      situation: `库摘要${i + 1}`,
+    }));
+    const live: Post[] = [
+      {
+        platform: "web",
+        content: "现场帖我改到三点半还在等已读，想被看见。",
+        emotion: ["tired" as const, "unseen" as const],
+        situation: "现场摘要",
+      },
+    ];
+    const mixed = synthesize([...local, ...live], profile);
+    assert.equal(mixed.materials.some((p) => p.content.includes("现场帖")), true);
+    const kept = libraryFirstMaterials(local, live, profile);
+    assert.equal(kept.length, 5);
+    assert.equal(kept.every((p) => p.platform === "archive"), true);
+    assert.equal(kept.some((p) => p.content.includes("现场帖")), false);
+  });
+
+  it("lets live fill empty slots when the library is short", () => {
+    const profile = makeProfile(["tired"]);
+    const local: Post[] = [
+      {
+        platform: "archive",
+        content: "库里只有这一夜我对着灯坐着。",
+        emotion: ["tired" as const],
+        situation: "库一条",
+      },
+    ];
+    const live: Post[] = [
+      {
+        platform: "web",
+        content: "现场补上的夜我把充电器拔了。",
+        emotion: ["tired" as const],
+        situation: "现场一条",
+      },
+    ];
+    const kept = libraryFirstMaterials(local, live, profile);
+    assert.equal(kept.length, 2);
+    assert.equal(kept[0]?.content.includes("库里"), true);
+    assert.equal(kept[1]?.content.includes("现场补上"), true);
   });
 });

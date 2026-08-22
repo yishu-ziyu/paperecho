@@ -1,8 +1,8 @@
 # Paper Echo · AI Agent 层架构
 
-> 四段流水线（完整闭环）：**倾听 → 搜索 → 整合 → 回应**。本文档描述 `src/game/agent/pipeline/` 下的最小可运行骨架，
-> 它与现有 `chains.ts` 提示词链**并行存在**，不改变任何现有运行时；目标是先跑通一套
-> 结构优良、数据源可插拔、方便后续评测/调优的 Agent 底座。
+> 四段流水线（完整闭环）：**倾听 → 搜索 → 整合 → 回应**。本文档描述 `src/game/agent/pipeline/`。
+> 游戏运行时仍是 `chains.ts`；**match 的 research 读本目录**（`formatCaseHitsLive`：库占满 5 条，live 只填空位 → synthesizeLibraryFirst）。
+> 预采集在 `scripts/collect/`；现场爬到的改写稿后台入库。crawl 仍占位；`respond` 供冒烟与离线评测。
 
 ## 1. 四段流水线（闭环）
 
@@ -37,12 +37,12 @@
 │    respond(ctx) ──► TurnOutput.reply     │
 │    从素材库取细节 + voice，开口回应       │
 └─────────────────────────────────────────┘
-        │ reply
+        │ EchoShadow / materials
         ▼
-  现有 chains.ts / server.ts（运行时，不改动）
+  chains.ts match research（formatCaseHitsLive，库占满 5 条）→ 开口仍走 match/turn/seal
 ```
 
-一句话：**Profile 合成画像 → PostSource 找一批帖子 → synthesize 整合成合成影子 → respond 开口回应**。
+一句话：**Profile 合成画像 → PostSource 找一批帖子 → synthesize 整合成合成影子 → match 用素材开口（respond 仍是评测入口）**。
 合成影子代表「跟你同频的那群人」，不绑定任何真人，名字抽象、声音融合、带素材库；对话时从其素材库取细节生成回应。
 
 ## 2. 数据契约
@@ -131,9 +131,9 @@ interface TurnOutput {
 
 | 源 | 文件 | 状态 | 说明 |
 | --- | --- | --- | --- |
-| `localPosts` | `sources/local.ts` | ✅ 可跑 | 12 张 Story 卡转 Post，确定性兜底，先跑通它 |
+| `localPosts` | `sources/local.ts` | ✅ 可跑 | 手写 12 张 + `COLLECTED` 改写稿转 Post；采集稿权重 ×0.9 |
 | `crawlPosts` | `sources/crawl.ts` | 🚧 占位 | 读 MediaCrawler 预爬 JSONL，调用抛 `not implemented` |
-| `liveSearchSource` | `sources/live.ts` | 🚧 占位 | AnySearch / Firecrawl 现搜，返回 `[]` |
+| `liveSearchSource` | `sources/live.ts` | ✅ 可跑 | AnySearch / Firecrawl 短预算现搜；失败 `[]`；原文后台入库 |
 
 切换方式：
 
@@ -159,29 +159,21 @@ const src = sourceFor("local");
 
 ## 4. 与现有 chains.ts 的关系与迁移路径
 
-- **现在（并行）**：`chains.ts` 仍是游戏唯一运行时，`pipeline/` 是独立的、被游戏代码**零引用**的新底座。
-  两者共用 `EmotionId / Story / EchoPerson / Fingerprint` 与 `emotions.ts / stories.ts` 里的纯函数，
-  互不侵入。
-- **映射关系**：现有 `match` 链里的 `fallbackEcho(fp, region)`（`storyToEcho(matchStory(...))`）≈
-  新流水线的 `runPipeline(makeProfile(emotionsOf(fp)))`（`localPosts → synthesize → EchoShadow`）。
-  前者已可产 `EchoPerson`；后者把「选故事」抽象成「整合一批帖子为合成影子」，为真实语料留出接口。
-- **未来（逐步替换）**：
-  1. 搜索层先切：`search_cases` 工具目前直接排 `STORIES`，可改为读 `pipeline` 的 `PostSource`，
-     `CrawlPosts` / `LiveSearch` 一旦接入即生效。
-  2. 倾听层再切：`makeRuntime` 里 `perceptionOf(...)` 的输入可换成 `PlayerProfile`，story/persona 补上后
-     画像更完整。
-  3. 回应层最后切：`synthesize` 产出 `EchoShadow`、`respond` 从 `materials` 素材库取细节生成回应，
-     作为 `runMatchChain` 的 `input.echo` 起点。
-  4. 记忆层（`memory.ts`）保持不变，仍由现有 `remember` / `search_archive` 使用。
+- **现在**：`chains.ts` 仍是游戏唯一对话运行时。`pipeline/` 已接到 match：`researchStep("match")` 调 `formatCaseHitsLive`（库 `localPosts` 先占满 5 条素材，短超时 live 只填空位，`synthesizeLibraryFirst`），产出 handle / voice / materials，**不再**把 `林予 · 杭州` 这类身份串塞进检索结果。`runAgentTool("search_cases")` 仍走库上的 `formatCaseHits`；有 query 时再附 2 条 opening（仍不带 name·city）。
+- **映射关系**：离线兜底仍是 `fallbackEcho(fp, region)`（本地故事卡）。线上 match 用合成影子当「世界上另一个我」的素材，名与城由 `arrive` 在链上落下，不由故事卡锁死。
+- **尚未切**：
+  1. 倾听层：`makeRuntime` 里 `perceptionOf(...)` 尚未换成完整 `PlayerProfile`（story / persona UI 未做）。
+  2. 回应层：游戏开口仍走 match/turn/seal；`respond` 是冒烟/评测入口，不是 Encounter 的生产路径。
+  3. 记忆层（`memory.ts`）仍由 `remember` / `search_archive` 使用。
 
 ## 5. Penguin 回声 Agent 映射
 
 | 四段流水线 | Penguin 回声 Agent 职责 | 对应现有实现 |
 | --- | --- | --- |
 | 倾听 Profile | 把玩家结构化痕迹合成画像 | `perceptionOf` + `ownedOf`（memory.ts / emotions.ts） |
-| 搜索 Source | 从世界语料里找「相似的人」 | `search_cases` / `search_archive`（tools.ts） |
-| 整合 Persona | 把一批帖子整合成「合成影子」 | `arrive` + greeting 生成（chains.ts） |
-| 回应 Respond | 从素材库取细节、遵守 voice，开口回应 | `runMatchChain` 的 `input.echo` 起点（chains.ts） |
+| 搜索 Source | 从世界语料里找「相似的人」 | `formatCaseHitsLive`（库占满 5 条 + live 补空）/ `search_cases` + `search_archive` |
+| 整合 Persona | 把一批帖子整合成「合成影子」 | `synthesize`（persona.ts）；身份由 `arrive` 落下 |
+| 回应 Respond | 从素材库取细节、遵守 voice，开口回应 | 生产路径 = match/turn/seal；`respond.ts` 供冒烟 |
 | 记忆 Memory | 跨夜记住玩家的事 | `memory.ts`（本阶段不动） |
 
 ## 6. MediaCrawler 语料库接入步骤
@@ -228,10 +220,11 @@ const src = sourceFor("local");
 - [ ] 接 store：情绪拖拽完成后由 store 调 `fingerprintOf` → `emotionsOf` 填 `PlayerProfile.emotions`。
 - [ ] 故事表单（`PlayerProfile.story`）与人格趣味题（`PlayerProfile.persona`）的 UI 与取值。
 - [ ] 实现 `crawlPostsFromPath` 的文件读取、缓存与过滤。
-- [ ] 实现 `liveSearch` 的 AnySearch / Firecrawl 检索与情绪标注。
+- [x] 实现 `liveSearch` 的 AnySearch / Firecrawl 短预算检索；失败返回 []；后台改写入库。
 - [ ] **LLM 融合 `synthesize`（现在是人肉启发式）**：用 LLM 把一批帖子的语言风格融合成统一的 `voice`。
 - [ ] **LLM 生成 `respond`（现在是人肉启发式）**：遵守 `voice` 与对话质量规范，从素材库取具体细节生成回应；回应层骨架已落地（`respond` / `TurnContext` / `TurnOutput`）。
-- [ ] 把 `search_cases` 工具切换到 `PostSource`，接入真实语料。
+- [x] 把 `search_cases` / match research 切到 `PostSource`（库优先 + live 短预算）。
+- [x] P0 预采集管线 `scripts/collect/`（搜公开页 → 洗 → 匿名改写 → QA → `src/game/collect.ts`）。
 - [ ] 离线评测：固定 profile 集 + 标注帖集，量化三个源的素材库质量与可复现性。
 - [ ] 记忆层与流水线的衔接（当前沿用 `memory.ts`，暂不改动）。
 
@@ -241,9 +234,12 @@ const src = sourceFor("local");
 | --- | --- |
 | `pipeline/profile.ts` | `PlayerProfile` 类型 + `emotionsOf` 提取入口 |
 | `pipeline/source.ts` | `Post` / `PostSource` 契约 |
-| `pipeline/sources/local.ts` | LocalPosts 默认兜底源 |
+| `pipeline/sources/local.ts` | LocalPosts 默认快路径 |
 | `pipeline/sources/crawl.ts` | CrawlPosts 占位源（JSONL schema + 接入 TODO） |
-| `pipeline/sources/live.ts` | LiveSearch 占位源（签名 + TODO） |
-| `pipeline/persona.ts` | `EchoShadow` + `synthesize`（一批帖子→合成影子） |
+| `pipeline/sources/live.ts` | LiveSearch 短预算现搜 |
+| `pipeline/web.ts` | 公开页检索与清洗 |
+| `pipeline/rewrite.ts` | 匿名改写 + QA（AI PING） |
+| `pipeline/ingest.ts` | 现场命中后台入库 |
+| `pipeline/persona.ts` | `EchoShadow` + `synthesize` / `synthesizeLibraryFirst` |
 | `pipeline/respond.ts` | `TurnContext`/`TurnOutput` + `respond`（从素材库取细节开口回应） |
 | `pipeline/index.ts` | 统一导出 + `runPipeline`（四段闭环）/ `sourceFor` |

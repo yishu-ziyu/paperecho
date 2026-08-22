@@ -21,5 +21,6 @@ attachments
 coverage
 playwright-report
 test-results
+corpus/
 AGENTS.md
 AGENTS.project.md

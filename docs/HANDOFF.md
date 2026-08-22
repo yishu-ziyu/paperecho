@@ -15,9 +15,9 @@
 
 - 项目在 `/Users/mahaoxuan/Desktop/黑客松/AI PING/paper-echo`。运行：`npm run dev`（with-app-env → vite :8080）；`npm run typecheck`；`npm run lint`。
 - env：`.env` 的 `AI_PING_API_KEY`；`.grok/app-env.json` 的 `VITE_AUTH_ENABLED=false`。LLM = AI PING（aiping.cn/api/v1）DeepSeek-V4-Flash-0731。
-- **Agent 只有一套实现：`src/game/agent/chains.ts`**。`server.ts` 三个 Server Function（runMatch/runTurn/runSeal）→ echoChain.match/turn/seal，每链 = 确定性 research → 单工具短命 Pi Agent 步 → 确定性 validate。记忆 = localStorage（journeys `paper-echo-v1` ≤24 局；memory `paper-echo-memory-v2` ≤48 条）+ Jaccard 多因子检索。
+- **Agent 只有一套实现：`src/game/agent/chains.ts`**。`server.ts` 三个 Server Function（runMatch/runTurn/runSeal）→ echoChain.match/turn/seal，每链 = 确定性 research → 单工具短命 Pi Agent 步 → 确定性 validate。match 的 research 读 `pipeline/`：库优先占满 5 条，live 短超时只填空位。记忆 = localStorage（journeys `paper-echo-v1` ≤24 局；memory `paper-echo-memory-v2` ≤48 条）+ Jaccard 多因子检索。
 - 超时：store 层 race match 22s / turn 12s / seal 14s；链内各步 7~15s。无 key/失败/超时三层兜底（fallbackEcho 本地故事卡）。
-- 数据：12 个手写 Story（故事卡），8 情绪，6 区域，10 个 phase。**玩家流程中，Mirror 阶段选句子=绑定人物，echo 永远非空**（match 链的身份自由度实际被锁，这是个已知但未结算的产品议题 B2）。
+- 数据：12 个手写 Story + `src/game/collect.ts` 的 `COLLECTED`（预采集改写稿）。玩家不点选故事卡。**Mirror 是手写**：玩家自己写下今晚那句；`echo` 起飞后由 match 链定名定城。现场可爬公开页（短预算约 4s，失败不影响开口）；**库占满 5 条素材**，live 只填空位；爬完改写过闸写入 `COLLECTED`。扩库也可用 `npm run collect`。
 - 已知体验缺陷清单（按优先级）见 §5。
 
 ## 2. 本会话已完成的工作
@@ -75,7 +75,8 @@
 ## 7. 关键文件地图（改动过的文件）
 
 - 删除：`src/game/agent/{graph,pi-echo}.ts`、`src/game/ai.ts`
-- Agent 本体：`src/game/agent/{chains,server,types,config,llm,tools,memory}.ts`（仅此 7 文件为活代码）
+- Agent 本体：`src/game/agent/{chains,server,types,config,llm,tools,memory}.ts` + `pipeline/`（match research 读手写+COLLECTED，live 短预算补空）
+- 预采集：`scripts/collect/` → 生成 `src/game/collect.ts`；原文 JSONL 在 gitignored 的 `corpus/`
 - 改动过的其他：`src/game/store.ts`、`src/game/components/JudgePanel.tsx`、`src/game/types.ts`、`scripts/probe-night.mts`、`package.json`、根目录三文档（README/agent.md/CODE_WIKI.md）
 - 新增：`docs/reports/social-story-pipeline.md`、本文件
 - 技能仓库（项目内，勿全局安装）：`/Users/mahaoxuan/Desktop/黑客松/AI PING/.dsh/agent-skills`

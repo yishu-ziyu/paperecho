@@ -8,8 +8,8 @@
  *   synthesize（persona.ts）   —— 把一批 Post 整合成 EchoShadow（合成影子）
  *   respond（respond.ts）      —— 对话循环：从素材库取细节开口回应
  *
- * 游戏运行时：match 的 research 经 `formatCaseHits` 读 LocalPosts
- *（手写 12 张 + COLLECTED 预采集改写稿）→ synthesize。crawl / live 仍占位。
+ * 游戏运行时：match 的 research 经 `formatCaseHitsLive`：库先占满 5 条素材，
+ * 短超时 live 只填空位。爬到的原文后台改写入库。crawl 仍占位。
  */
 import { synthesize } from "./persona";
 import type { EchoShadow } from "./persona";
@@ -43,7 +43,7 @@ export { synthesize };
 // 回应层（对话循环）
 export { respond };
 
-/** 默认数据源列表：先跑通 LocalPosts，其余按需插拔。 */
+/** 默认数据源：库。live 由 match 短预算另接，不挡这条闭环。 */
 export const DEFAULT_SOURCES: PostSource[] = [localPosts];
 
 /** 按 id 取源，便于评测/配置里用字符串切换。 */

@@ -1,9 +1,12 @@
 import { ownedOf } from "../emotions.ts";
 import type { EmotionId, Fingerprint, MemoryRecord, RegionId } from "../types.ts";
 import { isCompleteFact, isInstruction, jaccard, searchArchival, tokensOf } from "./memory.ts";
-import { synthesize } from "./pipeline/persona.ts";
+import { synthesize, synthesizeLibraryFirst } from "./pipeline/persona.ts";
 import { makeProfile } from "./pipeline/profile.ts";
-import { archiveStories, storyToPost } from "./pipeline/sources/local.ts";
+import type { PlayerProfile } from "./pipeline/profile.ts";
+import type { Post } from "./pipeline/source.ts";
+import { archiveStories, localPosts, storyToPost } from "./pipeline/sources/local.ts";
+import { liveSearchSource } from "./pipeline/sources/live.ts";
 
 export interface ToolCtx {
   archival: MemoryRecord[];
@@ -20,10 +23,37 @@ function asFeels(fp: Fingerprint[]): EmotionId[] {
   return ownedOf(fp, 0.3).map((f) => f.id);
 }
 
-/** match 检索：世界档案 → synthesize。blob 只有 handle/voice/情境+正文，无姓名城市、无原帖。 */
+function profileOf(ctx: ToolCtx): PlayerProfile {
+  return makeProfile(asFeels(ctx.fingerprint), ctx.story ?? "", ctx.persona ?? "");
+}
+
+function shadowBlob(posts: Post[], profile: PlayerProfile): string {
+  const shadow = synthesize(posts, profile);
+  if (!shadow.materials.length) return "世界档案空。没有相近的夜。";
+  const body = shadow.materials
+    .map((p) => `${p.situation || "（无摘要）"}\n${p.content}`)
+    .join("\n---\n");
+  return `${shadow.handle}\n${shadow.voice}\n---\n${body}`;
+}
+
+/** 库：手写 + COLLECTED。永远先到。 */
 export function formatCaseHits(ctx: ToolCtx): string {
-  const profile = makeProfile(asFeels(ctx.fingerprint), ctx.story ?? "", ctx.persona ?? "");
-  const shadow = synthesize(archiveStories().map(storyToPost), profile);
+  return shadowBlob(archiveStories().map(storyToPost), profileOf(ctx));
+}
+
+/**
+ * 库占满 5 条素材；live 短超时只填空位。live 失败仍返回库。原文不进 blob。
+ */
+export async function formatCaseHitsLive(ctx: ToolCtx): Promise<string> {
+  const profile = profileOf(ctx);
+  const local = await localPosts.search(profile);
+  let live: Post[] = [];
+  try {
+    live = await liveSearchSource.search(profile);
+  } catch {
+    live = [];
+  }
+  const shadow = synthesizeLibraryFirst(local, live, profile);
   if (!shadow.materials.length) return "世界档案空。没有相近的夜。";
   const body = shadow.materials
     .map((p) => `${p.situation || "（无摘要）"}\n${p.content}`)

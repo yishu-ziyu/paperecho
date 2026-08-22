@@ -102,3 +102,31 @@ export function synthesize(posts: Post[], profile: PlayerProfile): EchoShadow {
     materials,
   };
 }
+
+/**
+ * 库占满 5 条：先从 local 取素材，live 只填空位，不得凭 overlap 把库挤掉。
+ */
+export function libraryFirstMaterials(local: Post[], live: Post[], profile: PlayerProfile): Post[] {
+  const fromLib = selectMaterials(local, profile);
+  if (fromLib.length >= 5) return fromLib;
+  const seen = new Set(fromLib.map((p) => p.content));
+  const extras: Post[] = [];
+  for (const post of selectMaterials(live, profile)) {
+    if (seen.has(post.content)) continue;
+    seen.add(post.content);
+    extras.push(post);
+    if (fromLib.length + extras.length >= 5) break;
+  }
+  return [...fromLib, ...extras];
+}
+
+/** match 用：库先开口，live 只往后补。voice 仍看整批（库在前）。 */
+export function synthesizeLibraryFirst(local: Post[], live: Post[], profile: PlayerProfile): EchoShadow {
+  const materials = libraryFirstMaterials(local, live, profile);
+  const forVoice = local.length ? [...local, ...live] : live;
+  return {
+    handle: deriveHandle(profile.emotions),
+    voice: deriveVoice(forVoice.length ? forVoice : materials),
+    materials,
+  };
+}

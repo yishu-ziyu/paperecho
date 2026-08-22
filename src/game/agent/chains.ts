@@ -21,7 +21,7 @@ import type { EchoPerson, TokenMeter } from "../types.ts";
 import { AGENT_MODEL, aiPingProvider, LLM_CONFIG } from "./config.ts";
 import { emptyMeter, hasApiKey } from "./llm.ts";
 import { factsOf, isCompleteFact, ownLine, perceptionOf, renderBlocks, stolenVoice } from "./memory.ts";
-import { formatCaseHits, runAgentTool, type ToolCtx } from "./tools.ts";
+import { formatCaseHitsLive, runAgentTool, type ToolCtx } from "./tools.ts";
 import { acceptFelt, advanceExchange, exchangeCue, initialExchange } from "./exchange.ts";
 import type { ExchangeState } from "./exchange.ts";
 import type { NightInput, NightResult, RecallItem } from "./types.ts";
@@ -292,8 +292,8 @@ function recallWithoutCurrent(recall: RecallItem[] | undefined, playerLine?: str
   return items;
 }
 
-/** 研究步骤：确定性检索，不调用 LLM。 */
-function researchStep(kind: "match" | "turn" | "seal", rt: ChainRuntime): string {
+/** 研究步骤：库优先；match 短超时并入 live。不调用对话 LLM。 */
+async function researchStep(kind: "match" | "turn" | "seal", rt: ChainRuntime): Promise<string> {
   const notes: string[] = [];
   const earlier = recallWithoutCurrent(rt.input.recall, rt.input.playerLine)
     .slice(-2)
@@ -303,7 +303,7 @@ function researchStep(kind: "match" | "turn" | "seal", rt: ChainRuntime): string
     "今夜";
 
   if (kind === "match") {
-    const cases = formatCaseHits(rt.ctx);
+    const cases = await formatCaseHitsLive(rt.ctx);
     rt.hits.push(cases);
     notes.push(`【世界档案里的相似的人】\n${cases}`);
   }
@@ -346,7 +346,7 @@ async function runMatchChain(input: NightInput): Promise<NightResult> {
   const opened: ExchangeState = initialExchange();
   if (!hasApiKey()) return { ...fallbackFor("match", rt), exchange: opened, speak: 1, speakMode: "full" };
 
-  const research = researchStep("match", rt);
+  const research = await researchStep("match", rt);
 
   // Step 1: 身份决策。只给 arrive 工具。
   const decideSystem = `${RULES}\n\n${coreBlocks(rt)}
@@ -456,7 +456,7 @@ async function runTurnChain(input: NightInput): Promise<NightResult> {
   }
 
   const echo = input.echo ?? rt.local;
-  const research = researchStep("turn", rt);
+  const research = await researchStep("turn", rt);
 
   const earlierTonight = formatRecall(recallWithoutCurrent(input.recall, input.playerLine).slice(-2));
 
@@ -541,7 +541,7 @@ async function runSealChain(input: NightInput): Promise<NightResult> {
   const dialogue = (input.recall ?? [])
     .map((t) => `${t.who === "you" ? "玩家" : "回声"}：${t.text}`)
     .join("\n");
-  researchStep("seal", rt);
+  await researchStep("seal", rt);
 
   // Step 1: 记忆提取。
   const rememberSystem = `${RULES}\n\n${coreBlocks(rt)}
