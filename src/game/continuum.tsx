@@ -229,6 +229,9 @@ export function useWellDrag<T>(onDrop: (value: T) => void, opts?: { floor?: bool
   const floor = Boolean(opts?.floor);
   const [holding, setHolding] = useState<T | null>(null);
   const [over, setOver] = useState(false);
+  const origin = useRef<{ x: number; y: number } | null>(null);
+  const dragged = useRef(false);
+  const lastDragged = useRef(false);
 
   function hit(x: number, y: number) {
     const r = wellRef.current?.getBoundingClientRect();
@@ -241,6 +244,11 @@ export function useWellDrag<T>(onDrop: (value: T) => void, opts?: { floor?: bool
   useEffect(() => {
     function onMove(e: PointerEvent) {
       if (held.current == null) return;
+      if (origin.current) {
+        const d = Math.hypot(e.clientX - origin.current.x, e.clientY - origin.current.y);
+        if (d > 8) dragged.current = true;
+      }
+      if (!dragged.current) return;
       moveGhost(ghostRef.current, e.clientX, e.clientY);
       const next = hit(e.clientX, e.clientY);
       if (overRef.current === next) return;
@@ -249,9 +257,13 @@ export function useWellDrag<T>(onDrop: (value: T) => void, opts?: { floor?: bool
     }
     function onUp(e: PointerEvent) {
       const value = held.current;
+      const moved = dragged.current;
+      lastDragged.current = moved;
       held.current = null;
+      origin.current = null;
+      dragged.current = false;
       setHolding(null);
-      if (value != null && hit(e.clientX, e.clientY)) {
+      if (moved && value != null && hit(e.clientX, e.clientY)) {
         landGhost(ghostRef.current, wellRef.current);
         dropRef.current(value);
       } else {
@@ -274,12 +286,13 @@ export function useWellDrag<T>(onDrop: (value: T) => void, opts?: { floor?: bool
     return (e: ReactPointerEvent) => {
       if (e.button != null && e.button !== 0) return;
       held.current = value;
+      origin.current = { x: e.clientX, y: e.clientY };
+      dragged.current = false;
       setHolding(value);
       if (ghostRef.current) ghostRef.current.textContent = label;
-      moveGhost(ghostRef.current, e.clientX, e.clientY);
       (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
     };
   }
 
-  return { wellRef, ghostRef, holding, over, grab };
+  return { wellRef, ghostRef, holding, over, grab, wasDragged: () => lastDragged.current };
 }
