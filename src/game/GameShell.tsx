@@ -1,8 +1,10 @@
-import { useEffect } from "react";
-import { AnimatePresence, motion } from "motion/react";
+import { useCallback, useEffect, useState } from "react";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+import { startPad, unlockAudio } from "./audio";
 import { Hud } from "./components/Hud";
 import { JudgePanel } from "./components/JudgePanel";
 import { Scene } from "./components/Scene";
+import { TitleDive, type CardRect } from "./components/TitleDive";
 import { ArchivePhase } from "./phases/ArchivePhase";
 import { ComposePhase } from "./phases/ComposePhase";
 import { EncounterPhase } from "./phases/EncounterPhase";
@@ -22,26 +24,53 @@ import { useGame } from "./store";
  */
 export function GameShell() {
   const phase = useGame((s) => s.phase);
+  const startNew = useGame((s) => s.startNew);
+  const reduce = useReducedMotion();
+  const [diveFrom, setDiveFrom] = useState<CardRect | null>(null);
+  const [seedU, setSeedU] = useState(0);
+  const diving = Boolean(diveFrom);
 
   useEffect(() => {
     (window as Window & { __echoGame?: typeof useGame }).__echoGame = useGame;
   }, []);
 
+  const launch = useCallback(
+    (from: CardRect, u: number) => {
+      unlockAudio();
+      startPad();
+      if (reduce) {
+        startNew();
+        return;
+      }
+      setSeedU(u);
+      setDiveFrom(from);
+    },
+    [reduce, startNew],
+  );
+
+  const cover = useCallback(() => {
+    startNew();
+  }, [startNew]);
+
+  const finish = useCallback(() => {
+    setDiveFrom(null);
+  }, []);
+
   return (
     <Scene phase={phase}>
-      {phase !== "title" ? <Hud /> : null}
+      {phase !== "title" && !diving ? <Hud /> : null}
       <JudgePanel />
       <div className="relative min-h-0 flex-1">
         <AnimatePresence mode="sync" initial={false}>
           <motion.div
             key={phase}
             className="absolute inset-0 flex min-h-0 flex-col overflow-hidden"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1, pointerEvents: "auto" }}
-            exit={{ opacity: 0, pointerEvents: "none" }}
-            transition={{ duration: 0.2, ease: [0.2, 0, 0, 1] }}
+            initial={diving ? false : { opacity: 0 }}
+            animate={{ opacity: 1, pointerEvents: diving ? "none" : "auto" }}
+            exit={diving ? { opacity: 1 } : { opacity: 0, pointerEvents: "none" }}
+            transition={{ duration: diving ? 0 : 0.2, ease: [0.2, 0, 0, 1] }}
           >
-            {phase === "title" && <TitlePhase />}
+            {phase === "title" && <TitlePhase diving={diving} onLaunch={launch} />}
             {phase === "orbit" && <OrbitPhase />}
             {phase === "mirror" && <MirrorPhase />}
             {phase === "compose" && <ComposePhase />}
@@ -53,6 +82,7 @@ export function GameShell() {
             {phase === "archive" && <ArchivePhase />}
           </motion.div>
         </AnimatePresence>
+        {diveFrom ? <TitleDive from={diveFrom} seedU={seedU} onCovered={cover} onDone={finish} /> : null}
       </div>
     </Scene>
   );
