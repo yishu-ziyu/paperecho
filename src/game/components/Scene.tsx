@@ -30,7 +30,18 @@ function layerKey(phase: Phase, video?: string, still?: string | null) {
   return video || still || (phase === "throw" || phase === "flight" ? "night" : "void");
 }
 
-export function Scene({ phase, children, className }: { phase: Phase; children: ReactNode; className?: string }) {
+export function Scene({
+  phase,
+  children,
+  className,
+  closeUp = false,
+}: {
+  phase: Phase;
+  children: ReactNode;
+  className?: string;
+  /** 纸飞机拆开后再推近，避免在幕布后面就把地球放大。 */
+  closeUp?: boolean;
+}) {
   const night = phase === "flight" || phase === "throw" || phase === "title";
   const [allowVideo, setAllowVideo] = useState(true);
   useEffect(() => {
@@ -45,7 +56,8 @@ export function Scene({ phase, children, className }: { phase: Phase; children: 
   const indoor =
     phase === "orbit" || phase === "mirror" || phase === "compose" || phase === "fold";
   const sway = phase !== "throw" && phase !== "flight";
-  const camRef = useCameraSway(sway);
+  const zoom = sway && closeUp;
+  const camRef = useCameraSway(sway, zoom);
   return (
     <div
       className={cn("relative isolate h-dvh overflow-hidden bg-navy text-ink", className)}
@@ -53,10 +65,7 @@ export function Scene({ phase, children, className }: { phase: Phase; children: 
     >
       <div
         ref={camRef}
-        className={cn(
-          "pointer-events-none absolute origin-center will-change-transform",
-          sway ? "inset-[-8%]" : "inset-0",
-        )}
+        className="pointer-events-none absolute inset-0 origin-center will-change-transform"
         style={{ transformStyle: "preserve-3d" }}
       >
         <AnimatePresence initial={false}>

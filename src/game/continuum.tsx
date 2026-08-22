@@ -58,6 +58,8 @@ export function PullCommit({
   testId,
   disabledHint,
   commitBehavior = "fly",
+  tapToCommit = false,
+  showHint = true,
 }: {
   enabled: boolean;
   axis?: "x" | "y";
@@ -71,6 +73,9 @@ export function PullCommit({
   className?: string;
   testId: string;
   commitBehavior?: "fly" | "morph";
+  /** 点一下也能走。第二幕出口默认开，避免只靠下拉。 */
+  tapToCommit?: boolean;
+  showHint?: boolean;
 }) {
   const reduce = useReducedMotion();
   const x = useMotionValue(0);
@@ -80,6 +85,7 @@ export function PullCommit({
   const start = useRef<{ x: number; y: number } | null>(null);
   const locked = useRef(false);
   const dragging = useRef(false);
+  const pulled = useRef(false);
   const armedOnce = useRef(false);
   const [armed, setArmed] = useState(false);
   const commitRef = useRef(onCommit);
@@ -106,6 +112,7 @@ export function PullCommit({
         y.set(dy * 0.1);
       }
       const t = Math.min(1, mapped / threshold);
+      if (mapped > 8) pulled.current = true;
       progress.set(t);
       progressRef.current?.(t);
       const nextArmed = mapped > threshold;
@@ -174,9 +181,14 @@ export function PullCommit({
         y.stop();
         start.current = { x: e.clientX, y: e.clientY };
         dragging.current = true;
+        pulled.current = false;
       }}
       onClick={() => {
-        if (reduce && enabled && !locked.current) {
+        if (pulled.current) {
+          pulled.current = false;
+          return;
+        }
+        if ((reduce || tapToCommit) && enabled && !locked.current) {
           locked.current = true;
           onCommit();
         }
@@ -191,15 +203,17 @@ export function PullCommit({
       }}
     >
       {children}
-      <motion.span
-        className={cn(
-          "pointer-events-none absolute -bottom-6 left-1/2 -translate-x-1/2 whitespace-nowrap text-[0.65rem] tracking-[0.18em]",
-          armed ? "text-coral" : "text-paper/70",
-        )}
-        style={{ opacity: hintOpacity }}
-      >
-        {enabled ? hint ?? "松开" : disabledHint ?? "还不行"}
-      </motion.span>
+      {showHint ? (
+        <motion.span
+          className={cn(
+            "pointer-events-none absolute -bottom-6 left-1/2 -translate-x-1/2 whitespace-nowrap text-[0.65rem] tracking-[0.18em]",
+            armed ? "text-coral" : "text-paper/70",
+          )}
+          style={{ opacity: hintOpacity }}
+        >
+          {enabled ? hint ?? "松开" : disabledHint ?? "还不行"}
+        </motion.span>
+      ) : null}
     </motion.div>
   );
 }

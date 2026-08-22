@@ -57,7 +57,7 @@ export function GameShell() {
   }, []);
 
   return (
-    <Scene phase={phase}>
+    <Scene phase={phase} closeUp={phase !== "title" && !diving}>
       {phase !== "title" && !diving ? <Hud /> : null}
       <JudgePanel />
       <div className="relative min-h-0 flex-1">

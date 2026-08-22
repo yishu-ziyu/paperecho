@@ -132,7 +132,9 @@ export function OrbitPhase() {
           sign={1}
           threshold={52}
           hint="松开，带着走"
-          disabledHint={owned.length ? "先写下今晚那句" : ""}
+          disabledHint={owned.length ? "先写下今晚那句" : "先把一块拖近你，再写一句"}
+          tapToCommit
+          showHint={false}
           onProgress={setGather}
           onCommit={send}
           className="relative w-full max-w-lg flex-1 lg:max-w-md"
@@ -168,6 +170,29 @@ export function OrbitPhase() {
                   </motion.div>
                 ) : null}
               </AnimatePresence>
+              <div className="mt-4 flex flex-col items-center gap-1.5">
+                <button
+                  type="button"
+                  data-listen-go=""
+                  disabled={!ready}
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    send();
+                  }}
+                  className={cn(
+                    "min-h-11 w-full rounded-full px-4 text-sm tracking-[0.18em] transition-[background-color,color,opacity] duration-(--motion-fast) ease-(--ease-out)",
+                    ready
+                      ? "bg-ink text-paper shadow-[0_8px_20px_rgba(12,20,40,0.22)]"
+                      : "bg-ink/8 text-ink/35",
+                  )}
+                >
+                  带着走
+                </button>
+                <p className="text-[0.65rem] tracking-[0.18em] text-ink/40">
+                  {ready ? "点一下，或把这张纸往下拉" : owned.length ? "先写下今晚那句" : "先把一块拖近你"}
+                </p>
+              </div>
             </div>
           </Craft>
         </PullCommit>
