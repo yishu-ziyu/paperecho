@@ -310,14 +310,10 @@ export function FlightPhase() {
   }, [ready, reduce]);
 
   const title = ready
-    ? echo
-      ? `穿过来了。${echo.city} 在下面。`
-      : note || "到了"
+    ? note || (echo ? `到了 ${echo.city}` : "到了")
     : "夜很长，手可以带着飞";
   const body = ready
-    ? echo
-      ? `${echo.city}。把飞机往下拉，落到桌上。`
-      : note
+    ? "把飞机往下拉，落到桌上。"
     : hitLine || "飞机跟着你。灯是别人的窗，亮着的云要绕开。";
 
   return (
@@ -415,19 +411,6 @@ export function FlightPhase() {
             />
           ))}
         </motion.div>
-
-        {ready ? (
-          <motion.div
-            className="pointer-events-none absolute left-1/2 top-[64%] h-28 w-28 -translate-x-1/2 rounded-full"
-            initial={{ opacity: 0, scale: 0.6 }}
-            animate={{ opacity: 0.7, scale: 1.2 }}
-            transition={spring.parent}
-            style={{
-              background:
-                "radial-gradient(circle, color-mix(in oklab, var(--color-sun) 60%, transparent) 0%, transparent 70%)",
-            }}
-          />
-        ) : null}
 
         {flash ? <div className="pointer-events-none absolute inset-0 z-[3] bg-paper/25" /> : null}
 

@@ -84,6 +84,7 @@
 
 ### Phase 6 · flight（飞行/搜寻）
 - **手势**：`searching` 时飞机巡航动画 + 进度条；`found` 后 `PullCommit(threshold 48)`「松开，落到桌上」。
+- **文案**：找到后用 `searchNote`（「到了 {城}，{名} 读完了你的信」或线路不稳兜底）。不演「穿过来了」窗光穿梭。
 - **触发**：`arrive()`。
 - **产出**：对方「读完了你的信」。
 - **状态变化**：`phase → encounter`。
