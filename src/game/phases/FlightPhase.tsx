@@ -70,11 +70,11 @@ export function FlightPhase() {
           className={
             found
               ? "relative z-[1] flex min-h-0 w-full flex-1 items-center justify-center"
-              : "relative z-[1] flex min-h-0 w-full flex-1 flex-col items-center justify-center pb-[20%]"
+              : "relative z-[1] flex min-h-0 w-full flex-1 flex-col items-center pt-[10%]"
           }
         >
           {!found ? (
-            <div className="mb-5 w-full">
+            <div className="mb-8 w-full">
               <FlightWaitMark />
             </div>
           ) : null}
