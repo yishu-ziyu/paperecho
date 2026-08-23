@@ -46,7 +46,7 @@ await page.evaluate(
   { echo },
 );
 await page.locator("[data-flight-sky]").waitFor();
-await page.waitForTimeout(900);
+await page.waitForTimeout(1100);
 await page.screenshot({ path: `${out}/idle.png` });
 
 const searching = await page.evaluate(() => {

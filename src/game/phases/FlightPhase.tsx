@@ -53,7 +53,7 @@ export function FlightPhase() {
 
       <div
         data-flight-sky
-        className="relative flex min-h-0 w-full flex-1 items-center justify-center overflow-hidden"
+        className="relative flex min-h-0 w-full flex-1 flex-col items-center overflow-hidden"
       >
         <motion.div
           className="pointer-events-none absolute left-[8%] top-[38%] h-10 w-[42%] rounded-full bg-paper/10 blur-md"
@@ -66,52 +66,59 @@ export function FlightPhase() {
           transition={{ duration: 14, repeat: Infinity, ease: "easeInOut", delay: 0.6 }}
         />
 
-        {!found ? (
-          <div className="pointer-events-none absolute inset-x-0 top-[6%] z-0">
-            <FlightWaitMark />
-          </div>
-        ) : null}
+        <div
+          className={
+            found
+              ? "relative z-[1] flex min-h-0 w-full flex-1 items-center justify-center"
+              : "relative z-[1] flex min-h-0 w-full flex-1 flex-col items-center justify-center pb-[20%]"
+          }
+        >
+          {!found ? (
+            <div className="mb-5 w-full">
+              <FlightWaitMark />
+            </div>
+          ) : null}
 
-        {found ? (
-          <PullCommit
-            testId="flight"
-            enabled
-            sign={1}
-            threshold={48}
-            hint="松开，落到桌上"
-            commitBehavior="morph"
-            onCommit={arrive}
-            className="relative z-[1]"
-          >
-            <Craft className="h-20 w-40">
+          {found ? (
+            <PullCommit
+              testId="flight"
+              enabled
+              sign={1}
+              threshold={48}
+              hint="松开，落到桌上"
+              commitBehavior="morph"
+              onCommit={arrive}
+            >
+              <Craft className="h-20 w-40">
+                <Plane className="h-full w-full" />
+              </Craft>
+            </PullCommit>
+          ) : (
+            <motion.div
+              layoutId={CRAFT_ID}
+              data-craft=""
+              className="pointer-events-none h-20 w-40 will-change-transform"
+              initial={{ x: 0, y: 28, rotate: -10, scale: 0.72, opacity: 0.5 }}
+              animate={
+                reduce
+                  ? { opacity: 1, scale: 0.9 }
+                  : {
+                      x: [0, 48, -24, 32],
+                      y: [18, -22, 10, 4],
+                      rotate: [-10, 8, -6, 4],
+                      scale: 0.9,
+                      opacity: 1,
+                    }
+              }
+              transition={
+                reduce ? { duration: 0.01 } : { duration: cruise, repeat: Infinity, ease: "easeInOut" }
+              }
+            >
+              <span className="plane-trail" />
               <Plane className="h-full w-full" />
-            </Craft>
-          </PullCommit>
-        ) : (
-          <motion.div
-            layoutId={CRAFT_ID}
-            data-craft=""
-            className="pointer-events-none relative z-[1] mt-16 h-20 w-40 will-change-transform"
-            initial={{ x: 0, y: 28, rotate: -10, scale: 0.72, opacity: 0.5 }}
-            animate={
-              reduce
-                ? { opacity: 1, scale: 0.9 }
-                : {
-                    x: [0, 48, -24, 32],
-                    y: [18, -22, 10, 4],
-                    rotate: [-10, 8, -6, 4],
-                    scale: 0.9,
-                    opacity: 1,
-                  }
-            }
-            transition={
-              reduce ? { duration: 0.01 } : { duration: cruise, repeat: Infinity, ease: "easeInOut" }
-            }
-          >
-            <span className="plane-trail" />
-            <Plane className="h-full w-full" />
-          </motion.div>
-        )}
+            </motion.div>
+          )}
+        </div>
       </div>
     </div>
   );
