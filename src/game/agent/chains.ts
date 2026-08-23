@@ -385,13 +385,15 @@ ${details}`;
 ${exchangeCue(1, "full")}`;
   const step2 = await step("match-greeting", draftSystem, draftUser, [], 1, 20000);
 
-  const raw = step2.text || step1.text || rt.local.greeting;
+  const rawLive = step2.text || step1.text;
+  const raw = rawLive || rt.local.greeting;
   const spoken0 = ownLine(
     cleanOneLine(raw),
     [rt.local.greeting, ...rt.local.replies],
     input.archival,
   );
   const spoken = foreignPlace(spoken0, rt.draft.name, rt.draft.city) ? rt.local.greeting : spoken0;
+  const via = rawLive ? "live" : "archive";
 
   const builtEcho: EchoPerson = {
     name: rt.draft.name,
@@ -402,7 +404,7 @@ ${exchangeCue(1, "full")}`;
       .filter((l, i, arr) => l && !stolenVoice(l, input.archival) && arr.indexOf(l) === i)
       .slice(0, 4),
     returnLetter: rt.local.returnLetter,
-    source: "live",
+    source: via,
   };
 
   return {
@@ -425,7 +427,7 @@ ${exchangeCue(1, "full")}`;
       completion: step1.meter.completion + step2.meter.completion,
       total: step1.meter.total + step2.meter.total,
       model: AGENT_MODEL.id,
-      via: "live",
+      via,
       node: "match",
     },
     exchange: opened,
@@ -437,7 +439,10 @@ ${exchangeCue(1, "full")}`;
 /** turn 链：玩家回复后，对方回一句话。 */
 async function runTurnChain(input: NightInput): Promise<NightResult> {
   const rt = makeRuntime(input);
-  const priorPlayer = (input.recall ?? []).filter((t) => t.who === "you").map((t) => t.text);
+  // store.reply 会先把当前句推进 recall。交换闸只看「此前」的玩家句，否则自己跟自己撞上，永远升不了层。
+  const priorPlayer = recallWithoutCurrent(input.recall, input.playerLine)
+    .filter((t) => t.who === "you")
+    .map((t) => t.text);
   const lastEcho = (input.recall ?? []).filter((t) => t.who === "echo").at(-1)?.text ?? "";
   const stepEx = advanceExchange(
     input.exchange ?? initialExchange(),
@@ -494,9 +499,11 @@ ${research}`,
     [echo.greeting, ...echo.replies, ...rt.local.replies, "我那晚也没睡。电脑还亮着。"].find(
       (l) => l && l.trim(),
     ) || "我那晚也没睡。电脑还亮着。";
-  const raw = step2.text || rt.draft.lines[0] || fallbackLine;
+  const rawLive = step2.text;
+  const raw = rawLive || rt.draft.lines[0] || fallbackLine;
   const spoken0 = ownLine(cleanOneLine(raw), [fallbackLine], input.archival);
   const spoken = foreignPlace(spoken0, rt.draft.name, rt.draft.city) ? fallbackLine : spoken0;
+  const via = rawLive ? "live" : "archive";
 
   const nextEcho: EchoPerson = {
     ...echo,
@@ -506,7 +513,7 @@ ${research}`,
       .filter((l, i, arr) => l && !stolenVoice(l, input.archival) && arr.indexOf(l) === i)
       .slice(0, 4),
     returnLetter: echo.returnLetter || rt.local.returnLetter,
-    source: "live",
+    source: via,
   };
 
   return {
@@ -521,7 +528,7 @@ ${research}`,
     session: input.session ?? [],
     persona: rt.live.persona || `你是${nextEcho.name}，在${nextEcho.city}。`,
     human: rt.live.facts.join("\n"),
-    meter: step2.meter,
+    meter: { ...step2.meter, via },
     exchange: stepEx.state,
     speak: stepEx.speak,
     speakMode: stepEx.mode,
@@ -592,10 +599,11 @@ ${quoteHint}
     input.archival,
     [rt.local.returnLetter, echo.returnLetter].filter(Boolean),
   );
+  const via = liveLetter ? "live" : "archive";
   const nextEcho: EchoPerson = {
     ...echo,
     returnLetter,
-    source: echo.source || "live",
+    source: via,
   };
 
   return {
@@ -607,7 +615,7 @@ ${quoteHint}
     session: input.session ?? [],
     persona: rt.live.persona || `你是${nextEcho.name}，在${nextEcho.city}。`,
     human: rt.live.facts.join("\n"),
-    meter: step2.meter,
+    meter: { ...step2.meter, via },
     exchange: sealed,
     speak: sealed.unlocked,
     speakMode: "full",
