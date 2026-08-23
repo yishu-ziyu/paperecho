@@ -1,5 +1,12 @@
 import { useEffect, useRef, useState } from "react";
-import { animate, motion, useMotionValue, useReducedMotion, useTransform } from "motion/react";
+import {
+  animate,
+  motion,
+  useMotionValue,
+  useReducedMotion,
+  useTransform,
+  type MotionValue,
+} from "motion/react";
 import { sfxCharge, sfxFold, unlockAudio } from "../audio";
 import { Guide } from "../components/Guide";
 import { Plane } from "../components/Plane";
@@ -7,6 +14,162 @@ import { CRAFT_ID } from "../continuum";
 import { spring } from "../motion";
 import { clampHeading, headingToward, rubberAxis } from "../planeLook";
 import { useGame } from "../store";
+
+function liftOf(deg: number) {
+  return Math.sin((Math.max(0, Math.min(180, deg)) * Math.PI) / 180);
+}
+
+function flapShadow(deg: number) {
+  const k = liftOf(deg);
+  const down = 1 - k;
+  return `drop-shadow(${(-10 * k).toFixed(1)}px ${(8 + 14 * k).toFixed(1)}px ${(6 + 20 * k).toFixed(1)}px rgba(12,20,40,${(0.1 + 0.32 * k).toFixed(2)})) drop-shadow(0 ${(3.5 * down).toFixed(1)}px 0 rgba(80,64,40,${(0.2 * down).toFixed(2)}))`;
+}
+
+function FoldingSheet({
+  body,
+  folds,
+  pull,
+  busy,
+  reduce,
+}: {
+  body: string;
+  folds: number;
+  pull: MotionValue<number>;
+  busy: boolean;
+  reduce: boolean;
+}) {
+  const rootRef = useRef<HTMLDivElement>(null);
+  const foldsRef = useRef(folds);
+  foldsRef.current = folds;
+  const [box, setBox] = useState({ w: 320, h: 224, s: 128 });
+  const idleR = useMotionValue(reduce ? 8 : 14);
+  const idleL = useMotionValue(10);
+
+  useEffect(() => {
+    const el = rootRef.current;
+    if (!el) return;
+    const read = () => {
+      const w = el.clientWidth;
+      const h = el.clientHeight;
+      setBox({ w, h, s: Math.round(Math.min(w, h) * 0.46) });
+    };
+    read();
+    const ro = new ResizeObserver(read);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  useEffect(() => {
+    if (reduce || busy || folds !== 0) {
+      idleR.stop();
+      idleR.set(folds === 0 && reduce ? 8 : 0);
+      return;
+    }
+    const ctrl = animate(idleR, [12, 24, 12], { duration: 2.6, repeat: Infinity, ease: "easeInOut" });
+    return () => ctrl.stop();
+  }, [busy, folds, idleR, reduce]);
+
+  useEffect(() => {
+    if (reduce || busy || folds !== 1) {
+      idleL.stop();
+      idleL.set(0);
+      return;
+    }
+    const ctrl = animate(idleL, [10, 20, 10], { duration: 2.5, repeat: Infinity, ease: "easeInOut" });
+    return () => ctrl.stop();
+  }, [busy, folds, idleL, reduce]);
+
+  const angleR = useTransform([pull, idleR], ([p, i]: number[]) => {
+    if (foldsRef.current >= 1) return 180;
+    const live = Math.max(0, Math.min(1, p)) * 180;
+    if (reduce) return live;
+    return Math.min(180, live + (p > 0.02 ? 0 : i));
+  });
+  const angleL = useTransform([pull, idleL], ([p, i]: number[]) => {
+    if (foldsRef.current === 0) return 0;
+    const live = Math.max(0, Math.min(1, p)) * 180;
+    if (reduce) return live;
+    return Math.min(180, live + (p > 0.02 ? 0 : i));
+  });
+  const rotR = useTransform(angleR, (a) => `rotate3d(1, 1, 0, ${-a}deg)`);
+  const rotL = useTransform(angleL, (a) => `rotate3d(-1, 1, 0, ${a}deg)`);
+  const shadowR = useTransform(angleR, flapShadow);
+  const shadowL = useTransform(angleL, flapShadow);
+  const castR = useTransform(angleR, liftOf);
+  const castL = useTransform(angleL, liftOf);
+  const creaseR = useTransform(angleR, (a) => Math.max(0, (a - 100) / 80));
+  const creaseL = useTransform(angleL, (a) => Math.max(0, (a - 100) / 80));
+  const frontOpR = useTransform(angleR, (a) => (a < 92 ? 1 : 0));
+  const frontOpL = useTransform(angleL, (a) => (a < 92 ? 1 : 0));
+  const back3dOpR = useTransform(angleR, (a) => (a < 88 ? 1 : 0));
+  const back3dOpL = useTransform(angleL, (a) => (a < 88 ? 1 : 0));
+  const landOpR = useTransform(angleR, (a) => (a < 88 ? 0 : Math.min(1, (a - 88) / 52)));
+  const landOpL = useTransform(angleL, (a) => (a < 88 ? 0 : Math.min(1, (a - 88) / 52)));
+
+  const { w, s } = box;
+  const clip =
+    folds >= 1
+      ? `polygon(${s}px 0, calc(100% - ${s}px) 0, 100% ${s}px, 100% 100%, 0 100%, 0 ${s}px)`
+      : `polygon(0 0, calc(100% - ${s}px) 0, 100% ${s}px, 100% 100%, 0 100%)`;
+  const letter = (
+    <p className="text-sm leading-relaxed text-ink/70">{body || <span className="italic text-ink/45">一张空白。也可以寄出。</span>}</p>
+  );
+
+  return (
+    <div
+      ref={rootRef}
+      className="fold-sheet relative h-full w-full"
+      data-fold={folds}
+      style={{ ["--fold-s" as string]: `${s}px` }}
+    >
+      <div className="fold-base" style={{ clipPath: clip }}>
+        <div className="absolute inset-4">{letter}</div>
+      </div>
+      <motion.div
+        className="fold-cast fold-cast-tr"
+        style={{ width: s, height: s, opacity: castR }}
+        aria-hidden
+      />
+      <motion.div
+        className="fold-hinge fold-hinge-tr"
+        style={{ width: s, height: s, transform: rotR, zIndex: 3 }}
+      >
+        <motion.div className="fold-flap fold-flap-front" style={{ filter: shadowR, opacity: frontOpR }}>
+          <div className="fold-letter-clone" style={{ width: w, left: -(w - s) }}>
+            {letter}
+          </div>
+          {folds === 0 ? <span className="fold-grab fold-grab-tr" /> : null}
+        </motion.div>
+        <motion.div className="fold-flap fold-flap-back" style={{ opacity: back3dOpR }} />
+      </motion.div>
+      <motion.div className="fold-land fold-land-tr" style={{ width: s, height: s, opacity: landOpR, z: 2 }} aria-hidden />
+      <motion.div className="fold-crease fold-crease-tr" style={{ width: s, height: s, opacity: creaseR }} aria-hidden />
+      {folds >= 1 ? (
+        <>
+          <motion.div
+            className="fold-cast fold-cast-tl"
+            style={{ width: s, height: s, opacity: castL }}
+            aria-hidden
+          />
+          <motion.div
+            className="fold-hinge fold-hinge-tl"
+            style={{ width: s, height: s, transform: rotL, zIndex: 3 }}
+          >
+            <motion.div className="fold-flap fold-flap-front fold-flap-tl" style={{ filter: shadowL, opacity: frontOpL }}>
+              <div className="fold-letter-clone" style={{ width: w, left: 0 }}>
+                {letter}
+              </div>
+              <span className="fold-grab fold-grab-tl" />
+            </motion.div>
+            <motion.div className="fold-flap fold-flap-back fold-flap-tl" style={{ opacity: back3dOpL }} />
+          </motion.div>
+          <motion.div className="fold-land fold-land-tl" style={{ width: s, height: s, opacity: landOpL, z: 2 }} aria-hidden />
+          <motion.div className="fold-crease fold-crease-tl" style={{ width: s, height: s, opacity: creaseL }} aria-hidden />
+        </>
+      ) : null}
+    </div>
+  );
+}
 
 export function FoldPhase() {
   const folds = useGame((s) => s.folds);
@@ -20,6 +183,7 @@ export function FoldPhase() {
   const foldRef = useRef(folds);
   const dragging = useRef(false);
   const leavingRef = useRef(false);
+  const locking = useRef(false);
   const armedOnce = useRef(false);
   const restRef = useRef<HTMLDivElement>(null);
   const windowRef = useRef<HTMLDivElement>(null);
@@ -27,19 +191,13 @@ export function FoldPhase() {
   const reduce = useReducedMotion();
   const [leaving, setLeaving] = useState(false);
   const [armed, setArmed] = useState(false);
+  const [busy, setBusy] = useState(false);
   const pull = useMotionValue(0);
   const planeX = useMotionValue(0);
   const planeY = useMotionValue(0);
   const heading = useMotionValue(0);
-  const rot = useTransform(pull, (v) => -4 + v * (foldRef.current === 0 ? 22 : -16));
-  const skew = useTransform(pull, (v) => -v * 8);
-  const shade = useTransform(pull, (v) => Math.min(0.4, v * 0.45 + (foldRef.current === 1 ? 0.12 : 0)));
-  const crease = useTransform(pull, (v) => (foldRef.current === 0 ? v * 180 : 180));
-  const shadeBg = useTransform(shade, (s) => `linear-gradient(90deg, transparent, rgba(36,48,68,${s}))`);
-  const creaseY = useTransform(crease, (c) => Math.min(28, c * 0.15));
-  const cornerBg = useTransform(pull, (v) => `color-mix(in oklab, var(--color-coral) ${20 + v * 80}%, transparent)`);
   const hintOpacity = useTransform(pull, [0, 0.42, 1], [0.1, 1, 1]);
-  const body = extraLine.trim() || letterChips.slice(0, 3).join(" · ") || mirror;
+  const body = extraLine.trim() || letterChips.slice(0, 3).join(" · ") || mirror || "";
 
   function windowDelta() {
     const rest = restRef.current?.getBoundingClientRect();
@@ -104,6 +262,7 @@ export function FoldPhase() {
       dragging.current = false;
       start.current = null;
       if (foldRef.current >= 2) {
+        setBusy(false);
         if (leavingRef.current) return;
         const aim = windowDelta();
         const up = -planeY.get();
@@ -127,14 +286,20 @@ export function FoldPhase() {
       }
       const v = pull.get();
       if (v > 0.42) {
+        locking.current = true;
         sfxFold();
-        foldOnce();
-        pull.set(0);
-        setArmed(false);
-        armedOnce.current = false;
+        void animate(pull, 1, spring.snap).then(() => {
+          foldOnce();
+          pull.set(0);
+          setArmed(false);
+          armedOnce.current = false;
+          locking.current = false;
+          setBusy(false);
+        });
       } else {
         setArmed(false);
         armedOnce.current = false;
+        setBusy(false);
         void animate(pull, 0, spring.snap);
       }
     }
@@ -149,9 +314,10 @@ export function FoldPhase() {
   }, [foldOnce, goThrow, heading, planeX, planeY, pull]);
 
   function arm(x: number, y: number) {
-    if (leavingRef.current) return;
+    if (leavingRef.current || locking.current) return;
     unlockAudio();
     pull.stop();
+    setBusy(true);
     planeX.stop();
     planeY.stop();
     heading.stop();
@@ -176,7 +342,7 @@ export function FoldPhase() {
           <p className="relative z-[1] pt-8 text-center text-xs tracking-[0.2em] text-paper/70">窗</p>
         </div>
       ) : null}
-      <div className="relative mx-auto mt-4 flex w-full max-w-md flex-1 items-center justify-center" style={{ perspective: 900 }}>
+      <div className="relative mx-auto mt-4 flex w-full max-w-md flex-1 items-center justify-center overflow-visible" style={{ perspective: 720 }}>
         <div className="flex w-full justify-center">
           {folds >= 2 ? (
             <motion.div
@@ -199,50 +365,17 @@ export function FoldPhase() {
               layoutId={CRAFT_ID}
               data-craft=""
               data-pull="fold"
-              className="clay relative h-56 w-[min(88%,20rem)] origin-top-right cursor-grab touch-none active:cursor-grabbing"
-              style={{
-                rotate: rot,
-                skewX: skew,
-                clipPath:
-                  folds === 1
-                    ? "polygon(0 18%, 100% 0, 100% 100%, 0 100%)"
-                    : "polygon(0 0, 100% 0, 100% 100%, 0 100%)",
-                transformStyle: "preserve-3d",
-              }}
+              className="relative h-56 w-[min(88%,20rem)] cursor-grab touch-none overflow-visible active:cursor-grabbing"
+              style={{ transformStyle: "preserve-3d" }}
               onPointerDown={(e) => {
                 e.preventDefault();
                 (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
                 arm(e.clientX, e.clientY);
               }}
             >
-              <motion.div
-                className="pointer-events-none absolute inset-y-0 right-0 w-1/2 origin-left"
-                style={{
-                  background: shadeBg,
-                  rotateY: creaseY,
-                }}
-              />
-              <motion.div
-                className="pointer-events-none absolute inset-4 text-sm leading-relaxed"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ duration: 0.15 }}
-              >
-                {body ? (
-                  <p className="text-ink/70">{body}</p>
-                ) : (
-                  <p className="italic text-ink/45">一张空白。也可以寄出。</p>
-                )}
-              </motion.div>
+              <FoldingSheet body={body} folds={folds} pull={pull} busy={busy} reduce={Boolean(reduce)} />
               <motion.span
-                className="pointer-events-none absolute right-3 top-3 size-4 rounded-full"
-                style={{
-                  background: cornerBg,
-                  boxShadow: "inset 0 0 0 1px color-mix(in oklab, var(--color-coral) 80%, transparent)",
-                }}
-              />
-              <motion.span
-                className="pointer-events-none absolute bottom-3 left-1/2 -translate-x-1/2 text-[0.65rem] tracking-[0.18em] text-coral"
+                className="pointer-events-none absolute bottom-3 left-1/2 z-[4] -translate-x-1/2 text-[0.65rem] tracking-[0.18em] text-coral"
                 style={{ opacity: hintOpacity }}
               >
                 {armed ? "松开，折住" : "往对角拉"}

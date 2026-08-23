@@ -43,18 +43,18 @@ const DRIFT_PLACES: {
   dx: number;
   dy: number;
 }[] = [
-  { city: "杭州", region: "east", x: 5, y: 15, size: 0.95, dur: 9.2, delay: 0, dx: 7, dy: -11 },
-  { city: "芝加哥", region: "america", x: 70, y: 13, size: 0.88, dur: 10.4, delay: 1.1, dx: -9, dy: -8 },
-  { city: "墨西哥", region: "america", x: 74, y: 30, size: 0.9, dur: 8.6, delay: 0.4, dx: 6, dy: 10 },
-  { city: "里斯本", region: "europe", x: 3, y: 32, size: 0.82, dur: 11, delay: 2.2, dx: 10, dy: -6 },
-  { city: "奥克兰", region: "oceania", x: 6, y: 50, size: 0.92, dur: 9.8, delay: 1.6, dx: -7, dy: 9 },
-  { city: "内罗毕", region: "africa", x: 73, y: 48, size: 0.8, dur: 10.8, delay: 2.8, dx: 8, dy: -10 },
-  { city: "特罗姆瑟", region: "polar", x: 54, y: 17, size: 0.76, dur: 12.2, delay: 0.8, dx: -5, dy: 7 },
-  { city: "成都", region: "east", x: 16, y: 54, size: 0.78, dur: 8.9, delay: 3.4, dx: 9, dy: -7 },
-  { city: "札幌", region: "east", x: 78, y: 55, size: 0.74, dur: 11.4, delay: 2.1, dx: -8, dy: 6 },
-  { city: "爱丁堡", region: "europe", x: 2, y: 52, size: 0.72, dur: 9.5, delay: 4.1, dx: 7, dy: -9 },
-  { city: "墨尔本", region: "oceania", x: 68, y: 56, size: 0.76, dur: 10.1, delay: 3.7, dx: -6, dy: 8 },
-  { city: "马拉喀什", region: "africa", x: 20, y: 20, size: 0.7, dur: 12.6, delay: 1.9, dx: 5, dy: -12 },
+  { city: "杭州", region: "east", x: 4, y: 15, size: 0.95, dur: 9.2, delay: 0, dx: 7, dy: -11 },
+  { city: "芝加哥", region: "america", x: 71, y: 14, size: 0.9, dur: 10.4, delay: 1.1, dx: -9, dy: -8 },
+  { city: "墨西哥", region: "america", x: 72, y: 20, size: 0.86, dur: 8.6, delay: 0.4, dx: 6, dy: 10 },
+  { city: "里斯本", region: "europe", x: 5, y: 21, size: 0.82, dur: 11, delay: 2.2, dx: 10, dy: -6 },
+  { city: "特罗姆瑟", region: "polar", x: 24, y: 16, size: 0.76, dur: 12.2, delay: 0.8, dx: -5, dy: 7 },
+  { city: "马拉喀什", region: "africa", x: 38, y: 63, size: 0.7, dur: 12.6, delay: 1.9, dx: 5, dy: -12 },
+  { city: "奥克兰", region: "oceania", x: 5, y: 65, size: 0.9, dur: 9.8, delay: 1.6, dx: -7, dy: 9 },
+  { city: "内罗毕", region: "africa", x: 76, y: 63, size: 0.8, dur: 10.8, delay: 2.8, dx: 8, dy: -10 },
+  { city: "成都", region: "east", x: 22, y: 71, size: 0.78, dur: 8.9, delay: 3.4, dx: 9, dy: -7 },
+  { city: "札幌", region: "east", x: 80, y: 72, size: 0.74, dur: 11.4, delay: 2.1, dx: -8, dy: 6 },
+  { city: "爱丁堡", region: "europe", x: 6, y: 73, size: 0.72, dur: 9.5, delay: 4.1, dx: 7, dy: -9 },
+  { city: "墨尔本", region: "oceania", x: 58, y: 66, size: 0.76, dur: 10.1, delay: 3.7, dx: -6, dy: 8 },
 ];
 
 /**
@@ -496,30 +496,32 @@ function BroadcastDrift({
       transition={{ duration: 0.4 }}
       aria-hidden
     >
-      {DRIFT_PLACES.map((place) => {
-        const lit = aimed === place.region;
-        const mute = Boolean(aimed) && !lit;
-        const ink = mute ? 20 : lit ? 88 : 40;
-        return (
-          <span
-            key={place.city}
-            data-throw-fly={place.city}
-            className={reduce ? "absolute whitespace-nowrap font-display tracking-[0.08em]" : "throw-drift absolute whitespace-nowrap font-display tracking-[0.08em]"}
-            style={{
-              left: `${place.x}%`,
-              top: `${place.y}%`,
-              fontSize: `${place.size}rem`,
-              color: `color-mix(in oklab, var(--color-paper) ${ink}%, var(--color-navy))`,
-              ["--throw-drift-dur" as string]: `${place.dur}s`,
-              ["--throw-drift-delay" as string]: `${place.delay}s`,
-              ["--throw-drift-x" as string]: `${place.dx}px`,
-              ["--throw-drift-y" as string]: `${place.dy}px`,
-            }}
-          >
-            {`飞向${place.city}`}
-          </span>
-        );
-      })}
+      <div className="relative mx-auto h-full w-full max-w-md">
+        {DRIFT_PLACES.map((place) => {
+          const lit = aimed === place.region;
+          const mute = Boolean(aimed) && !lit;
+          const ink = mute ? 20 : lit ? 88 : 40;
+          return (
+            <span
+              key={place.city}
+              data-throw-fly={place.city}
+              className={reduce ? "absolute whitespace-nowrap font-display tracking-[0.08em]" : "throw-drift absolute whitespace-nowrap font-display tracking-[0.08em]"}
+              style={{
+                left: `${place.x}%`,
+                top: `${place.y}%`,
+                fontSize: `${place.size}rem`,
+                color: `color-mix(in oklab, var(--color-paper) ${ink}%, var(--color-navy))`,
+                ["--throw-drift-dur" as string]: `${place.dur}s`,
+                ["--throw-drift-delay" as string]: `${place.delay}s`,
+                ["--throw-drift-x" as string]: `${place.dx}px`,
+                ["--throw-drift-y" as string]: `${place.dy}px`,
+              }}
+            >
+              {`飞向${place.city}`}
+            </span>
+          );
+        })}
+      </div>
     </motion.div>
   );
 }
