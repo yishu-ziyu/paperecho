@@ -214,6 +214,26 @@
     0 0 28px color-mix(in oklab, var(--color-paper) 16%, transparent);
 }
 
+@keyframes throw-drift {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+  50% {
+    transform: translate3d(var(--throw-drift-x, 8px), var(--throw-drift-y, -10px), 0);
+  }
+}
+
+.throw-drift {
+  animation: throw-drift var(--throw-drift-dur, 9s) ease-in-out var(--throw-drift-delay, 0s) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .throw-drift {
+    animation: none;
+  }
+}
+
 @keyframes blob-breathe {
   0%,
   100% {

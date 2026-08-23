@@ -137,7 +137,7 @@ export function ReturnPhase() {
               animate={{ y: 0, opacity: 1, scale: 1 }}
               transition={spring.parent}
             >
-              <Plane className="h-16 w-28" scorched={scorch} />
+              <Plane className="h-16 w-14" scorched={scorch} />
               <p className="mt-3 text-xs tracking-[0.2em] text-ink/40">折回来了</p>
             </motion.div>
           ) : open ? (

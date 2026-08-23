@@ -1,7 +1,7 @@
 import { ownedOf } from "../emotions.ts";
 import type { EmotionId, Fingerprint, MemoryRecord, RegionId } from "../types.ts";
 import { isCompleteFact, isInstruction, jaccard, searchArchival, tokensOf } from "./memory.ts";
-import { synthesize, synthesizeLibraryFirst } from "./pipeline/persona.ts";
+import { selectMaterials, synthesize, synthesizeLibraryFirst, type EchoShadow } from "./pipeline/persona.ts";
 import { makeProfile } from "./pipeline/profile.ts";
 import type { PlayerProfile } from "./pipeline/profile.ts";
 import type { Post } from "./pipeline/source.ts";
@@ -27,13 +27,16 @@ function profileOf(ctx: ToolCtx): PlayerProfile {
   return makeProfile(asFeels(ctx.fingerprint), ctx.story ?? "", ctx.persona ?? "");
 }
 
-function shadowBlob(posts: Post[], profile: PlayerProfile): string {
-  const shadow = synthesize(posts, profile);
+export function blobOfShadow(shadow: EchoShadow): string {
   if (!shadow.materials.length) return "世界档案空。没有相近的夜。";
   const body = shadow.materials
     .map((p) => `${p.situation || "（无摘要）"}\n${p.content}`)
     .join("\n---\n");
   return `${shadow.handle}\n${shadow.voice}\n---\n${body}`;
+}
+
+function shadowBlob(posts: Post[], profile: PlayerProfile): string {
+  return blobOfShadow(synthesize(posts, profile));
 }
 
 /** 库：手写 + COLLECTED。永远先到。 */
@@ -42,23 +45,30 @@ export function formatCaseHits(ctx: ToolCtx): string {
 }
 
 /**
+ * 世界档案合成影子。库满 5 条时不候现场爬（开口等不起）。
+ * match 才传 live=true；turn 只用库。
+ */
+export async function gatherShadow(ctx: ToolCtx, live = false): Promise<EchoShadow> {
+  const profile = profileOf(ctx);
+  const local = await localPosts.search(profile);
+  const lib = selectMaterials(local, profile);
+  if (!live || lib.length >= 5) {
+    return synthesizeLibraryFirst(local, [], profile);
+  }
+  let extra: Post[] = [];
+  try {
+    extra = await liveSearchSource.search(profile);
+  } catch {
+    extra = [];
+  }
+  return synthesizeLibraryFirst(local, extra, profile);
+}
+
+/**
  * 库占满 5 条素材；live 短超时只填空位。live 失败仍返回库。原文不进 blob。
  */
 export async function formatCaseHitsLive(ctx: ToolCtx): Promise<string> {
-  const profile = profileOf(ctx);
-  const local = await localPosts.search(profile);
-  let live: Post[] = [];
-  try {
-    live = await liveSearchSource.search(profile);
-  } catch {
-    live = [];
-  }
-  const shadow = synthesizeLibraryFirst(local, live, profile);
-  if (!shadow.materials.length) return "世界档案空。没有相近的夜。";
-  const body = shadow.materials
-    .map((p) => `${p.situation || "（无摘要）"}\n${p.content}`)
-    .join("\n---\n");
-  return `${shadow.handle}\n${shadow.voice}\n---\n${body}`;
+  return blobOfShadow(await gatherShadow(ctx, true));
 }
 
 function rankStories(ctx: ToolCtx, query: string) {

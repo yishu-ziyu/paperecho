@@ -31,6 +31,32 @@ import type { RegionId } from "../types";
 
 type Beat = "dive" | "bloom" | "ready";
 
+/** Night-sky examples of where a letter can go. Region is a match boost, not a hard filter. */
+const DRIFT_PLACES: {
+  city: string;
+  region: RegionId;
+  x: number;
+  y: number;
+  size: number;
+  dur: number;
+  delay: number;
+  dx: number;
+  dy: number;
+}[] = [
+  { city: "杭州", region: "east", x: 5, y: 15, size: 0.95, dur: 9.2, delay: 0, dx: 7, dy: -11 },
+  { city: "芝加哥", region: "america", x: 70, y: 13, size: 0.88, dur: 10.4, delay: 1.1, dx: -9, dy: -8 },
+  { city: "墨西哥", region: "america", x: 74, y: 30, size: 0.9, dur: 8.6, delay: 0.4, dx: 6, dy: 10 },
+  { city: "里斯本", region: "europe", x: 3, y: 32, size: 0.82, dur: 11, delay: 2.2, dx: 10, dy: -6 },
+  { city: "奥克兰", region: "oceania", x: 6, y: 50, size: 0.92, dur: 9.8, delay: 1.6, dx: -7, dy: 9 },
+  { city: "内罗毕", region: "africa", x: 73, y: 48, size: 0.8, dur: 10.8, delay: 2.8, dx: 8, dy: -10 },
+  { city: "特罗姆瑟", region: "polar", x: 54, y: 17, size: 0.76, dur: 12.2, delay: 0.8, dx: -5, dy: 7 },
+  { city: "成都", region: "east", x: 16, y: 54, size: 0.78, dur: 8.9, delay: 3.4, dx: 9, dy: -7 },
+  { city: "札幌", region: "east", x: 78, y: 55, size: 0.74, dur: 11.4, delay: 2.1, dx: -8, dy: 6 },
+  { city: "爱丁堡", region: "europe", x: 2, y: 52, size: 0.72, dur: 9.5, delay: 4.1, dx: 7, dy: -9 },
+  { city: "墨尔本", region: "oceania", x: 68, y: 56, size: 0.76, dur: 10.1, delay: 3.7, dx: -6, dy: 8 },
+  { city: "马拉喀什", region: "africa", x: 20, y: 20, size: 0.7, dur: 12.6, delay: 1.9, dx: 5, dy: -12 },
+];
+
 /**
  * Window → paper plane flies into the earth → windows bloom → slingshot.
  * Arrival is short and the globe can be turned while lights open.
@@ -342,7 +368,7 @@ export function ThrowPhase() {
       ? { title: "飞进地球", body: "同一架飞机，从窗穿过去。" }
       : beat === "bloom"
         ? { title: "灯是别人的窗", body: "一盏一盏开。" }
-        : { title: "转地球，拉飞机", body: "转到那盏窗。拉满再放。" };
+        : { title: "将心声广播全世界", body: "转到那盏窗。拉满再放。" };
 
   const cue = thrown
     ? "在飞"
@@ -360,6 +386,7 @@ export function ThrowPhase() {
 
   return (
     <motion.div className="relative flex min-h-0 flex-1 flex-col px-4" style={{ y: punch }}>
+      <BroadcastDrift aimed={aimed} dim={dragging || thrown} visible={beat !== "dive"} reduce={Boolean(reduce)} />
       <motion.div
         className="pointer-events-none absolute inset-0 z-[8]"
         style={{ opacity: aperture }}
@@ -367,10 +394,17 @@ export function ThrowPhase() {
       >
         <div className="throw-window absolute inset-0" />
       </motion.div>
-      <Guide tone="night" title={guide.title} body={guide.body} />
+      <div data-throw-headline="" className="relative z-[2]">
+        <Guide
+          tone="night"
+          title={guide.title}
+          body={guide.body}
+          className={beat === "ready" ? "bg-transparent" : undefined}
+        />
+      </div>
       <motion.div
         ref={globeRef}
-        className="relative mx-auto mt-1 flex w-[min(82vw,21rem)] flex-1 items-center will-change-transform"
+        className="relative z-[2] mx-auto mt-1 flex w-[min(82vw,21rem)] flex-1 items-center will-change-transform"
         style={{ scale: globeScale, y: globeY }}
       >
         <div className="relative w-full">
@@ -390,18 +424,12 @@ export function ThrowPhase() {
           />
         </div>
       </motion.div>
-      <p className="min-h-6 text-center text-sm text-paper/80">
-        {beat !== "ready"
-          ? "\u00a0"
-          : region && place
-            ? `飞向 ${place.city}`
-            : place
-              ? `对着 ${place.city}，拉飞机`
-              : "转一转，找到一个亮点"}
+      <p className="sr-only">
+        {place ? `飞向 ${place.city}` : "转地球，选一个方向"}
       </p>
       <div
         data-throw-well
-        className="relative mx-auto mt-1 h-40 w-full max-w-md touch-none overflow-visible"
+        className="relative z-[3] mx-auto mt-1 h-40 w-full max-w-md touch-none overflow-visible"
         onPointerDown={(e) => {
           if (thrownRef.current || !readyRef.current) return;
           e.preventDefault();
@@ -430,8 +458,8 @@ export function ThrowPhase() {
           ref={restRef}
           layoutId={CRAFT_ID}
           data-craft=""
-          className="absolute left-1/2 top-1 h-20 w-36 will-change-transform"
-          style={{ x, y, rotate: rot, scaleX: planeScaleX, scaleY: planeScaleY, opacity: fade, marginLeft: -72 }}
+          className="absolute left-1/2 top-1 h-24 w-20 will-change-transform"
+          style={{ x, y, rotate: rot, scaleX: planeScaleX, scaleY: planeScaleY, opacity: fade, marginLeft: -40 }}
         >
           <Plane className="h-full w-full" charged={full && !thrown} />
         </motion.div>
@@ -444,6 +472,54 @@ export function ThrowPhase() {
       <p data-throw-cue className="pb-6 text-center text-xs text-paper/40">
         {cue}
       </p>
+    </motion.div>
+  );
+}
+
+function BroadcastDrift({
+  aimed,
+  dim,
+  visible,
+  reduce,
+}: {
+  aimed: RegionId | null;
+  dim: boolean;
+  visible: boolean;
+  reduce: boolean;
+}) {
+  return (
+    <motion.div
+      data-throw-drift=""
+      className="pointer-events-none absolute inset-0 z-[1] overflow-hidden"
+      initial={false}
+      animate={{ opacity: !visible ? 0 : dim ? 0.14 : 1 }}
+      transition={{ duration: 0.4 }}
+      aria-hidden
+    >
+      {DRIFT_PLACES.map((place) => {
+        const lit = aimed === place.region;
+        const mute = Boolean(aimed) && !lit;
+        const ink = mute ? 20 : lit ? 88 : 40;
+        return (
+          <span
+            key={place.city}
+            data-throw-fly={place.city}
+            className={reduce ? "absolute whitespace-nowrap font-display tracking-[0.08em]" : "throw-drift absolute whitespace-nowrap font-display tracking-[0.08em]"}
+            style={{
+              left: `${place.x}%`,
+              top: `${place.y}%`,
+              fontSize: `${place.size}rem`,
+              color: `color-mix(in oklab, var(--color-paper) ${ink}%, var(--color-navy))`,
+              ["--throw-drift-dur" as string]: `${place.dur}s`,
+              ["--throw-drift-delay" as string]: `${place.delay}s`,
+              ["--throw-drift-x" as string]: `${place.dx}px`,
+              ["--throw-drift-y" as string]: `${place.dy}px`,
+            }}
+          >
+            {`飞向${place.city}`}
+          </span>
+        );
+      })}
     </motion.div>
   );
 }
@@ -483,8 +559,8 @@ function Trail({
   const ghost = useTransform(fade, (v) => v * opacity);
   return (
     <motion.div
-      className="pointer-events-none absolute left-1/2 top-1 h-20 w-36"
-      style={{ x, y: trailed, rotate: rot, scaleX, scaleY: stretch, opacity: ghost, marginLeft: -72 }}
+      className="pointer-events-none absolute left-1/2 top-1 h-24 w-20"
+      style={{ x, y: trailed, rotate: rot, scaleX, scaleY: stretch, opacity: ghost, marginLeft: -40 }}
     >
       <Plane className="h-full w-full" />
     </motion.div>

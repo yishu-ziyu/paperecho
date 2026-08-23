@@ -1,37 +1,17 @@
 import { motion, useReducedMotion } from "motion/react";
 import { Guide } from "../components/Guide";
-import { LetterPop } from "../components/LetterPop";
 import { Plane } from "../components/Plane";
 import { Craft, CRAFT_ID, PullCommit } from "../continuum";
 import { useGame } from "../store";
 
-/**
- * Title-page 字标 language (LetterPop + clip-up) with the night-search line,
- * split so it reads as a stacked mark instead of a caption under a bar.
- */
 function FlightWaitMark() {
-  const reduce = useReducedMotion();
   return (
-    <div
+    <p
       data-flight-wait
-      className="pointer-events-none px-5 text-center"
-      style={{ ["--pop-delay" as string]: "80ms" }}
+      className="pointer-events-none px-5 text-center font-display text-[clamp(1.35rem,5.6vw,1.85rem)] font-medium tracking-[0.08em] text-paper/80"
     >
-      <h1
-        className="font-display text-[clamp(2.4rem,12vw,3.8rem)] font-bold leading-[0.88] tracking-wide text-paper"
-        style={{ textShadow: "0 2px 0 #d5c7ab, 0 4px 0 #c3b394, 0 10px 18px rgba(10, 16, 32, 0.45)" }}
-      >
-        <span className="block">
-          <LetterPop text="在夜里" />
-        </span>
-        <span className="block">
-          <LetterPop text="找一个" start={3} />
-        </span>
-      </h1>
-      <p className="clip-up-mask mx-auto mt-4 font-display text-[1.05rem] tracking-[0.28em] text-paper/70">
-        <span className={reduce ? undefined : "clip-up"}>也说过类似话的人</span>
-      </p>
-    </div>
+      寻找世另我ing
+    </p>
   );
 }
 
@@ -89,7 +69,7 @@ export function FlightPhase() {
               commitBehavior="morph"
               onCommit={arrive}
             >
-              <Craft className="h-20 w-40">
+              <Craft className="h-24 w-20">
                 <Plane className="h-full w-full" />
               </Craft>
             </PullCommit>
@@ -97,7 +77,7 @@ export function FlightPhase() {
             <motion.div
               layoutId={CRAFT_ID}
               data-craft=""
-              className="pointer-events-none h-20 w-40 will-change-transform"
+              className="pointer-events-none h-24 w-20 will-change-transform"
               initial={{ x: 0, y: 28, rotate: -10, scale: 0.72, opacity: 0.5 }}
               animate={
                 reduce

@@ -151,7 +151,7 @@ export function EncounterPhase() {
               drag.over ? "bg-coral/15 shadow-[inset_0_0_0_2px_var(--color-coral)]" : "bg-paper/40",
             )}
           >
-            <div className="pointer-events-none absolute right-3 top-3 h-8 w-14 opacity-80">
+            <div className="pointer-events-none absolute right-3 top-3 h-10 w-9 opacity-80">
               <Plane className="h-full w-full" scorched={scorch} />
             </div>
             <ul ref={listRef} className="mt-auto flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto pb-2 pt-8">

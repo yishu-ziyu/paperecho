@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import { animate, motion, useMotionValue, useTransform } from "motion/react";
+import { animate, motion, useMotionValue, useReducedMotion, useTransform } from "motion/react";
 import { sfxCharge, sfxFold, unlockAudio } from "../audio";
 import { Guide } from "../components/Guide";
 import { Plane } from "../components/Plane";
 import { CRAFT_ID } from "../continuum";
 import { spring } from "../motion";
+import { clampHeading, headingToward, rubberAxis } from "../planeLook";
 import { useGame } from "../store";
 
 export function FoldPhase() {
@@ -15,15 +16,21 @@ export function FoldPhase() {
   const extraLine = useGame((s) => s.extraLine);
   const mirror = useGame((s) => s.selectedMirror);
   const start = useRef<{ x: number; y: number } | null>(null);
+  const grabOrigin = useRef({ x: 0, y: 0 });
   const foldRef = useRef(folds);
   const dragging = useRef(false);
   const leavingRef = useRef(false);
   const armedOnce = useRef(false);
+  const restRef = useRef<HTMLDivElement>(null);
+  const windowRef = useRef<HTMLDivElement>(null);
   foldRef.current = folds;
+  const reduce = useReducedMotion();
   const [leaving, setLeaving] = useState(false);
   const [armed, setArmed] = useState(false);
   const pull = useMotionValue(0);
+  const planeX = useMotionValue(0);
   const planeY = useMotionValue(0);
+  const heading = useMotionValue(0);
   const rot = useTransform(pull, (v) => -4 + v * (foldRef.current === 0 ? 22 : -16));
   const skew = useTransform(pull, (v) => -v * 8);
   const shade = useTransform(pull, (v) => Math.min(0.4, v * 0.45 + (foldRef.current === 1 ? 0.12 : 0)));
@@ -34,13 +41,49 @@ export function FoldPhase() {
   const hintOpacity = useTransform(pull, [0, 0.42, 1], [0.1, 1, 1]);
   const body = extraLine.trim() || letterChips.slice(0, 3).join(" · ") || mirror;
 
+  function windowDelta() {
+    const rest = restRef.current?.getBoundingClientRect();
+    const win = windowRef.current?.getBoundingClientRect();
+    if (!rest || !win) return { dx: 0, dy: -80 };
+    return {
+      dx: win.left + win.width / 2 - (rest.left + rest.width / 2),
+      dy: win.top + win.height / 2 - (rest.top + rest.height / 2),
+    };
+  }
+
+  useEffect(() => {
+    if (folds < 2) return;
+    const { dx, dy } = windowDelta();
+    void animate(heading, clampHeading(headingToward(dx, dy), 22), spring.settle);
+  }, [folds, heading]);
+
+  useEffect(() => {
+    if (folds < 2 || reduce || leaving) return;
+    function onHover(e: PointerEvent) {
+      if (e.pointerType !== "mouse") return;
+      if (dragging.current || leavingRef.current) return;
+      const rest = restRef.current?.getBoundingClientRect();
+      if (!rest) return;
+      const dx = e.clientX - (rest.left + rest.width / 2);
+      const dy = e.clientY - (rest.top + rest.height / 2);
+      heading.set(clampHeading(headingToward(dx, dy), 36));
+      planeX.set(rubberAxis(dx * 0.14, 22));
+      planeY.set(rubberAxis(dy * 0.1, 16));
+    }
+    window.addEventListener("pointermove", onHover, { passive: true });
+    return () => window.removeEventListener("pointermove", onHover);
+  }, [folds, reduce, leaving, heading, planeX, planeY]);
+
   useEffect(() => {
     function onMove(e: PointerEvent) {
       if (!dragging.current || !start.current) return;
       if (foldRef.current >= 2) {
         if (leavingRef.current) return;
+        const dx = e.clientX - start.current.x;
         const dy = e.clientY - start.current.y;
-        planeY.set(Math.min(40, dy));
+        planeX.set(rubberAxis(grabOrigin.current.x + dx, 88));
+        planeY.set(rubberAxis(grabOrigin.current.y + dy, 170));
+        heading.set(clampHeading(headingToward(dx, dy), 52));
         return;
       }
       const dx = start.current.x - e.clientX;
@@ -62,16 +105,23 @@ export function FoldPhase() {
       start.current = null;
       if (foldRef.current >= 2) {
         if (leavingRef.current) return;
+        const aim = windowDelta();
         const up = -planeY.get();
-        if (up > 40) {
+        const nearWindow = Math.hypot(aim.dx, aim.dy) < 64;
+        if (up > 40 || nearWindow) {
           leavingRef.current = true;
           setLeaving(true);
-          void animate(planeY, -240, spring.launch);
+          void animate(planeX, planeX.get() + aim.dx, spring.launch);
+          void animate(planeY, planeY.get() + aim.dy - 28, spring.launch);
+          void animate(heading, clampHeading(headingToward(aim.dx, aim.dy), 28), spring.launch);
           window.setTimeout(() => {
             if (useGame.getState().phase === "fold") goThrow();
           }, 480);
         } else {
+          void animate(planeX, 0, spring.settle);
           void animate(planeY, 0, spring.settle);
+          const rest = windowDelta();
+          void animate(heading, clampHeading(headingToward(rest.dx, rest.dy), 22), spring.settle);
         }
         return;
       }
@@ -96,13 +146,16 @@ export function FoldPhase() {
       window.removeEventListener("pointerup", onUp, { capture: true });
       window.removeEventListener("pointercancel", onUp, { capture: true });
     };
-  }, [foldOnce, goThrow, planeY, pull]);
+  }, [foldOnce, goThrow, heading, planeX, planeY, pull]);
 
   function arm(x: number, y: number) {
     if (leavingRef.current) return;
     unlockAudio();
     pull.stop();
+    planeX.stop();
     planeY.stop();
+    heading.stop();
+    grabOrigin.current = { x: planeX.get(), y: planeY.get() };
     start.current = { x, y };
     dragging.current = true;
   }
@@ -118,7 +171,7 @@ export function FoldPhase() {
         }
       />
       {folds >= 2 ? (
-        <div className="relative mx-auto mt-2 h-20 w-full max-w-md overflow-hidden">
+        <div ref={windowRef} className="relative mx-auto mt-2 h-20 w-full max-w-md overflow-hidden">
           <div className="absolute left-1/2 top-[-2.2rem] h-[5.5rem] w-[5.5rem] -translate-x-1/2 rounded-[28%] bg-paper/16 shadow-[inset_0_0_0_3px_color-mix(in_oklab,var(--color-paper)_22%,transparent)]" />
           <p className="relative z-[1] pt-8 text-center text-xs tracking-[0.2em] text-paper/70">窗</p>
         </div>
@@ -127,18 +180,19 @@ export function FoldPhase() {
         <div className="flex w-full justify-center">
           {folds >= 2 ? (
             <motion.div
+              ref={restRef}
               layoutId={CRAFT_ID}
               data-craft=""
               data-pull="window"
-              className="touch-none cursor-grab active:cursor-grabbing"
-              style={{ y: planeY }}
+              className="h-28 w-24 touch-none cursor-grab will-change-transform active:cursor-grabbing"
+              style={{ x: planeX, y: planeY, rotate: heading }}
               onPointerDown={(e) => {
                 e.preventDefault();
                 (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
                 arm(e.clientX, e.clientY);
               }}
             >
-              <Plane className="h-24 w-44" />
+              <Plane className="h-full w-full" />
             </motion.div>
           ) : (
             <motion.div

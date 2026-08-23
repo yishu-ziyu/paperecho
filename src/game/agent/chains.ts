@@ -6,23 +6,24 @@
  *
  * 产品里的三个业务动作被拆成明确的小步骤，每步只做一件事：
  *
- *   match: research -> decidePersona(arrive) -> draftGreeting -> validate
- *   turn:  research -> rememberPlayer -> reply -> validate
+ *   match: research（世界档案影子）→ respond（大模型用素材开口）
+ *   turn:  research（库）→ respond（大模型用素材接一句）
  *   seal:  research -> rememberFacts -> writeReturnLetter -> validate
  *
- * 每一步都是一个短命 Pi Agent：只给这一步允许的工具，跑完即结束。
+ * 开口走 pipeline/respond.ts（已训练的说话规范），不走故事卡金句。
+ * 短命 Pi Agent 仍用于 seal 的工具步。
  */
 import { Agent, type AgentMessage, type AgentTool } from "@earendil-works/pi-agent-core";
 import { Type, createModels } from "@earendil-works/pi-ai";
 import { chipPool } from "../emotions.ts";
 import { fallbackEcho } from "../kernel.ts";
-import { foreignPlace } from "../stories.ts";
 import type { EchoPerson, TokenMeter } from "../types.ts";
 import { AGENT_MODEL, llmApiKey, llmProvider, LLM_CONFIG } from "./config.ts";
 import { emptyMeter, hasApiKey } from "./llm.ts";
 import { factsOf, isCompleteFact, ownLine, perceptionOf, renderBlocks, stolenVoice } from "./memory.ts";
-import { formatCaseHitsLive, runAgentTool, type ToolCtx } from "./tools.ts";
-import { acceptFelt, advanceExchange, exchangeCue, initialExchange } from "./exchange.ts";
+import type { EchoShadow } from "./pipeline/persona.ts";
+import { blobOfShadow, gatherShadow, runAgentTool, type ToolCtx } from "./tools.ts";
+import { acceptFelt, advanceExchange, initialExchange } from "./exchange.ts";
 import type { ExchangeState } from "./exchange.ts";
 import type { NightInput, NightResult, RecallItem } from "./types.ts";
 
@@ -108,6 +109,17 @@ export function cleanOneLine(text: string, maxLen = 56): string {
   return closeHangingQuotes(raw);
 }
 
+/** 素材开口留下。不因「杭州」等外地词打回故事卡。 */
+export function keepSpoken(
+  raw: string,
+  fallback: string,
+  archival: import("../types.ts").MemoryRecord[],
+  used?: string | string[],
+): string {
+  const line = ownLine(cleanOneLine(raw), [fallback], archival, used);
+  return (line && line.trim()) || fallback;
+}
+
 function meterOf(messages: AgentMessage[], node: string): TokenMeter {
   let prompt = 0;
   let completion = 0;
@@ -184,6 +196,7 @@ interface ChainRuntime {
   ctx: ToolCtx;
   hits: string[];
   draft: { name: string; city: string; felt: string; lines: string[] };
+  shadow: EchoShadow | null;
 }
 
 function makeRuntime(input: NightInput): ChainRuntime {
@@ -230,34 +243,35 @@ function makeRuntime(input: NightInput): ChainRuntime {
       felt: input.echo?.felt ?? local.felt,
       lines: [],
     },
+    shadow: null,
   };
 }
 
-function makeArriveTool(rt: ChainRuntime, lockIdentity: boolean): AgentTool {
+async function speakFromMaterials(
+  rt: ChainRuntime,
+  userLine: string,
+  history: RecallItem[] | undefined,
+  fallback: string,
+  timeoutMs: number,
+): Promise<{ text: string; via: TokenMeter["via"] }> {
+  const shadow = rt.shadow;
+  if (!shadow?.materials.length) {
+    return { text: fallback, via: "archive" };
+  }
+  const { respond } = await import("./pipeline/respond.ts");
+  const out = await respond({
+    shadow,
+    userLine: userLine.trim() || rt.input.letter,
+    history: (history ?? []).map((t) => ({ who: t.who, text: t.text })),
+    timeoutMs,
+  });
   return {
-    name: "arrive",
-    label: "落到桌上",
-    description:
-      "用结构化参数落下你自己的身份和这座城市的三句新细节。已有名字时不要改名。felt 必须是有画面的人话短句，禁止 anxious,tired 这类标签串。三句不能重复 Human，不能重复刚说的那句。",
-    parameters: Type.Object({
-      name: Type.Optional(Type.String()),
-      city: Type.Optional(Type.String()),
-      felt: Type.Optional(Type.String()),
-      lines: Type.Array(Type.String()),
-    }),
-    execute: async (_id, params) => {
-      const p = params as { name?: string; city?: string; felt?: string; lines?: string[] };
-      if (!lockIdentity && p.name?.trim()) rt.draft.name = p.name.trim();
-      if (!lockIdentity && p.city?.trim()) rt.draft.city = p.city.trim();
-      if (p.felt?.trim()) rt.draft.felt = acceptFelt(p.felt, rt.draft.felt);
-      if (Array.isArray(p.lines))
-        rt.draft.lines = p.lines
-          .map((l) => String(l).trim())
-          .filter(Boolean)
-          .slice(0, 3);
-      rt.live.persona = `你是${rt.draft.name}，在${rt.draft.city}。`;
-      return { content: [{ type: "text", text: "已落到桌上。" }], details: rt.draft };
-    },
+    text: keepSpoken(out.reply, fallback, rt.input.archival, [
+      userLine,
+      rt.input.letter,
+      rt.input.mirror,
+    ]),
+    via: out.via === "live" ? "live" : "archive",
   };
 }
 
@@ -278,13 +292,6 @@ function makeRememberTool(rt: ChainRuntime): AgentTool {
   };
 }
 
-/** 今晚对话铺成「玩家/回声」行。reply 注入时去掉与 playerLine 重复的末条。 */
-function formatRecall(items: RecallItem[]): string {
-  return items
-    .map((t) => `${t.who === "you" ? "玩家" : "回声"}：${t.text}`)
-    .join("\n");
-}
-
 function recallWithoutCurrent(recall: RecallItem[] | undefined, playerLine?: string): RecallItem[] {
   const items = recall ?? [];
   const last = items.at(-1);
@@ -302,10 +309,11 @@ async function researchStep(kind: "match" | "turn" | "seal", rt: ChainRuntime): 
     [rt.input.letter, rt.input.mirror, rt.input.playerLine, ...earlier].filter(Boolean).join(" ") ||
     "今夜";
 
-  if (kind === "match") {
-    const cases = await formatCaseHitsLive(rt.ctx);
-    rt.hits.push(cases);
-    notes.push(`【世界档案里的相似的人】\n${cases}`);
+  if (kind === "match" || kind === "turn") {
+    rt.shadow = await gatherShadow(rt.ctx, kind === "match");
+    const blob = blobOfShadow(rt.shadow);
+    rt.hits.push(blob);
+    notes.push(`【世界档案里的相似的人】\n${blob}`);
   }
 
   if (rt.input.archival.length > 0) {
@@ -344,63 +352,25 @@ function fallbackFor(kind: "match" | "turn" | "seal", rt: ChainRuntime): NightRe
 async function runMatchChain(input: NightInput): Promise<NightResult> {
   const rt = makeRuntime(input);
   const opened: ExchangeState = initialExchange();
-  if (!hasApiKey()) return { ...fallbackFor("match", rt), exchange: opened, speak: 1, speakMode: "full" };
 
-  const research = await researchStep("match", rt);
-
-  // Step 1: 身份决策。只给 arrive 工具。
-  const decideSystem = `${RULES}\n\n${coreBlocks(rt)}
-现在你只做身份匹配：从上面的检索资料和玩家今晚的痕迹里，确定/保持你是一个什么样的人。
-不评价玩家，不替 TA 下结论。
-只能调用 arrive 落下名字、城市、felt、三句新细节。调用后可以补一句不超过 56 字的微信式第一句。
-${exchangeCue(1, "full")}`;
-  const decideUser = `${rt.perception}
-你要对上的信：${input.letter || "（空白）"}
-玩家写下的一句：${input.mirror || "（无）"}
-${research}`;
-  const step1 = await step(
-    "match-persona",
-    decideSystem,
-    decideUser,
-    [makeArriveTool(rt, Boolean(input.echo))],
-    4,
+  await researchStep("match", rt);
+  const spokenRes = await speakFromMaterials(
+    rt,
+    input.letter || input.mirror,
+    undefined,
+    "灯还开着。我也没回那条。",
+    14000,
   );
-
-  // Step 2: 只写第一句。不改名，不换城。
-  const name = rt.draft.name || rt.local.name;
-  const city = rt.draft.city || rt.local.city;
-  const details = rt.draft.lines.length
-    ? rt.draft.lines.map((l) => `- ${l}`).join("\n")
-    : "（还没确定）";
-  const draftSystem = `${RULES}
-
-# Persona
-你是${name}，在${city}。
-
-# 你的新细节
-${details}`;
-  const draftUser = `${rt.perception}
-现在只写一句话。你是${name}，在${city}。
-这句话 ≤56 字，说你自己今晚发生了什么（一件具体事），像微信。不要引用 Human 的句子。
-${exchangeCue(1, "full")}`;
-  const step2 = await step("match-greeting", draftSystem, draftUser, [], 1, 20000);
-
-  const rawLive = step2.text || step1.text;
-  const raw = rawLive || rt.local.greeting;
-  const spoken0 = ownLine(
-    cleanOneLine(raw),
-    [rt.local.greeting, ...rt.local.replies],
-    input.archival,
-  );
-  const spoken = foreignPlace(spoken0, rt.draft.name, rt.draft.city) ? rt.local.greeting : spoken0;
-  const via = rawLive ? "live" : "archive";
+  const spoken = spokenRes.text;
+  const via = spokenRes.via;
+  const felt = rt.local.felt === rt.local.greeting ? "" : acceptFelt(rt.local.felt, "");
 
   const builtEcho: EchoPerson = {
     name: rt.draft.name,
     city: rt.draft.city,
-    felt: acceptFelt(rt.draft.felt, rt.local.felt),
+    felt,
     greeting: spoken,
-    replies: [spoken, ...rt.draft.lines, ...rt.local.replies]
+    replies: [spoken, ...rt.local.replies]
       .filter((l, i, arr) => l && !stolenVoice(l, input.archival) && arr.indexOf(l) === i)
       .slice(0, 4),
     returnLetter: rt.local.returnLetter,
@@ -410,25 +380,18 @@ ${exchangeCue(1, "full")}`;
   return {
     echo: builtEcho,
     spoken,
-    suggestions: rt.draft.lines
-      .map((l) => closeHangingQuotes(l.trim()))
-      .filter((l) => l && l !== spoken && !stolenVoice(l, input.archival) && !foreignPlace(l, rt.draft.name, rt.draft.city))
-      .slice(0, 3),
+    suggestions: rt.pool.filter((l) => l && l !== spoken).slice(0, 3),
     facts: rt.ctx.remembered.filter((f) => isCompleteFact(f) && !/玩家靠近|今晚靠近/.test(f)),
     hits: rt.hits.slice(-4),
     session: [
       ...(input.session ?? []),
-      { chain: "match", steps: ["research", "persona", "greeting"] },
+      { chain: "match", steps: ["research", "respond"] },
     ],
     persona: rt.live.persona || `你是${builtEcho.name}，在${builtEcho.city}。`,
     human: rt.live.facts.join("\n"),
     meter: {
-      prompt: step1.meter.prompt + step2.meter.prompt,
-      completion: step1.meter.completion + step2.meter.completion,
-      total: step1.meter.total + step2.meter.total,
-      model: AGENT_MODEL.id,
-      via,
-      node: "match",
+      ...emptyMeter("match", via),
+      model: via === "live" ? AGENT_MODEL.id : "archive",
     },
     exchange: opened,
     speak: 1,
@@ -450,66 +413,27 @@ async function runTurnChain(input: NightInput): Promise<NightResult> {
     priorPlayer,
     lastEcho,
   );
-  if (!hasApiKey()) {
-    return {
-      ...fallbackFor("turn", rt),
-      exchange: stepEx.state,
-      speak: stepEx.speak,
-      speakMode: stepEx.mode,
-      judgment: stepEx.judgment,
-    };
-  }
-
   const echo = input.echo ?? rt.local;
-  const research = await researchStep("turn", rt);
-
-  const earlierTonight = formatRecall(recallWithoutCurrent(input.recall, input.playerLine).slice(-2));
-
-  // Step 1: 只记玩家刚说过的事实。
-  const rememberSystem = `${RULES}\n\n${coreBlocks(rt)}
-现在你只做一件事：如果玩家刚才的话里有值得记住的事实，调用 remember 存下。不要回复。`;
-  await step(
-    "turn-remember",
-    rememberSystem,
-    `${earlierTonight ? `今晚刚说过：\n${earlierTonight}\n\n` : ""}玩家刚才说：${input.playerLine || "（无）"}`,
-    [makeRememberTool(rt)],
-    4,
-    20000,
-  );
-
-  // Step 2: 回应。只给 arrive，补充城市细节后说一句自己的事。
-  const replySystem = `${RULES}\n\n${coreBlocks(rt)}
-现在你只做回应。记住：你是${echo.name}，在${echo.city}。用你自己的平行经历接 TA：先说一件你的具体事，可以带出「我也这样」的共情，但不评价玩家、不替 TA 下结论。
-可以调用 arrive 补齐一两条这座城市的新细节，然后说一句 ≤56 字的微信式话。不要复述玩家刚扔的那句。
-最多轻轻点一下刚说过的那件事。
-${exchangeCue(stepEx.speak, stepEx.mode)}`;
-  const step2 = await step(
-    "turn-reply",
-    replySystem,
-    `${rt.perception}
-你现在的身份：${echo.name} · ${echo.city} ${echo.felt || ""}
-${earlierTonight ? `今晚刚说过（最近两句）：\n${earlierTonight}\n` : ""}玩家刚扔过来：${input.playerLine || "（无）"}
-${research}`,
-    [makeArriveTool(rt, true)],
-    4,
-    25000,
-  );
+  await researchStep("turn", rt);
 
   const fallbackLine =
-    [echo.greeting, ...echo.replies, ...rt.local.replies, "我那晚也没睡。电脑还亮着。"].find(
-      (l) => l && l.trim(),
-    ) || "我那晚也没睡。电脑还亮着。";
-  const rawLive = step2.text;
-  const raw = rawLive || rt.draft.lines[0] || fallbackLine;
-  const spoken0 = ownLine(cleanOneLine(raw), [fallbackLine], input.archival);
-  const spoken = foreignPlace(spoken0, rt.draft.name, rt.draft.city) ? fallbackLine : spoken0;
-  const via = rawLive ? "live" : "archive";
+    [echo.greeting, ...echo.replies, "灯还开着。我也没回那条。"].find((l) => l && l.trim()) ||
+    "灯还开着。我也没回那条。";
+  const spokenRes = await speakFromMaterials(
+    rt,
+    input.playerLine || "",
+    recallWithoutCurrent(input.recall, input.playerLine),
+    fallbackLine,
+    10000,
+  );
+  const spoken = spokenRes.text;
+  const via = spokenRes.via;
 
   const nextEcho: EchoPerson = {
     ...echo,
-    felt: acceptFelt(rt.draft.felt, echo.felt || rt.local.felt),
+    felt: acceptFelt(rt.shadow?.materials[0]?.situation, echo.felt || rt.local.felt),
     greeting: echo.greeting || spoken,
-    replies: [spoken, ...rt.draft.lines, ...echo.replies]
+    replies: [spoken, ...echo.replies]
       .filter((l, i, arr) => l && !stolenVoice(l, input.archival) && arr.indexOf(l) === i)
       .slice(0, 4),
     returnLetter: echo.returnLetter || rt.local.returnLetter,
@@ -519,16 +443,13 @@ ${research}`,
   return {
     echo: nextEcho,
     spoken,
-    suggestions: rt.draft.lines
-      .map((l) => closeHangingQuotes(l.trim()))
-      .filter((l) => l && l !== spoken && !stolenVoice(l, input.archival) && !foreignPlace(l, nextEcho.name, nextEcho.city))
-      .slice(0, 3),
+    suggestions: rt.pool.filter((l) => l && l !== spoken).slice(0, 3),
     facts: rt.ctx.remembered.filter((f) => isCompleteFact(f) && !/玩家靠近|今晚靠近/.test(f)),
     hits: rt.hits.slice(-4),
     session: input.session ?? [],
     persona: rt.live.persona || `你是${nextEcho.name}，在${nextEcho.city}。`,
     human: rt.live.facts.join("\n"),
-    meter: { ...step2.meter, via },
+    meter: { ...emptyMeter("turn", via), model: via === "live" ? AGENT_MODEL.id : "archive" },
     exchange: stepEx.state,
     speak: stepEx.speak,
     speakMode: stepEx.mode,

@@ -6,9 +6,7 @@
  * 不把密钥写进仓库。无 key / 401 / 空正文时，链应标 archive，桌上走本地故事卡。
  */
 import { echoChain } from "../src/game/agent/chains.ts";
-import { ownLine } from "../src/game/agent/memory.ts";
 import { fallbackEcho } from "../src/game/kernel.ts";
-import { foreignPlace } from "../src/game/stories.ts";
 import { playerHand } from "../src/game/emotions.ts";
 
 const fingerprint = [
@@ -20,24 +18,8 @@ const player1 = "我改到凌晨，群里只回了收到，灯还开着。";
 const player2 = "那几页我塞进抽屉最下层，到现在都没打开。";
 const player3 = "我把灯留着，像在等一个不存在的点头。";
 
-function tableSpoken(
-  raw: string,
-  replies: string[],
-  recall: { who: string; text: string }[],
-  name: string,
-  city: string,
-  greeting: string,
-) {
-  const lastEcho = recall.filter((t) => t.who === "echo").at(-1)?.text;
-  const spoken0 = ownLine(
-    raw,
-    replies,
-    [],
-    recall.map((t) => t.text),
-  );
-  return foreignPlace(spoken0, name, city)
-    ? replies.find((r) => r !== lastEcho && !foreignPlace(r, name, city)) || greeting
-    : spoken0;
+function tableSpoken(raw: string) {
+  return raw.trim();
 }
 
 const local = fallbackEcho(fingerprint, "east");
@@ -66,7 +48,7 @@ const turn1 = await echoChain.turn({
   exchange: match.exchange,
   session: match.session,
 });
-const t1shown = tableSpoken(turn1.spoken, echo.replies, [...recall, { who: "you", text: player1 }], echo.name, echo.city, greet);
+const t1shown = tableSpoken(turn1.spoken);
 recall = [...recall, { who: "you", text: player1 }, { who: "echo", text: t1shown }];
 
 const turn2 = await echoChain.turn({
@@ -81,7 +63,7 @@ const turn2 = await echoChain.turn({
   exchange: turn1.exchange,
   session: turn1.session,
 });
-const t2shown = tableSpoken(turn2.spoken, [...echo.replies, t1shown], [...recall, { who: "you", text: player2 }], echo.name, echo.city, greet);
+const t2shown = tableSpoken(turn2.spoken);
 recall = [...recall, { who: "you", text: player2 }, { who: "echo", text: t2shown }];
 
 const seal = await echoChain.seal({

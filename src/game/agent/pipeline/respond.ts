@@ -36,6 +36,7 @@
 import { EMOTIONS } from "../../emotions.ts";
 import { llmApiKey, LLM_CONFIG } from "../config.ts";
 import { cleanOneLine } from "../chains.ts";
+import { parroted } from "../memory.ts";
 import type { EchoShadow } from "./persona.ts";
 import type { Post } from "./source.ts";
 
@@ -47,12 +48,16 @@ export interface TurnContext {
   userLine: string;
   /** 对话历史（骨架阶段可选，未来供 LLM 取上下文）。 */
   history?: { who: "you" | "echo"; text: string }[];
+  /** 覆盖默认 LLM 超时。游戏层 match/turn 有更短的 Promise.race。 */
+  timeoutMs?: number;
 }
 
 /** 回应层的一次输出。 */
 export interface TurnOutput {
   /** 回应文本。 */
   reply: string;
+  /** live = 大模型开口；archive = 启发式兜底。 */
+  via?: "live" | "archive";
 }
 
 /** 文件头部「声音 3 条 + 质量 5 条 + 软引导 S1/S2/S5」的内联 system prompt。 */
@@ -186,7 +191,7 @@ async function llmReply(ctx: TurnContext): Promise<string | null> {
   }
 
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), LLM_CONFIG.timeoutMs);
+  const timer = setTimeout(() => controller.abort(), ctx.timeoutMs ?? LLM_CONFIG.timeoutMs);
   const endpoint = llmEndpoint();
   const user = buildUserPrompt(ctx);
   if (LLM_CONFIG.api === "openai-completions") {
@@ -263,48 +268,88 @@ function scoreMaterial(post: Post, userLine: string, hit: Set<string>): number {
   return overlap * 2 + shared;
 }
 
-/** 挑一条最相关的素材：情绪重叠 + 关键词命中，取不到就取第一条（确定性可复现）。 */
-function pickMaterial(materials: Post[], userLine: string): Post {
+/** 按相关度排序素材，便于开口时跳过复读玩家原话的那条。 */
+function rankedMaterials(materials: Post[], userLine: string): Post[] {
   const hit = emotionsHit(userLine);
-  let best = materials[0]!;
-  let bestScore = -1;
-  for (const post of materials) {
-    const score = scoreMaterial(post, userLine, hit);
-    if (score > bestScore) {
-      best = post;
-      bestScore = score;
-    }
-  }
-  return best;
+  return [...materials].sort(
+    (a, b) => scoreMaterial(b, userLine, hit) - scoreMaterial(a, userLine, hit),
+  );
 }
 
-/** 从素材里取一句具体细节（优先一句话情境摘要，回退正文首句）。 */
-function detailOf(post: Post): string {
-  const situation = post.situation.trim();
-  if (situation) return situation;
-  const first = post.content.split(/[。！？]/)[0]?.trim();
-  return first || post.content.trim();
+const LITERARY =
+  /假装|像在等|折进衣领|不存在的点头|隐身了|时间不像时间|怒气|没有一盏是为我|把难受咽|牙关却咬着/;
+const META = /素材齐了|记下你这句话|我也有过类似的|接住了|值得被|不是一个人/;
+const CONCRETE =
+  /灯|茶|手机|抽屉|窗|风扇|清单|电脑|群里|收到|沙发|杯子|截图|门|椅|稿|三点|凌晨|十七|罚单|机台|水龙头/;
+const ACTION = /删了|关了|塞进|划掉|打成|没回|打开|站了|扣过|凉了|没动|循环|托着|练/;
+
+const HUMAN_FALLBACK = "灯还开着。我也没回那条。";
+
+function sentencesOf(text: string): string[] {
+  const out: string[] = [];
+  for (const chunk of text.split(/(?<=[。！？])\s*/)) {
+    const s = chunk.trim();
+    const body = s.replace(/[。！？…\s]/g, "");
+    if (body.length < 6) continue;
+    if (body.length > 28 && s.includes("，")) {
+      for (const part of s.split("，")) {
+        const p = part.trim();
+        if (p.replace(/[。！？\s]/g, "").length >= 6) out.push(p);
+      }
+    } else {
+      out.push(s);
+    }
+  }
+  return out;
+}
+
+function closeLine(s: string): string {
+  const t = s.replace(/[。！？]+$/, "").trim();
+  if (!t) return "";
+  return cleanOneLine(`${t}。`, 56);
+}
+
+function spokenScore(s: string, userLine: string): number {
+  if (!s || parroted(s, userLine) || META.test(s)) return -100;
+  if (LITERARY.test(s) || /^你/.test(s)) return -50;
+  let n = 0;
+  if (CONCRETE.test(s)) n += 3;
+  if (ACTION.test(s)) n += 3;
+  if (/我/.test(s)) n += 2;
+  const len = s.replace(/[。！？]/g, "").length;
+  if (len <= 16) n += 2;
+  else if (len <= 24) n += 1;
+  else if (len > 36) n -= 2;
+  return n;
+}
+
+/** 从最近的那条素材里挑一句能当微信发的话。不要金句，不要「我也有过类似的」。 */
+export function pickSpokenLine(
+  materials: Post[],
+  userLine: string,
+  used: Iterable<string> = [],
+): string {
+  const banned = [...used].filter(Boolean);
+  for (const post of rankedMaterials(materials, userLine)) {
+    const ranked = [...sentencesOf(post.content), post.situation.trim()]
+      .map((raw) => closeLine(raw))
+      .filter((line) => line && !banned.some((b) => parroted(line, b)))
+      .map((line) => ({ line, score: spokenScore(line, userLine) }))
+      .sort((a, b) => b.score - a.score);
+    const best = ranked.find((c) => c.score > 0);
+    if (best) return best.line;
+  }
+  return "";
 }
 
 /**
- * 兜底实现：确定性/人肉启发式（原骨架实现，完整保留）。
- *
- * 从 `ctx.shadow.materials` 挑一条与 `ctx.userLine` 最相关的素材，结合 `ctx.shadow.voice`
- * 的约束（骨架阶段 voice 是「说话方式描述」，不作为可拼贴文本，仅约束未来的 LLM；本模板
- * 天然守短句/白描），拼一句「我也有过类似的 + 素材具体细节」；素材库为空则给占位回应。
+ * 兜底：从世界档案里拿一句具体的自己的事。像微信，不贴模板。
  */
 export function heuristicRespond(ctx: TurnContext): TurnOutput {
-  const { shadow, userLine } = ctx;
-  const materials = shadow.materials;
-
-  if (materials.length === 0) {
-    return {
-      reply: "我这边还空着，先记下你这句话。等素材齐了，我再拿一段相似的接上。",
-    };
-  }
-
-  const detail = detailOf(pickMaterial(materials, userLine));
-  return { reply: `我也有过类似的。${detail}` };
+  const { shadow, userLine, history } = ctx;
+  const used = [userLine, ...(history ?? []).map((h) => h.text)];
+  const line = pickSpokenLine(shadow.materials, userLine, used);
+  return { reply: line || HUMAN_FALLBACK, via: "archive" };
 }
 
 /**
@@ -313,6 +358,6 @@ export function heuristicRespond(ctx: TurnContext): TurnOutput {
  */
 export async function respond(ctx: TurnContext): Promise<TurnOutput> {
   const llm = await llmReply(ctx);
-  if (llm) return { reply: llm };
+  if (llm) return { reply: llm, via: "live" };
   return heuristicRespond(ctx);
 }

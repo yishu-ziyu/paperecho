@@ -97,7 +97,7 @@ await shot("04-throw");
 await apply({
   phase: "flight",
   searching: true,
-  searchNote: "在夜里找一个也说过类似话的人",
+  searchNote: "寻找世另我ing",
   throwPower: 0.72,
   echo: null,
 });

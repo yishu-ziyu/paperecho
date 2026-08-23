@@ -39,7 +39,7 @@ await page.evaluate(
       region: "europe",
       echo: null,
       searching: true,
-      searchNote: "在夜里找一个也说过类似话的人",
+      searchNote: "寻找世另我ing",
       throwPower: 0.9,
     });
   },
@@ -56,8 +56,8 @@ const searching = await page.evaluate(() => {
   return {
     hasSteerHook: Boolean(window.__flightTest),
     hasFollowCopy: /跟着你|绕开|手可以带着飞/.test(text),
-    note: compact.includes("在夜里找一个也说过类似话的人"),
-    waitMark: wait.includes("在夜里") && wait.includes("找一个"),
+    note: compact.includes("寻找世另我ing"),
+    waitMark: wait.includes("寻找世另我ing"),
     progress: Boolean(document.querySelector("[data-flight-progress]")),
     pull: Boolean(document.querySelector('[data-pull="flight"]')),
   };

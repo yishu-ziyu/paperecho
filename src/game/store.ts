@@ -14,7 +14,6 @@ import {
 } from "./emotions";
 import { buildJourney, fallbackEcho, letterFromChips } from "./kernel";
 import { loadJourneys, persistJourneys } from "./save";
-import { foreignPlace } from "./stories";
 import type {
   CoreMemory,
   EchoPerson,
@@ -241,7 +240,7 @@ export const useGame = create<GameState>((set, get) => ({
       throwPower: power,
       phase: "flight",
       searching: true,
-      searchNote: "在夜里找一个也说过类似话的人",
+      searchNote: "寻找世另我ing",
       echo: null,
       archival,
       recall: [],
@@ -271,10 +270,7 @@ export const useGame = create<GameState>((set, get) => ({
         if (get().phase !== "flight") return;
         sfxMatch();
         const live = res.echo;
-        const rawGreet = live.greeting || local.greeting;
-        const greeting = foreignPlace(rawGreet, live.name, live.city)
-          ? local.greeting
-          : ownLine(rawGreet, [live.greeting, ...live.replies, local.greeting], get().archival);
+        const greeting = live.greeting?.trim() || local.greeting;
         set({
           echo: { ...live, greeting },
           core: res.core,
@@ -361,11 +357,7 @@ export const useGame = create<GameState>((set, get) => ({
         if (get().phase !== "encounter") return;
         const echo = get().echo;
         if (!echo) return;
-        const lastEcho = get().recall.filter((t) => t.who === "echo").at(-1)?.text;
-        const spoken0 = ownLine(res.spoken, echo.replies, get().archival, get().recall.map((t) => t.text));
-        const spoken = foreignPlace(spoken0, echo.name, echo.city)
-          ? echo.replies.find((r) => r !== lastEcho && !foreignPlace(r, echo.name, echo.city)) || echo.greeting
-          : spoken0;
+        const spoken = res.spoken.trim() || echo.greeting;
         const suggestions = playerHand(get().fingerprint, get().chips, [
           spoken,
           ...get().recall.map((t) => t.text),

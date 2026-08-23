@@ -8,8 +8,9 @@ import type { Post } from "./pipeline/source.ts";
 import { makeProfile } from "./pipeline/profile.ts";
 import { archiveStories, storyToPost } from "./pipeline/sources/local.ts";
 import { queriesOf } from "./pipeline/sources/live.ts";
-import { cleanOneLine } from "./chains.ts";
-import { formatCaseHits, formatCaseHitsLive, runAgentTool, type ToolCtx } from "./tools.ts";
+import { cleanOneLine, keepSpoken } from "./chains.ts";
+import { heuristicRespond } from "./pipeline/respond.ts";
+import { blobOfShadow, formatCaseHits, formatCaseHitsLive, gatherShadow, runAgentTool, type ToolCtx } from "./tools.ts";
 
 describe("match research via PostSource", () => {
   it("feeds synthesize materials, not locked story names", () => {
@@ -68,6 +69,97 @@ describe("isCompleteFact", () => {
     assert.equal(isCompleteFact("其实也没"), false);
     assert.equal(isCompleteFact("这家的"), false);
     assert.equal(isCompleteFact("你那条「如果搞砸了呢"), false);
+  });
+});
+
+describe("keepSpoken from materials", () => {
+  it("does not bounce a Hangzhou detail back to Diego's collar line", () => {
+    const raw = "杭州灯还开着，茶已经凉了。";
+    const card = "山上的风很大。我把怒气折进衣领里，假装那只是天气。";
+    assert.equal(foreignPlace(raw, "Diego", "Valparaíso"), true);
+    assert.equal(keepSpoken(raw, card, []), raw);
+  });
+});
+
+describe("gatherShadow library", () => {
+  it("returns anonymous materials for anger/wronged, not Diego's nameplate", async () => {
+    const shadow = await gatherShadow({
+      archival: [],
+      fingerprint: [
+        { id: "anger", closeness: 0.9 },
+        { id: "wronged", closeness: 0.85 },
+      ],
+      region: "america",
+      remembered: [],
+      story: "换来一句还好",
+    });
+    assert.ok(shadow.materials.length >= 3);
+    assert.match(shadow.handle, /跟你一样/);
+    const blob = blobOfShadow(shadow);
+    assert.equal(blob.includes("Diego · Valparaíso"), false);
+    assert.ok(shadow.materials.every((p) => p.content.trim().length >= 8));
+  });
+});
+
+const NOT_WECHAT =
+  /我也有过类似的|折进衣领|假装那只是天气|不存在的点头|等素材齐了|记下你这句话/;
+
+function assertWeChat(reply: string) {
+  assert.equal(NOT_WECHAT.test(reply), false, reply);
+  assert.ok(reply.length >= 6 && reply.length <= 56, reply);
+}
+
+describe("heuristicRespond", () => {
+  const archive = () => synthesize(archiveStories().map(storyToPost), makeProfile(["anger", "wronged"]));
+
+  it("does not echo the player's letter back as the reply", () => {
+    const letter = "我把最好的那面都给出去了，换来一句还好。";
+    const out = heuristicRespond({ shadow: archive(), userLine: letter });
+    assert.equal(out.reply.includes("换来一句还好"), false);
+    assertWeChat(out.reply);
+  });
+
+  it("speaks a WeChat line, not the collar metaphor", () => {
+    const out = heuristicRespond({
+      shadow: archive(),
+      userLine: "他们说我太敏感，我把火压着没回。",
+    });
+    assertWeChat(out.reply);
+    assert.match(out.reply, /我/);
+  });
+
+  it("unseen/tired does not use the nod metaphor", () => {
+    const shadow = synthesize(archiveStories().map(storyToPost), makeProfile(["unseen", "tired"]));
+    const out = heuristicRespond({
+      shadow,
+      userLine: "群里只回了收到，灯还开着。",
+    });
+    assertWeChat(out.reply);
+    assert.equal(out.reply.includes("不存在的点头"), false);
+  });
+
+  it("second turn does not repeat the first line", () => {
+    const shadow = archive();
+    const first = heuristicRespond({ shadow, userLine: "换来一句还好。" });
+    const second = heuristicRespond({
+      shadow,
+      userLine: "我回家把聊天记录翻了一遍。",
+      history: [
+        { who: "you", text: "换来一句还好。" },
+        { who: "echo", text: first.reply },
+      ],
+    });
+    assert.notEqual(second.reply, first.reply);
+    assertWeChat(first.reply);
+    assertWeChat(second.reply);
+  });
+
+  it("empty materials still sounds like a person", () => {
+    const out = heuristicRespond({
+      shadow: { handle: "回声", voice: "", materials: [] },
+      userLine: "今晚睡不着。",
+    });
+    assert.equal(out.reply, "灯还开着。我也没回那条。");
   });
 });
 
