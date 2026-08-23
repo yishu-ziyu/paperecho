@@ -25,7 +25,7 @@ export function FlightPhase() {
   const found = !searching && Boolean(echo);
   const cruise = 7.8 - Math.min(0.95, power) * 2.2;
   const title = note || (found && echo ? `到了 ${echo.city}` : "飞机在找一个相似的人");
-  const body = found ? "把飞机往下拉，落到桌上。" : undefined;
+  const body = found ? "往下拉" : undefined;
 
   return (
     <div className="relative flex flex-1 flex-col items-center justify-between overflow-hidden px-4 py-8">

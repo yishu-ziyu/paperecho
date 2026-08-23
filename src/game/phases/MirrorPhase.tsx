@@ -22,7 +22,7 @@ export function MirrorPhase() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-4">
-      <Guide title="谁的这句话，最像你今晚" body="这些是你带来的。往下拖一句到桌上——认领，不是点选。" />
+      <Guide title="谁的这句话，最像你今晚" body="往下拖到桌上" />
       <ul className="mx-auto mt-2 flex gap-2">
         {owned.map((f) => {
           const e = EMOTION_MAP[f.id];

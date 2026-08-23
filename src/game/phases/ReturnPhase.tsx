@@ -110,7 +110,7 @@ export function ReturnPhase() {
     <div className="flex flex-1 flex-col items-center px-4">
       <Guide
         title={open ? `${echo.name} 的回信` : "把回信拉开"}
-        body={open ? "再往下送，滑进抽屉。" : "往下拉。拉开是一回事，放进抽屉是下一回事。"}
+        body="往下拉"
       />
       <Craft className="relative mx-auto mt-8 w-full max-w-md">
         <motion.div

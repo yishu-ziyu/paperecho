@@ -24,17 +24,9 @@ export function ArchivePhase() {
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden" data-phase="archive">
       {justFiled ? (
-        <Guide
-          className="relative z-20 shrink-0 px-4"
-          title="刚说完"
-          body="柜子把今晚的话钉上了。"
-        />
+        <Guide className="relative z-20 shrink-0 px-4" title="刚说完" />
       ) : journeys.length ? null : (
-        <Guide
-          className="relative z-20 shrink-0 px-4"
-          title="墙还空着"
-          body="抽出一张空白，折一架出去。"
-        />
+        <Guide className="relative z-20 shrink-0 px-4" title="墙还空着" />
       )}
       <div className="relative min-h-0 flex-1">
         <CabinetWall
