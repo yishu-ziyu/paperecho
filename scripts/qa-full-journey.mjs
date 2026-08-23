@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { mkdirSync, writeFileSync } from "node:fs";
 import { chromium } from "playwright";
-import { dragToken, dropOnto, pull } from "./play-gestures.mjs";
+import { dragToken, pull } from "./play-gestures.mjs";
 
 const url = process.env.PLAY_URL || "http://127.0.0.1:8080/";
 const out = "/workspace/screenshots/journey";
@@ -107,11 +107,16 @@ await page.locator('[data-drop="encounter"]').waitFor({ timeout: 8000 });
 await page.waitForTimeout(1100);
 await shot("07-encounter");
 
+const speakLines = [
+  "抽屉我到现在都没再打开。",
+  "我把那张截图发给自己了。",
+  "群里那条我还是没回。",
+];
 for (let r = 0; r < 3; r++) {
-  const opt = page.locator(".echo-opt").first();
-  await opt.waitFor({ timeout: 14000 });
-  const desk = page.locator('[data-drop="encounter"]').first();
-  await dropOnto(page, opt, desk);
+  const box = page.locator("textarea").first();
+  await box.waitFor({ timeout: 14000 });
+  await box.fill(speakLines[r]);
+  await page.locator('button[type="submit"]').click();
   if (r < 2) {
     await page.waitForFunction(() => {
       const g = window.__echoGame?.getState?.();

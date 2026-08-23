@@ -15,7 +15,6 @@
  */
 import { Agent, type AgentMessage, type AgentTool } from "@earendil-works/pi-agent-core";
 import { Type, createModels } from "@earendil-works/pi-ai";
-import { chipPool } from "../emotions.ts";
 import { fallbackEcho } from "../kernel.ts";
 import type { EchoPerson, TokenMeter } from "../types.ts";
 import { AGENT_MODEL, llmApiKey, llmProvider, LLM_CONFIG } from "./config.ts";
@@ -23,7 +22,7 @@ import { emptyMeter, hasApiKey } from "./llm.ts";
 import { factsOf, isCompleteFact, ownLine, perceptionOf, renderBlocks, stolenVoice } from "./memory.ts";
 import type { EchoShadow } from "./pipeline/persona.ts";
 import { blobOfShadow, gatherShadow, runAgentTool, type ToolCtx } from "./tools.ts";
-import { acceptFelt, advanceExchange, initialExchange } from "./exchange.ts";
+import { acceptFelt, advanceExchange, initialExchange, type SpeakMode, type StoryDepth } from "./exchange.ts";
 import type { ExchangeState } from "./exchange.ts";
 import type { NightInput, NightResult, RecallItem } from "./types.ts";
 
@@ -191,7 +190,6 @@ interface ChainRuntime {
   input: NightInput;
   local: EchoPerson;
   perception: string;
-  pool: string[];
   live: { persona: string; facts: string[] };
   ctx: ToolCtx;
   hits: string[];
@@ -208,7 +206,6 @@ function makeRuntime(input: NightInput): ChainRuntime {
     input.region,
     input.playerPersona ?? "",
   );
-  const pool = chipPool(input.fingerprint).slice(0, 3);
   const live = {
     persona:
       input.corePersona ||
@@ -233,7 +230,6 @@ function makeRuntime(input: NightInput): ChainRuntime {
     input,
     local,
     perception,
-    pool,
     live,
     ctx,
     hits: [],
@@ -253,6 +249,8 @@ async function speakFromMaterials(
   history: RecallItem[] | undefined,
   fallback: string,
   timeoutMs: number,
+  speak: StoryDepth = 1,
+  mode: SpeakMode = "full",
 ): Promise<{ text: string; via: TokenMeter["via"] }> {
   const shadow = rt.shadow;
   if (!shadow?.materials.length) {
@@ -264,6 +262,8 @@ async function speakFromMaterials(
     userLine: userLine.trim() || rt.input.letter,
     history: (history ?? []).map((t) => ({ who: t.who, text: t.text })),
     timeoutMs,
+    speak,
+    mode,
   });
   return {
     text: keepSpoken(out.reply, fallback, rt.input.archival, [
@@ -335,7 +335,7 @@ function fallbackFor(kind: "match" | "turn" | "seal", rt: ChainRuntime): NightRe
   return {
     echo,
     spoken: kind === "seal" ? echo.returnLetter : echo.greeting,
-    suggestions: kind === "seal" ? [] : rt.pool,
+    suggestions: [],
     facts: rt.live.facts.slice(0, 2),
     hits: [],
     session: rt.input.session ?? [],
@@ -358,8 +358,10 @@ async function runMatchChain(input: NightInput): Promise<NightResult> {
     rt,
     input.letter || input.mirror,
     undefined,
-    "灯还开着。我也没回那条。",
+    "十七稿我打成一包，塞进抽屉最下层。",
     14000,
+    1,
+    "full",
   );
   const spoken = spokenRes.text;
   const via = spokenRes.via;
@@ -380,7 +382,7 @@ async function runMatchChain(input: NightInput): Promise<NightResult> {
   return {
     echo: builtEcho,
     spoken,
-    suggestions: rt.pool.filter((l) => l && l !== spoken).slice(0, 3),
+    suggestions: [],
     facts: rt.ctx.remembered.filter((f) => isCompleteFact(f) && !/玩家靠近|今晚靠近/.test(f)),
     hits: rt.hits.slice(-4),
     session: [
@@ -417,14 +419,16 @@ async function runTurnChain(input: NightInput): Promise<NightResult> {
   await researchStep("turn", rt);
 
   const fallbackLine =
-    [echo.greeting, ...echo.replies, "灯还开着。我也没回那条。"].find((l) => l && l.trim()) ||
-    "灯还开着。我也没回那条。";
+    [echo.greeting, ...echo.replies, "我也有一件，后来就没再动。"].find((l) => l && l.trim()) ||
+    "我也有一件，后来就没再动。";
   const spokenRes = await speakFromMaterials(
     rt,
     input.playerLine || "",
     recallWithoutCurrent(input.recall, input.playerLine),
     fallbackLine,
     10000,
+    stepEx.speak,
+    stepEx.mode,
   );
   const spoken = spokenRes.text;
   const via = spokenRes.via;
@@ -443,7 +447,7 @@ async function runTurnChain(input: NightInput): Promise<NightResult> {
   return {
     echo: nextEcho,
     spoken,
-    suggestions: rt.pool.filter((l) => l && l !== spoken).slice(0, 3),
+    suggestions: [],
     facts: rt.ctx.remembered.filter((f) => isCompleteFact(f) && !/玩家靠近|今晚靠近/.test(f)),
     hits: rt.hits.slice(-4),
     session: input.session ?? [],

@@ -36,6 +36,7 @@
 import { EMOTIONS } from "../../emotions.ts";
 import { llmApiKey, LLM_CONFIG } from "../config.ts";
 import { cleanOneLine } from "../chains.ts";
+import { exchangeCue, type SpeakMode, type StoryDepth } from "../exchange.ts";
 import { parroted } from "../memory.ts";
 import type { EchoShadow } from "./persona.ts";
 import type { Post } from "./source.ts";
@@ -50,6 +51,9 @@ export interface TurnContext {
   history?: { who: "you" | "echo"; text: string }[];
   /** 覆盖默认 LLM 超时。游戏层 match/turn 有更短的 Promise.race。 */
   timeoutMs?: number;
+  /** 这一句影子该讲到的层（交换闸）。 */
+  speak?: StoryDepth;
+  mode?: SpeakMode;
 }
 
 /** 回应层的一次输出。 */
@@ -61,20 +65,17 @@ export interface TurnOutput {
 }
 
 /** 文件头部「声音 3 条 + 质量 5 条 + 软引导 S1/S2/S5」的内联 system prompt。 */
-const SYSTEM_PROMPT = `你是玩家今晚对上的「回声」——不是 AI，不是咨询师，是深夜里一个跟你同频的普通人。
-声音：
-1. 写「事」，不写「状态」——有具体的时间/地点/动作/物件，不堆情绪形容词。
-2. 不碎——一两句自然流动，不逐条崩成短标签。
-3. 零剧场腔——不写诗、不写金句。
+const SYSTEM_PROMPT = `你是玩家今晚对上的那个人——不是 AI，不是咨询师，是微信里一个刚认识、还没睡的人。
+声音：写「事」不写「状态」；一两句自然流动；零剧场腔，不写诗、不写金句、不用意象装。
 质量：
-1. 说一件自己的具体事，别贴情绪标签。
-2. 先接住，再用平行的事回，不替对方下结论。
-3. 共情落在「我也有过」，不是「你好可怜」。
-4. 像聊天，不总结、不说完，留个口子。
-5. 不端咨询腔、不金句、不 AI 万能句（看见、接住、值得、不是一个人、加油，都不许说）。
-软引导：先听懂对方底层情绪（标签不出口）；用平行经历接；钩子长在自己身上，不反问对方。
-素材只能化用细节（取时间/物件/动作重新说成自己的事），禁止搬运素材原句。
-输出：只说那一两句回应（≤56 字），纯文本，不要引号、不要称呼自己、不要工具名，你的事从素材里取具体细节。不要写出层号。`;
+1. 说一件自己的具体事。
+2. 像朋友聊天：先接对方刚说的那件（物件/动作），再说你一件平行的。禁止答非所问，禁止跳到无关场景。
+3. 共情落在「我也有过一件」，不是「你好可怜」。
+4. 不总结、不说完，留个口子在自己身上。
+5. 不许咨询腔和万能句（看见、接住、值得、不是一个人、加油）。
+软引导（标签不出口）：听懂底层情绪；用平行经历接；钩子长在自己身上，不反问。
+素材只准化用跟对方这句同一条线的细节。港口的灯、衣领、不存在的点头这类金句不要写。
+输出：一两句纯文本，≤56 字。不要引号、不要层号、不要工具名。`;
 
 /** 对话只要一两句，跟 LLM_CONFIG.maxTokens 对齐。 */
 const LLM_MAX_TOKENS = LLM_CONFIG.maxTokens;
@@ -86,16 +87,30 @@ function debugFallthrough(reason: string): void {
   }
 }
 
-/** 把素材库（≤5 条）铺成 user prompt 的一段。 */
-function materialsBlock(posts: Post[]): string {
-  const list = posts.slice(0, 5);
-  if (list.length === 0) return "（素材库空着）";
-  return list
-    .map((p) => {
-      const situation = p.situation.trim();
-      return `- ${p.content.trim()}${situation ? `（当时：${situation}）` : ""}`;
-    })
-    .join("\n");
+const LITERARY =
+  /假装|像在等|折进衣领|不存在的点头|隐身了|时间不像时间|怒气|没有一盏是为我|把难受咽|牙关却咬着|心里下了|夜色像|港口的灯/;
+const META = /素材齐了|记下你这句话|我也有过类似的|接住了|值得被|不是一个人|^我懂/;
+const CONCRETE =
+  /灯|茶|手机|抽屉|窗|风扇|清单|电脑|群里|收到|沙发|杯子|截图|门|椅|稿|三点|凌晨|十七|罚单|机台|水龙头|相册|文件夹|面包|地铁|冰箱|电视|客厅|指甲|原稿|外卖|便利贴|语音|图层/;
+const ACTION = /删了|关了|塞进|划掉|打成|没回|打开|站了|扣过|凉了|没动|循环|托着|练|翻|压着|塞|没打开|没再/;
+
+/** 对方这句话里的物件/动作，用来钉住这一句的线。 */
+export function threadTokens(text: string): string[] {
+  const found = [...(text.match(CONCRETE) ?? []), ...(text.match(ACTION) ?? [])];
+  return [...new Set(found)];
+}
+
+function objectsOf(text: string): string[] {
+  return [...new Set(text.match(CONCRETE) ?? [])];
+}
+
+/** 对方说了具体物件时，回句必须还在这条线上。 */
+export function staysOnThread(reply: string, userLine: string): boolean {
+  const objects = objectsOf(userLine);
+  if (!objects.length) return true;
+  if (objects.some((o) => reply.includes(o))) return true;
+  const acts = [...new Set(userLine.match(ACTION) ?? [])];
+  return acts.some((a) => a.length >= 2 && reply.includes(a));
 }
 
 /** 对话历史铺成一段（只取最近 6 条，防过长）。 */
@@ -108,17 +123,30 @@ function historyBlock(history?: TurnContext["history"]): string {
   return `你们刚聊过：\n${lines}\n\n`;
 }
 
+function materialsBlock(posts: Post[], userLine: string): string {
+  const lines = spokenDetails(posts, userLine);
+  if (!lines.length) {
+    return "（没有跟对方这句相关的细节。就接住这件事本身，说你一件平行的小事。）";
+  }
+  return lines.map((line, i) => `${i + 1}. ${line}`).join("\n");
+}
+
 function buildUserPrompt(ctx: TurnContext): string {
   const { shadow, userLine } = ctx;
+  const thread = threadTokens(userLine).join("、") || "对方刚说的这件事";
+  const cue = exchangeCue(ctx.speak ?? 1, ctx.mode ?? "full");
   return `你是：${shadow.handle}
 说话方式：${shadow.voice}
 
-你的素材库（都当成你自己经历过的事）：
-${materialsBlock(shadow.materials)}
+这一句必须接着聊：${thread}
+${cue}
+
+你能用的细节（只准用跟这条线相关的，都当成你自己的事）：
+${materialsBlock(shadow.materials, userLine)}
 
 ${historyBlock(ctx.history)}对方刚说：${userLine}
 
-现在开口回应。挑素材里一个具体细节（时间/物件/动作），说你那件相似的事，先接住对方。一两句，≤56 字。禁止照抄素材原句。`;
+现在开口。先接住对方刚说的物件/动作，再说你一件平行的具体事。一两句，≤56 字。禁止照抄。禁止跳到无关场景。`;
 }
 
 function anthropicText(content: unknown): string {
@@ -257,15 +285,20 @@ function emotionsHit(text: string): Set<string> {
   return hit;
 }
 
-/** 素材与 userLine 的相关度打分：情绪重叠优先，再叠加文本关键词命中。 */
+/** 素材与 userLine 的相关度：先钉物件/动作，情绪只做弱分。 */
 function scoreMaterial(post: Post, userLine: string, hit: Set<string>): number {
   const overlap = post.emotion.filter((e) => hit.has(e)).length;
-  const postGrams = bigrams(`${post.content} ${post.situation}`);
+  const postText = `${post.content} ${post.situation}`;
+  const postGrams = bigrams(postText);
   let shared = 0;
   for (const g of bigrams(userLine)) {
     if (postGrams.has(g)) shared++;
   }
-  return overlap * 2 + shared;
+  const objects = objectsOf(userLine);
+  const objectHit = objects.filter((o) => postText.includes(o)).length;
+  const acts = [...new Set(userLine.match(ACTION) ?? [])];
+  const actHit = acts.filter((a) => postText.includes(a)).length;
+  return objectHit * 12 + actHit * 3 + shared + overlap * 0.25;
 }
 
 /** 按相关度排序素材，便于开口时跳过复读玩家原话的那条。 */
@@ -276,14 +309,7 @@ function rankedMaterials(materials: Post[], userLine: string): Post[] {
   );
 }
 
-const LITERARY =
-  /假装|像在等|折进衣领|不存在的点头|隐身了|时间不像时间|怒气|没有一盏是为我|把难受咽|牙关却咬着/;
-const META = /素材齐了|记下你这句话|我也有过类似的|接住了|值得被|不是一个人/;
-const CONCRETE =
-  /灯|茶|手机|抽屉|窗|风扇|清单|电脑|群里|收到|沙发|杯子|截图|门|椅|稿|三点|凌晨|十七|罚单|机台|水龙头/;
-const ACTION = /删了|关了|塞进|划掉|打成|没回|打开|站了|扣过|凉了|没动|循环|托着|练/;
-
-const HUMAN_FALLBACK = "灯还开着。我也没回那条。";
+const HUMAN_FALLBACK = "我也有一件，后来就没再动。";
 
 function sentencesOf(text: string): string[] {
   const out: string[] = [];
@@ -330,16 +356,34 @@ export function pickSpokenLine(
   used: Iterable<string> = [],
 ): string {
   const banned = [...used].filter(Boolean);
+  const needThread = objectsOf(userLine).length > 0;
   for (const post of rankedMaterials(materials, userLine)) {
+    const postHits = !needThread || staysOnThread(`${post.content} ${post.situation}`, userLine);
     const ranked = [...sentencesOf(post.content), post.situation.trim()]
       .map((raw) => closeLine(raw))
       .filter((line) => line && !banned.some((b) => parroted(line, b)))
       .map((line) => ({ line, score: spokenScore(line, userLine) }))
       .sort((a, b) => b.score - a.score);
-    const best = ranked.find((c) => c.score > 0);
+    const best = ranked.find((c) => {
+      if (c.score <= 0) return false;
+      if (!needThread) return true;
+      return staysOnThread(c.line, userLine) || postHits;
+    });
     if (best) return best.line;
   }
   return "";
+}
+
+/** 给模型看的口语细节：按对方这句排序，丢掉剧场腔整段。 */
+export function spokenDetails(materials: Post[], userLine: string, used: Iterable<string> = []): string[] {
+  const out: string[] = [];
+  const banned = [...used].filter(Boolean);
+  for (const post of rankedMaterials(materials, userLine)) {
+    const line = pickSpokenLine([post], userLine, [...banned, ...out]);
+    if (line && !out.includes(line)) out.push(line);
+    if (out.length >= 3) break;
+  }
+  return out;
 }
 
 /**
@@ -356,8 +400,19 @@ export function heuristicRespond(ctx: TurnContext): TurnOutput {
  * 回应层：优先真实 LLM（拿素材的具体细节说自己那件相似的事）；
  * 无 key / 网络错 / 超时 / 空输出时回退到 `heuristicRespond`。
  */
+function acceptLive(reply: string, userLine: string, materials: Post[]): boolean {
+  if (!reply) return false;
+  if (LITERARY.test(reply) || META.test(reply)) return false;
+  if (parroted(reply, userLine)) return false;
+  if (staysOnThread(reply, userLine)) return true;
+  const post = rankedMaterials(materials, userLine)[0];
+  if (!post || !staysOnThread(`${post.content} ${post.situation}`, userLine)) return false;
+  const allowed = new Set([...objectsOf(userLine), ...objectsOf(`${post.content} ${post.situation}`)]);
+  return objectsOf(reply).every((o) => allowed.has(o));
+}
+
 export async function respond(ctx: TurnContext): Promise<TurnOutput> {
   const llm = await llmReply(ctx);
-  if (llm) return { reply: llm, via: "live" };
+  if (llm && acceptLive(llm, ctx.userLine, ctx.shadow.materials)) return { reply: llm, via: "live" };
   return heuristicRespond(ctx);
 }

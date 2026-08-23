@@ -2,7 +2,7 @@
 /** Play two full nights. Collect loop-breakers, voice slips, and stuck verbs. */
 import { mkdirSync, writeFileSync } from "node:fs";
 import { chromium } from "playwright";
-import { dragToken, dropOnto, pull } from "./play-gestures.mjs";
+import { dragToken, pull } from "./play-gestures.mjs";
 
 const url = process.env.PLAY_URL || "http://127.0.0.1:8080/";
 const out = "/workspace/screenshots/loop";
@@ -162,20 +162,22 @@ async function night(page, persona, index, previous) {
   if (previous?.echo?.name && log.echo?.name === previous.echo.name) log.issues.push("same-echo");
   if (log.picked && log.echo?.name && log.picked !== log.echo.name) log.issues.push(`identity-swap:${log.picked}->${log.echo.name}`);
 
-  const desk = page.locator('[data-drop="encounter"]').first();
+  const lines = [
+    "抽屉我到现在都没再打开。",
+    "我把那张截图发给自己了。",
+    "群里那条我还是没回。",
+  ];
   for (let r = 0; r < 3; r++) {
-    await page.waitForTimeout(200);
-    const opts = page.locator("button.echo-opt");
-    const count = await opts.count();
-    if (!count) {
-      log.issues.push(`no-options-round-${r}`);
+    const you = lines[r];
+    const box = page.locator("textarea").first();
+    await box.waitFor({ timeout: 14000 }).catch(() => log.issues.push(`no-input-round-${r}`));
+    if (!(await box.count())) {
       const st = await state(page);
       if (st?.phase === "return") break;
       break;
     }
-    const choice = opts.nth(Math.min(r, count - 1));
-    const you = (await choice.innerText()).trim();
-    await dropOnto(page, choice, desk);
+    await box.fill(you);
+    await page.locator('button[type="submit"]').click();
     await page.waitForFunction(() => {
       const g = window.__echoGame?.getState?.();
       return g && (!g.waitingEcho || g.phase === "return");
@@ -220,7 +222,7 @@ async function night(page, persona, index, previous) {
   const stA = await state(page);
   log.memories = stA?.archival || [];
   if (index > 0 && !log.memories.length) log.issues.push("memories-missing-on-return-visit");
-  if (!body.includes("会回来的那些句子") && !body.includes("空白的一张")) {
+  if (!body.includes("这一晚说过的") && !body.includes("空白的一张")) {
     log.issues.push("archive-copy-missing");
   }
   log.issues.push(...issuesOf(body, { phase: "archive" }));

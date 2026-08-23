@@ -15,18 +15,15 @@ mkdirSync(out, { recursive: true });
 const echo = {
   name: "林予",
   city: "杭州",
-  felt: "我改了十七稿方案，群里只回了一句收到。灯还开着，像在等一个不存在的点头。",
-  greeting: "我改了十七稿方案，群里只回了一句收到。灯还开着，像在等一个不存在的点头。",
+  felt: "",
+  greeting: "十七稿我打成一包，塞进抽屉最下层。",
   replies: [
-    "我改了十七稿方案，群里只回了一句收到。灯还开着，像在等一个不存在的点头。",
     "十七稿我打成一包，塞进抽屉最下层。",
     "那句收到我到现在都没回。",
   ],
   returnLetter: "你那句「我把灯留着，像在等一个不存在的点」我还留着。灯还开着。",
   source: "archive",
 };
-
-const slips = ["那几页叫 appendix_v7。我没提。", "已读。我把手机扣过去了。", "我倒在沙发上还握着手机。"];
 
 const first = [{ who: "echo", text: echo.greeting }];
 const waiting = [
@@ -77,7 +74,7 @@ await apply(motion, {
   round: 0,
   waitingEcho: false,
   recall: first,
-  suggestions: slips,
+  suggestions: [],
   region: "east",
   exchange: { unlocked: 1, silentTurns: 0 },
   fingerprint: [
@@ -99,7 +96,7 @@ await apply(stable, {
   round: 1,
   waitingEcho: true,
   recall: waiting,
-  suggestions: slips,
+  suggestions: [],
   region: "east",
   exchange: { unlocked: 2, silentTurns: 0 },
   fingerprint: [
@@ -114,7 +111,7 @@ await apply(stable, {
   waitingEcho: false,
   round: 2,
   recall: table,
-  suggestions: slips,
+  suggestions: [],
   exchange: { unlocked: 3, silentTurns: 0 },
   judgeOpen: false,
 });

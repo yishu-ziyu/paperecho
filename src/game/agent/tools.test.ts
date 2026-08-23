@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { COLLECTED } from "../collect.ts";
-import { foreignPlace, STORIES } from "../stories.ts";
+import { foreignPlace, STORIES, storyToEcho } from "../stories.ts";
 import { isCompleteFact } from "./memory.ts";
 import { libraryFirstMaterials, synthesize } from "./pipeline/persona.ts";
 import type { Post } from "./pipeline/source.ts";
@@ -9,7 +9,7 @@ import { makeProfile } from "./pipeline/profile.ts";
 import { archiveStories, storyToPost } from "./pipeline/sources/local.ts";
 import { queriesOf } from "./pipeline/sources/live.ts";
 import { cleanOneLine, keepSpoken } from "./chains.ts";
-import { heuristicRespond } from "./pipeline/respond.ts";
+import { heuristicRespond, spokenDetails, staysOnThread } from "./pipeline/respond.ts";
 import { blobOfShadow, formatCaseHits, formatCaseHitsLive, gatherShadow, runAgentTool, type ToolCtx } from "./tools.ts";
 
 describe("match research via PostSource", () => {
@@ -159,7 +159,42 @@ describe("heuristicRespond", () => {
       shadow: { handle: "回声", voice: "", materials: [] },
       userLine: "今晚睡不着。",
     });
-    assert.equal(out.reply, "灯还开着。我也没回那条。");
+    assert.equal(out.reply, "我也有一件，后来就没再动。");
+  });
+
+  it("drawer stays on the drawer, not the harbour lamps", () => {
+    const shadow = synthesize(archiveStories().map(storyToPost), makeProfile(["unseen", "tired"]));
+    const userLine = "抽屉我到现在都没再打开。";
+    const out = heuristicRespond({ shadow, userLine });
+    assertWeChat(out.reply);
+    assert.equal(/港口|衣领|不存在的点头/.test(out.reply), false, out.reply);
+    const details = spokenDetails(shadow.materials, userLine).join("\n");
+    assert.equal(details.includes("港口的灯"), false, details);
+    assert.equal(/抽屉|稿|塞/.test(details + out.reply), true, details + out.reply);
+  });
+
+  it("second drawer turn continues that night, not the generic fallback", () => {
+    const shadow = synthesize(archiveStories().map(storyToPost), makeProfile(["unseen", "tired"]));
+    const used = "十七稿我打成一包，塞进抽屉最下层。";
+    const out = heuristicRespond({
+      shadow,
+      userLine: "抽屉我到现在都没再打开。",
+      history: [{ who: "echo", text: used }],
+    });
+    assertWeChat(out.reply);
+    assert.notEqual(out.reply, "我也有一件，后来就没再动。");
+    assert.equal(/港口|衣领/.test(out.reply), false, out.reply);
+    assert.equal(out.reply.includes(used), false);
+  });
+});
+
+describe("storyToEcho spoken greeting", () => {
+  it("does not greet with the harbour-lamp line", () => {
+    const mara = STORIES.find((s) => s.id === "s2");
+    assert.ok(mara);
+    const echo = storyToEcho(mara);
+    assert.equal(echo.greeting.includes("港口的灯"), false);
+    assert.equal(echo.felt, "");
   });
 });
 

@@ -86,7 +86,7 @@ export function JudgePanel() {
       </dl>
       <p className="mt-3 text-xs text-ink/55">
         {echo ? `${echo.name} · ${echo.city}` : "尚未起飞"}
-        {echo ? ` · 纸层 ${exchange.unlocked}` : ""}
+        {echo ? ` · 说到${["发生的事", "当时的感觉", "后来改了什么"][exchange.unlocked - 1]}` : ""}
       </p>
       <ul className="mt-2 flex flex-wrap gap-1.5">
         {owned.map((f) => (

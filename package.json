@@ -14,7 +14,7 @@
     "preview": "node scripts/with-app-env.mjs vite preview",
     "typecheck": "tsc --noEmit",
     "check:auth": "node scripts/check-auth-invariant.mjs",
-    "test": "node --test 'scripts/**/*.test.mjs' && node --experimental-strip-types --test src/lib/app-data/app-data.test.ts src/lib/auth/gate-identity.test.ts src/game/paperFlow.test.ts src/game/globeBloom.test.ts src/game/cabinet.test.ts src/game/phaseMotion.test.ts src/game/planeLook.test.ts src/game/agent/exchange.test.ts src/game/agent/tools.test.ts scripts/collect/qa.test.ts",
+    "test": "node --test 'scripts/**/*.test.mjs' && node --experimental-strip-types --test src/lib/app-data/app-data.test.ts src/lib/auth/gate-identity.test.ts src/game/paperFlow.test.ts src/game/globeBloom.test.ts src/game/cabinet.test.ts src/game/phaseMotion.test.ts src/game/planeLook.test.ts src/game/agent/exchange.test.ts src/game/agent/tools.test.ts src/game/agent/project-env.test.ts scripts/collect/qa.test.ts",
     "collect": "node scripts/with-app-env.mjs npx -y tsx scripts/collect/run.mts",
     "lint": "eslint .",
     "format": "prettier --write ."
@@ -75,6 +75,7 @@
     "tailwindcss": "^4.3.0",
     "three": "0.128.0",
     "tw-animate-css": "^1.3.4",
+    "undici": "^8.10.0",
     "vaul": "^1.1.2",
     "zod": "^4.4.0",
     "zustand": "^5.0.0"

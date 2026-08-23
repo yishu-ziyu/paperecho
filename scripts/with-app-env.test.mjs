@@ -11,6 +11,7 @@ import {
   parseAppEnv,
   projectRoot,
   readAppEnv,
+  withEnvProxy,
 } from "./with-app-env.mjs";
 
 const execFileAsync = promisify(execFile);
@@ -48,6 +49,13 @@ test("a missing app-env.json is a clean no-op", () => {
 test("reads the app env from a workspace", () => {
   const root = makeWorkspace('{"VITE_AUTH_ENABLED":"false"}');
   assert.deepEqual(readAppEnv(root), { VITE_AUTH_ENABLED: "false" });
+});
+
+test("enables Node env proxy so fetch honors HTTPS_PROXY", () => {
+  const out = withEnvProxy({ PATH: "/usr/bin" });
+  assert.match(out.NODE_OPTIONS, /--use-env-proxy/);
+  const again = withEnvProxy({ NODE_OPTIONS: "--use-env-proxy --trace-warnings" });
+  assert.equal(again.NODE_OPTIONS.split("--use-env-proxy").length - 1, 1);
 });
 
 test("an explicit process-env override wins over the file", () => {

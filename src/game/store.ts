@@ -8,7 +8,6 @@ import {
   chipPool,
   fingerprintOf,
   ownedOf,
-  playerHand,
   replyPool,
   seedTokens,
 } from "./emotions";
@@ -274,7 +273,7 @@ export const useGame = create<GameState>((set, get) => ({
         set({
           echo: { ...live, greeting },
           core: res.core,
-          suggestions: playerHand(s.fingerprint, s.chips, [greeting, letter, s.extraLine, ...s.letterChips]),
+          suggestions: [],
           hits: res.hits,
           meter: res.meter,
           session: res.session,
@@ -292,7 +291,7 @@ export const useGame = create<GameState>((set, get) => ({
             human: "",
             persona: `你是${local.name}，在${local.city}。`,
           },
-          suggestions: playerHand(s.fingerprint, s.chips, [local.greeting, ...s.letterChips, s.extraLine]),
+          suggestions: [],
           meter: emptyMeter(),
           recall: [{ who: "echo", text: local.greeting }],
           searching: false,
@@ -358,15 +357,9 @@ export const useGame = create<GameState>((set, get) => ({
         const echo = get().echo;
         if (!echo) return;
         const spoken = res.spoken.trim() || echo.greeting;
-        const suggestions = playerHand(get().fingerprint, get().chips, [
-          spoken,
-          ...get().recall.map((t) => t.text),
-          ...get().letterChips,
-          get().extraLine,
-        ]);
         set({
           echo: { ...echo, replies: [...echo.replies, spoken] },
-          suggestions: suggestions.length ? suggestions : get().suggestions,
+          suggestions: [],
           hits: res.hits,
           meter: res.meter,
           session: res.session,

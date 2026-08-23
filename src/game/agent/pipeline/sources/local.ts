@@ -28,13 +28,15 @@ export function summarize(text: string, maxLen = 36): string {
   return first.length > maxLen ? `${first.slice(0, maxLen)}…` : first;
 }
 
-/** 一张 Story 卡 → 一条 Post。content 合并 opening 与两行 lines。 */
+/** 一张 Story 卡 → 一条 Post。只取口语行，不把剧场腔 opening 喂给开口。 */
 export function storyToPost(story: Story): Post {
+  const spoken = story.lines.map((l) => l.trim()).filter(Boolean);
+  const content = spoken.join(" ") || story.opening;
   return {
     platform: "archive",
-    content: [story.opening, ...story.lines].join(" "),
+    content,
     emotion: story.feels,
-    situation: summarize(story.opening),
+    situation: summarize(spoken[0] || story.opening),
   };
 }
 

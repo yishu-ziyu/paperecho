@@ -234,12 +234,14 @@ export function matchStory(
 }
 
 export function storyToEcho(story: Story): import("./types").EchoPerson {
+  const spoken = story.lines.map((l) => l.trim()).filter(Boolean);
+  const greeting = spoken[0] || story.opening;
   return {
     name: story.name,
     city: story.city,
-    felt: story.opening,
-    greeting: story.opening,
-    replies: [story.opening, story.lines[0], story.lines[1]],
+    felt: "",
+    greeting,
+    replies: spoken.slice(0, 3),
     returnLetter: story.returnLetter,
     source: "archive",
   };

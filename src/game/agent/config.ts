@@ -1,23 +1,33 @@
 /**
- * LLM 适配层：MiniMax CN 主路径，AI PING 备选。
+ * LLM 适配层：MiniMax CN 主路径，配置只认项目 `.env`。
  *
- * 默认 MiniMax-M3（Anthropic Messages）。切备选：
- *   PAPER_ECHO_LLM=aiping   且提供 AI_PING_API_KEY
- * MiniMax 无 key、但备选 key 在时，自动落到 AI PING。
- * 换模型只改这一个文件，业务链（chains.ts）从这里取配置。
+ *   MINIMAX_CN_API_KEY / MINIMAX_BASE_URL / MINIMAX_MODEL
+ *   HTTPS_PROXY 出网（Node fetch 默认不走系统代理）
+ *
+ * 不读宿主 ANTHROPIC_BASE_URL。切备选：PAPER_ECHO_LLM=aiping + AI_PING_API_KEY。
  */
 import { createProvider, envApiKeyAuth } from "@earendil-works/pi-ai";
 import { anthropicMessagesApi } from "@earendil-works/pi-ai/api/anthropic-messages.lazy";
 import { openAICompletionsApi } from "@earendil-works/pi-ai/api/openai-completions.lazy";
 import type { Model } from "@earendil-works/pi-ai";
+import {
+  installFetchProxy,
+  isRealLlmKey,
+  loadProjectLlmEnv,
+  minimaxBaseUrl,
+  minimaxModel,
+} from "./project-env.ts";
 import type { LlmConfig } from "./types.ts";
+
+loadProjectLlmEnv();
+installFetchProxy();
 
 const MINIMAX: LlmConfig = {
   providerId: "minimax-cn",
   providerName: "MiniMax CN",
-  baseUrl: "https://api.minimaxi.com/anthropic",
+  baseUrl: minimaxBaseUrl(),
   apiKeyEnv: "MINIMAX_CN_API_KEY",
-  modelId: "MiniMax-M3",
+  modelId: minimaxModel(),
   modelName: "MiniMax M3",
   contextWindow: 1_000_000,
   maxTokens: 2048,
@@ -41,15 +51,11 @@ const AIPING: LlmConfig = {
   api: "openai-completions",
 };
 
-function hasEnv(name: string): boolean {
-  return Boolean(process.env[name]?.trim());
-}
-
 function resolveConfig(): LlmConfig {
   const prefer = (process.env.PAPER_ECHO_LLM || "minimax").toLowerCase();
-  if (prefer === "aiping" && hasEnv("AI_PING_API_KEY")) return AIPING;
-  if (hasEnv("MINIMAX_CN_API_KEY") || hasEnv("ANTHROPIC_AUTH_TOKEN")) return MINIMAX;
-  if (hasEnv("AI_PING_API_KEY")) return AIPING;
+  if (prefer === "aiping" && isRealLlmKey(process.env.AI_PING_API_KEY)) return AIPING;
+  if (isRealLlmKey(process.env.MINIMAX_CN_API_KEY)) return MINIMAX;
+  if (isRealLlmKey(process.env.AI_PING_API_KEY)) return AIPING;
   return MINIMAX;
 }
 
@@ -95,10 +101,7 @@ export function llmProvider() {
     name: LLM_CONFIG.providerName,
     baseUrl: LLM_CONFIG.baseUrl,
     auth: {
-      apiKey: envApiKeyAuth("MiniMax CN API key", [
-        LLM_CONFIG.apiKeyEnv,
-        "ANTHROPIC_AUTH_TOKEN",
-      ]),
+      apiKey: envApiKeyAuth("MiniMax CN API key", [LLM_CONFIG.apiKeyEnv]),
     },
     models: [AGENT_MODEL as Model<"anthropic-messages">],
     api: anthropicMessagesApi(),
@@ -106,10 +109,11 @@ export function llmProvider() {
 }
 
 export function llmApiKey(): string | undefined {
-  const primary = process.env[LLM_CONFIG.apiKeyEnv]?.trim();
-  if (primary) return primary;
-  if (LLM_CONFIG.api === "anthropic-messages") {
-    return process.env.ANTHROPIC_AUTH_TOKEN?.trim() || undefined;
+  const primary = process.env.MINIMAX_CN_API_KEY?.trim();
+  if (isRealLlmKey(primary)) return primary;
+  if (LLM_CONFIG.api === "openai-completions") {
+    const alt = process.env.AI_PING_API_KEY?.trim();
+    return isRealLlmKey(alt) ? alt : undefined;
   }
   return undefined;
 }

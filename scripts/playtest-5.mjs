@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { mkdirSync, writeFileSync } from "node:fs";
 import { chromium } from "playwright";
-import { dragToken, dropOnto, pull } from "./play-gestures.mjs";
+import { dragToken, pull } from "./play-gestures.mjs";
 
 const url = process.env.PLAY_URL || "http://127.0.0.1:8080/";
 const outDir = "/workspace/screenshots/playtest";
@@ -147,7 +147,7 @@ async function journey(page, persona, index) {
   await page.screenshot({ path: `${outDir}/${persona.id}-flight.png` });
   await pull(page, "flight", 0, 90);
 
-  await page.locator("text=/把一句拖向对方|写一句自己的|对方把纸|回信正在折|拖到桌上|先听/").first().waitFor({ timeout: 12000 });
+  await page.locator("text=/先说|具体的|纸正在折|回信正在折|先听完/").first().waitFor({ timeout: 12000 });
   record.echo = await page.locator("h2").first().innerText();
   record.greeting = await page.locator("ul li").first().innerText();
   await page.waitForTimeout(1100);
@@ -155,20 +155,23 @@ async function journey(page, persona, index) {
   await page.screenshot({ path: `${outDir}/${persona.id}-encounter.png` });
 
   if (record.greeting.length > 36) record.issues.push("greeting-long");
-  if (new Set(record.suggestions).size < record.suggestions.length) record.issues.push("dup-suggestions");
-  if (record.suggestions.every((s) => s.length > 18)) record.issues.push("suggestions-too-long");
+  if (record.suggestions.length) record.issues.push("suggestion-chips");
 
-  const desk = page.locator('[data-drop="encounter"]').first();
+  const speakLines = [
+    "抽屉我到现在都没再打开。",
+    "我把那张截图发给自己了。",
+    "群里那条我还是没回。",
+  ];
   for (let i = 0; i < 3; i++) {
-    const opts = page.locator("button.echo-opt");
-    const count = await opts.count();
+    const text = speakLines[i];
+    const box = page.locator("textarea").first();
+    const count = await box.count();
     if (!count) {
-      record.issues.push(`no-options-round-${i}`);
+      record.issues.push(`no-input-round-${i}`);
       break;
     }
-    const choice = opts.nth(Math.min(i, count - 1));
-    const text = (await choice.innerText()).trim();
-    await dropOnto(page, choice, desk);
+    await box.fill(text);
+    await page.locator('button[type="submit"]').click();
     await page.waitForFunction(() => !document.body.innerText.includes("……"), { timeout: 15000 }).catch(() => {
       record.issues.push(`waiting-stuck-round-${i}`);
     });

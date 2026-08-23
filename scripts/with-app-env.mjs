@@ -65,6 +65,18 @@ export function mergeAppEnv(appEnv, processEnv) {
   return { ...appEnv, ...processEnv };
 }
 
+const ENV_PROXY_FLAG = "--use-env-proxy";
+
+/**
+ * Node fetch ignores HTTP(S)_PROXY unless this flag is on.
+ * MiniMax 走系统代理才能出网；不加就会 DNS/直连超时，开口掉进启发式。
+ */
+export function withEnvProxy(env) {
+  const existing = env.NODE_OPTIONS || "";
+  if (existing.split(/\s+/).filter(Boolean).includes(ENV_PROXY_FLAG)) return env;
+  return { ...env, NODE_OPTIONS: `${existing} ${ENV_PROXY_FLAG}`.trim() };
+}
+
 /**
  * Translate a child's `exit` `(code, signal)` into this process's exit status.
  *
@@ -104,20 +116,51 @@ export function isMainModule(moduleUrl) {
   }
 }
 
+/** 与 src/game/agent/project-env.ts 的 PROJECT_LLM_KEYS 对齐：项目 .env 覆盖宿主劫持。 */
+const PROJECT_LLM_KEYS = [
+  "MINIMAX_CN_API_KEY",
+  "MINIMAX_BASE_URL",
+  "MINIMAX_MODEL",
+  "HTTPS_PROXY",
+  "HTTP_PROXY",
+  "ALL_PROXY",
+  "PAPER_ECHO_LLM",
+  "AI_PING_API_KEY",
+];
+
+function parseDotEnv(text) {
+  const out = {};
+  for (const raw of text.split(/\n/)) {
+    const line = raw.trim();
+    if (!line || line.startsWith("#")) continue;
+    const i = line.indexOf("=");
+    if (i < 1) continue;
+    const key = line.slice(0, i).trim();
+    let value = line.slice(i + 1).trim();
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
+      value = value.slice(1, -1);
+    }
+    out[key] = value;
+  }
+  return out;
+}
+
 /**
- * Load the local `.env` file (gitignored) before starting Vite.
- * Server-side secrets like MINIMAX_CN_API_KEY / AI_PING_API_KEY live there.
- * Existing process environment entries always win.
+ * Load `.env`. MiniMax / 代理键以文件为准，不被 ANTHROPIC_* 劫持盖掉。
+ * 其余键仍是「进程里已有的赢」。
  */
 function loadLocalDotEnv(root) {
-  if (typeof process.loadEnvFile !== "function") return;
   const envPath = join(root, ".env");
   if (!existsSync(envPath)) return;
-  const before = { ...process.env };
-  process.loadEnvFile(envPath);
-  for (const key of Object.keys(before)) {
-    if (before[key] === undefined) delete process.env[key];
+  const file = parseDotEnv(readFileSync(envPath, "utf8"));
+  for (const key of PROJECT_LLM_KEYS) {
+    if (file[key]?.trim()) process.env[key] = file[key].trim();
   }
+  if (!process.env.NO_PROXY?.trim()) process.env.NO_PROXY = "127.0.0.1,localhost";
+  if (typeof process.loadEnvFile === "function") process.loadEnvFile(envPath);
 }
 
 function main(argv) {
@@ -127,7 +170,7 @@ function main(argv) {
     process.exit(2);
   }
   loadLocalDotEnv(projectRoot());
-  const env = mergeAppEnv(readAppEnv(projectRoot()), process.env);
+  const env = withEnvProxy(mergeAppEnv(readAppEnv(projectRoot()), process.env));
   const child = spawn(command, args, { stdio: "inherit", env });
   // The dev server is long-running and is stopped by signalling this wrapper.
   for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"]) {
