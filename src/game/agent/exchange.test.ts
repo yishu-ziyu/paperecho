@@ -25,6 +25,12 @@ describe("isNewPersonalDetail", () => {
       true,
     );
   });
+
+  it("rejects the current line if it already sits in priorPlayer", () => {
+    const line = "那几页我塞进抽屉最下层，到现在都没打开。";
+    assert.equal(isNewPersonalDetail(line, [], "灯还开着"), true);
+    assert.equal(isNewPersonalDetail(line, [line], "灯还开着"), false);
+  });
 });
 
 describe("advanceExchange", () => {

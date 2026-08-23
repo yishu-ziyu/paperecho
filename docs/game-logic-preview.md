@@ -2,7 +2,8 @@
 
 > 对齐当前飞行口径（2026-08-23）：寻找中只巡航等待，无跟飞、无躲障；找到后用 `searchNote` 下拉落地。  
 > 拼碎片（`compose`）已删除：`43bcbd7`「拿掉拼碎片，倾听写完直接折」。  
-> 本文只描述现状，不改玩法口味。
+> 本文只描述现状，不改玩法口味。  
+> 聊天页手感与「AI 有没有进眼睛」见 [`docs/previews/encounter-agent.md`](./previews/encounter-agent.md)。
 
 ---
 
@@ -149,7 +150,7 @@ flowchart TB
 
 ## 3. 功能板块预览
 
-静帧在 `docs/previews/`，由 `scripts/preview-modules.mjs` 注入 store 拍下（390×844）。throw / flight 跳过入场弹簧。重拍：`npm run dev` 之后 `node scripts/preview-modules.mjs`。
+静帧在 `docs/previews/`，由 `scripts/preview-modules.mjs` 注入 store 拍下（390×844）。throw / flight 跳过入场弹簧。重拍：`npm run dev` 之后 `node scripts/preview-modules.mjs`。聊天页另拍：`node scripts/preview-encounter.mjs`。
 
 ### 3.1 title · 进房间
 
@@ -220,6 +221,7 @@ flowchart TB
 | **门槛** | `waitingEcho` 时不能连发。满 3 轮封信。 |
 | **产出** | `round < 3`：`runTurn` 12s。`round ≥ 3`：`runSeal` 14s，进 `return`。具体细节才换下一张；层号不出现。 |
 | **可回退** | 不能。 |
+| **谁在说话** | 交互是真的。2026-08-23 真跑时模型钥匙失效，桌上字是本地故事卡；三张纸条始终是情绪池，不是模型句。详见 [encounter-agent.md](./previews/encounter-agent.md)。 |
 
 ### 3.7 return · 拆回信
 
@@ -250,7 +252,7 @@ flowchart TB
 
 <img src="./previews/09-judge.png" alt="按 J 打开的回声系统面板" width="390" />
 
-给评委看的透明盒。展示：当前链节点、live / 本地信柜、token、认领情绪百分比、persona、检索 hits、当晚 recall、档案条数、交换层（内部）。
+给评委看的透明盒。展示：当前链节点、live / 本地信柜、token、认领情绪百分比、persona、检索 hits、当晚 recall、档案条数、交换层（内部）。模型步没吐字时路径应是「本地信柜」，不再空盖「实时链」。`09-judge.png` 仍是旧的注入假 meter；真话术静帧见 `14-encounter-judge.png`。
 
 ### 4.2 世界档案与采集
 
@@ -308,6 +310,6 @@ archival[]        还记得的事
 
 1. **throw 选区的意义还偏弱**。
 2. **return 关页即丢**。
-3. **match / turn 的部分 AI 产出**游戏层还没全吃进去。
+3. **match / turn 的部分 AI 产出**游戏层还没全吃进去（链上 suggestions / facts 仍被丢掉）。有效钥匙到位后，用 `scripts/probe-encounter.mts` 再对一次桌上句子。
 4. **store 里残留的 chips / addChip**：界面已不用，是否清掉另说。
 5. **命题张力**还没当作对外口径定稿。
