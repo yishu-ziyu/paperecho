@@ -12,6 +12,7 @@
   --font-sans: "Nunito", "Noto Sans SC", ui-sans-serif, system-ui, sans-serif;
   --font-display: "Fredoka", "Noto Sans SC", ui-rounded, sans-serif;
   --font-latin: "Fredoka", ui-rounded, sans-serif;
+  --font-hand: "Ma Shan Zheng", "Caveat", "Noto Sans SC", cursive;
   --radius-sm: 10px;
   --radius-md: 16px;
   --radius-lg: 22px;
@@ -59,6 +60,11 @@
 @utility font-latin {
   font-family: var(--font-latin);
   font-weight: 700;
+}
+
+@utility font-hand {
+  font-family: var(--font-hand);
+  font-weight: 400;
 }
 
 @utility type-clay {
@@ -377,6 +383,26 @@
     opacity: 0;
     transform: scale(0.18);
   }
+}
+
+/* Promise Wall #scene — their canvas chrome, no sidebar/dock/compose */
+.promise-wall-host {
+  position: absolute;
+  inset: 0;
+}
+.promise-wall-scene {
+  display: block;
+  width: 100%;
+  height: 100%;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+.promise-wall-scene.dragging {
+  cursor: grabbing;
+}
+.promise-wall-scene.hovering {
+  cursor: pointer;
 }
 
 @media (prefers-reduced-motion: reduce) {

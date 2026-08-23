@@ -14,6 +14,7 @@ import { OrbitPhase } from "./phases/OrbitPhase";
 import { ReturnPhase } from "./phases/ReturnPhase";
 import { ThrowPhase } from "./phases/ThrowPhase";
 import { TitlePhase } from "./phases/TitlePhase";
+import { phaseFrame } from "./phaseMotion";
 import { useGame } from "./store";
 
 /**
@@ -25,6 +26,7 @@ export function GameShell() {
   const phase = useGame((s) => s.phase);
   const startNew = useGame((s) => s.startNew);
   const reduce = useReducedMotion();
+  const frame = phaseFrame(phase, reduce);
   const [diveFrom, setDiveFrom] = useState<CardRect | null>(null);
   const [seedU, setSeedU] = useState(0);
   const diving = Boolean(diveFrom);
@@ -63,11 +65,16 @@ export function GameShell() {
         <AnimatePresence mode="sync" initial={false}>
           <motion.div
             key={phase}
+            data-slide={phase === "archive" ? "cabinet" : undefined}
             className="absolute inset-0 flex min-h-0 flex-col overflow-hidden"
-            initial={diving ? false : { opacity: 0 }}
-            animate={{ opacity: 1, pointerEvents: diving ? "none" : "auto" }}
-            exit={diving ? { opacity: 1 } : { opacity: 0, pointerEvents: "none" }}
-            transition={{ duration: diving ? 0 : 0.2, ease: [0.2, 0, 0, 1] }}
+            initial={diving ? false : frame.initial}
+            animate={{
+              ...frame.animate,
+              pointerEvents: diving ? "none" : "auto",
+            }}
+            exit={diving ? { opacity: 1 } : frame.exit}
+            transition={diving ? { duration: 0 } : frame.transition}
+            style={{ zIndex: phase === "archive" ? 20 : 1 }}
           >
             {phase === "title" && <TitlePhase diving={diving} onLaunch={launch} />}
             {phase === "orbit" && <OrbitPhase />}

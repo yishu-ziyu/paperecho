@@ -1,0 +1,11 @@
+Promise Wall (center wall engine)
+Source: https://github.com/thebuggeddev/promise-wall
+         index.html @ 0cb1b20c3952e4c4184b7e0e33fe5acfac2b4447
+Live:   https://promise-wall-ashen.vercel.app/
+
+The upstream repository is a single HTML file (Three.js r128 + GSAP 3.12.5)
+and does not publish a LICENSE file. Paper Echo vendors their wall engine in
+`src/game/vendor/promise-wall.js` — textures, scene, card factory, motion loop —
+and only changes note copy. Keep this notice with the ported wall.
+
+Not affiliated with, endorsed by, or connected to thebuggeddev.

@@ -16,6 +16,7 @@ export default tseslint.config(
       "node_modules/**",
       "src/routeTree.gen.ts",
       "src/game/bloub/**",
+      "src/game/vendor/**",
     ],
   },
   js.configs.recommended,
