@@ -81,6 +81,7 @@ export function TitlePhase({
           ) : null}
           <motion.div
             className="absolute inset-0 flex flex-col items-center justify-center px-6 py-8"
+            style={{ ["--pop-delay" as string]: "2s" }}
             animate={{ opacity: diving ? 0 : Math.max(0, 1 - pull * 1.35) }}
             transition={{ duration: 0.1 }}
           >

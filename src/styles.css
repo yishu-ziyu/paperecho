@@ -299,7 +299,7 @@
   display: inline-block;
   transform-origin: 50% 80%;
   animation: letter-pop 560ms cubic-bezier(0.34, 1.35, 0.64, 1) both;
-  animation-delay: calc(var(--i) * 55ms);
+  animation-delay: calc(var(--pop-delay, 0ms) + var(--i) * 55ms);
 }
 
 .clip-up-mask {
@@ -308,7 +308,8 @@
 
 .clip-up {
   display: block;
-  animation: clip-up 520ms var(--ease-enter) 420ms both;
+  animation: clip-up 520ms var(--ease-enter) both;
+  animation-delay: calc(var(--pop-delay, 0ms) + 420ms);
 }
 
 .enc-slot {
