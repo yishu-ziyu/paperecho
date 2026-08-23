@@ -28,7 +28,6 @@ export function OrbitPhase() {
   const color = mixBlobColor(fp.length ? fp : tokens.map((t) => ({ id: t.id, closeness: closenessOf(t) })));
   const heldToken = held ? tokens.find((t) => t.id === held) : null;
   const heldClose = heldToken ? closenessOf(heldToken) : 0;
-  const pad = (MIN_RADIUS - 4) * 2;
   const line = draft.trim();
   const ready = owned.length > 0 && line.length >= 4;
   const showPortrait = line.length >= 4;
@@ -51,38 +50,32 @@ export function OrbitPhase() {
             className="relative aspect-square w-full touch-none select-none"
           >
             <div
-              className="pointer-events-none absolute left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full border border-paper/25"
+              className="pointer-events-none absolute z-0 -translate-x-1/2 -translate-y-1/2 rounded-full border border-paper/25"
               style={{
+                left: `${CENTER.x}%`,
                 top: `${CENTER.y}%`,
                 width: `${MAX_RADIUS * 2}%`,
                 height: `${MAX_RADIUS * 2}%`,
               }}
               aria-hidden
             />
-            <Craft
-              className="pointer-events-none absolute rounded-full bg-paper/55 shadow-[0_10px_28px_rgba(12,20,40,0.22)] ring-1 ring-paper/40"
-              style={{
-                left: `${CENTER.x}%`,
-                top: `${CENTER.y}%`,
-                width: `${pad}%`,
-                height: `${pad}%`,
-                transform: "translate(-50%, -50%)",
-              }}
-            />
             <div
+              data-orbit-well
+              aria-hidden
               className={cn(
-                "pointer-events-none absolute left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full border border-dashed transition-[border-color] duration-(--motion-fast) ease-(--ease-out)",
-                owned.length ? "border-coral/55" : "border-ink/25",
+                "pointer-events-none absolute z-0 -translate-x-1/2 -translate-y-1/2 rounded-full bg-paper",
+                "shadow-[inset_0_8px_16px_rgba(12,20,40,0.2),inset_0_-1px_0_rgba(255,248,238,0.55),0_12px_28px_rgba(12,20,40,0.3)]",
+                owned.length ? "ring-2 ring-coral/60" : "ring-1 ring-ink/10",
               )}
               style={{
+                left: `${CENTER.x}%`,
                 top: `${CENTER.y}%`,
                 width: `${MIN_RADIUS * 2}%`,
                 height: `${MIN_RADIUS * 2}%`,
               }}
-              aria-hidden
             />
             <div
-              className="absolute z-30"
+              className="absolute z-20"
               style={{ left: `${CENTER.x}%`, top: `${CENTER.y}%`, transform: "translate(-50%, -50%)" }}
             >
               <EmotionCreature
@@ -93,7 +86,7 @@ export function OrbitPhase() {
                 size={78}
                 label="你"
                 title="你"
-                className="[&>span]:mt-1 [&>span]:text-base [&>span]:font-medium [&>span]:text-ink"
+                className="[&>span]:absolute [&>span]:top-full [&>span]:left-1/2 [&>span]:mt-1 [&>span]:-translate-x-1/2 [&>span]:text-base [&>span]:font-medium [&>span]:text-ink"
               />
             </div>
             {tokens.map((t) => (
@@ -290,7 +283,7 @@ function Token({
         x: ((xy[0] - r.left) / r.width) * 100,
         y: ((xy[1] - r.top) / r.height) * 100,
       };
-      const placed = clampToRing(raw.x, raw.y, token.id);
+      const placed = clampToRing(raw.x, raw.y, token.id, live.current);
       writePct(currentTarget as HTMLElement, placed.x, placed.y);
       live.current = placed;
       if (first) {
@@ -319,7 +312,11 @@ function Token({
       type="button"
       aria-label={e.label}
       {...bind()}
-      className={cn("absolute z-10 flex w-16 touch-none flex-col items-center", active && "z-40")}
+      className={cn(
+        "absolute z-10 flex w-16 touch-none flex-col items-center",
+        near && "z-[25]",
+        active && "z-40",
+      )}
       style={{
         left: `${token.x}%`,
         top: `${token.y}%`,

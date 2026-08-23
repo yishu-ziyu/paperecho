@@ -35,6 +35,7 @@ export function GameShell() {
     (window as Window & { __echoGame?: typeof useGame }).__echoGame = useGame;
     if (!import.meta.env.DEV) return;
     const jump = new URLSearchParams(window.location.search).get("phase");
+    if (jump === "orbit") useGame.setState({ phase: "orbit" });
     if (jump === "throw") useGame.setState({ phase: "throw", folds: 2, region: null });
     if (jump === "fold") {
       useGame.setState({

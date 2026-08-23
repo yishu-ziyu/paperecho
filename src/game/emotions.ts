@@ -158,14 +158,31 @@ export const EMOTIONS: Emotion[] = [
 
 export const EMOTION_MAP = Object.fromEntries(EMOTIONS.map((e) => [e.id, e])) as Record<EmotionId, Emotion>;
 
-export function clampToRing(x: number, y: number, id: EmotionId): TokenPos {
+export function clampToRing(x: number, y: number, id: EmotionId, from?: TokenPos): TokenPos {
   const dx0 = x - CENTER.x;
   const dy0 = y - CENTER.y;
   let d = Math.hypot(dx0, dy0);
-  const nx = d < 0.01 ? 0 : dx0 / d;
-  const ny = d < 0.01 ? 1 : dy0 / d;
-  if (d < 0.01) d = MIN_RADIUS;
-  d = Math.max(MIN_RADIUS, Math.min(MAX_RADIUS, d));
+  let nx: number;
+  let ny: number;
+  if (d < 2) {
+    const fx = (from?.x ?? x) - CENTER.x;
+    const fy = (from?.y ?? y) - CENTER.y;
+    const fd = Math.hypot(fx, fy);
+    if (fd >= 2) {
+      nx = fx / fd;
+      ny = fy / fd;
+    } else {
+      const i = Math.max(0, EMOTIONS.findIndex((e) => e.id === id));
+      const a = (Math.PI * 2 * i) / EMOTIONS.length - Math.PI / 2;
+      nx = Math.cos(a);
+      ny = Math.sin(a);
+    }
+    d = MIN_RADIUS;
+  } else {
+    nx = dx0 / d;
+    ny = dy0 / d;
+    d = Math.max(MIN_RADIUS, Math.min(MAX_RADIUS, d));
+  }
   let px = CENTER.x + nx * d;
   let py = CENTER.y + ny * d;
   px = Math.max(10, Math.min(90, px));
