@@ -8,15 +8,18 @@ import {
   useTransform,
   type MotionValue,
 } from "motion/react";
-import { sfxCharge, sfxSnap, sfxThrow, sfxWhoosh } from "../audio";
+import { sfxBloom, sfxCharge, sfxSnap, sfxThrow, sfxWhoosh } from "../audio";
 import { Globe } from "../components/Globe";
 import { Guide } from "../components/Guide";
 import { Plane } from "../components/Plane";
 import { CRAFT_ID } from "../continuum";
+import { ownedOf } from "../emotions";
+import { bloomOrder, emptyBloom, type BloomMap } from "../globeBloom";
 import {
   FIRE_THRESHOLD,
   FULL_THRESHOLD,
   MAX_PULL_PX,
+  ease,
   powerOf,
   rubberY,
   spring,
@@ -26,16 +29,17 @@ import { REGIONS } from "../stories";
 import { useGame } from "../store";
 import type { RegionId } from "../types";
 
+type Beat = "dive" | "bloom" | "ready";
+
 /**
- * Slingshot throw — continuous dynamic motion, not a timed clip.
- *
- * C4: plane drops in from the window (top) onto the bands.
- * C5: layoutId stays on this plane through launch so flight is the same craft.
+ * Window → paper plane flies into the earth → windows bloom → slingshot.
+ * Arrival is short and the globe can be turned while lights open.
  */
 export function ThrowPhase() {
   const region = useGame((s) => s.region);
   const pickRegion = useGame((s) => s.pickRegion);
   const launch = useGame((s) => s.launch);
+  const fingerprint = useGame((s) => s.fingerprint);
   const reduce = useReducedMotion();
   const start = useRef<{ x: number; y: number } | null>(null);
   const last = useRef({ p: 0, x: 0, y: 0 });
@@ -45,52 +49,141 @@ export function ThrowPhase() {
   const chargeRef = useRef(0);
   const draggingRef = useRef(false);
   const thrownRef = useRef(false);
-  const enteredRef = useRef(false);
+  const readyRef = useRef(Boolean(reduce));
   const restRef = useRef<HTMLDivElement>(null);
   const globeRef = useRef<HTMLDivElement>(null);
+  const bloomRef = useRef<BloomMap>(emptyBloom(reduce ? 1 : 0));
+  const awakeRef = useRef(reduce ? 1 : 0.08);
   const [dragging, setDragging] = useState(false);
   const [thrown, setThrown] = useState(false);
-  const [entered, setEntered] = useState(Boolean(reduce));
+  const [beat, setBeat] = useState<Beat>(reduce ? "ready" : "dive");
   const [facing, setFacing] = useState<RegionId | null>(null);
   const [full, setFull] = useState(false);
-  const y = useMotionValue(reduce ? 0 : -120);
+  const y = useMotionValue(reduce ? 0 : -36);
   const x = useMotionValue(0);
-  const rot = useMotionValue(0);
+  const rot = useMotionValue(reduce ? 0 : -12);
   const power = useMotionValue(0);
   const stretch = useMotionValue(1);
   const fade = useMotionValue(1);
   const bandY = useMotionValue(0);
   const bandX = useMotionValue(0);
-  const globeScale = useMotionValue(1);
-  const globeY = useMotionValue(0);
+  const globeScale = useMotionValue(reduce ? 1 : 0.78);
+  const globeY = useMotionValue(reduce ? 0 : 28);
   const punch = useMotionValue(0);
-  const scaleX = useTransform(stretch, squashX);
+  const craftScale = useMotionValue(reduce ? 1 : 1.08);
+  const aperture = useMotionValue(reduce ? 0 : 1);
+  const gear = useMotionValue(reduce ? 1 : 0);
+  const planeScaleX = useTransform([stretch, craftScale], (v) => squashX(Number(v[0])) * Number(v[1]));
+  const planeScaleY = useTransform([stretch, craftScale], (v) => Number(v[0]) * Number(v[1]));
   const leftD = useTransform([bandY, bandX], slingPath(-42));
   const rightD = useTransform([bandY, bandX], slingPath(42));
-  const bandOpacity = useTransform(power, [0, 0.06, 1], [0, 0.7, 1]);
+  const bandOpacity = useTransform([power, gear], (v) => {
+    const p = Number(v[0]);
+    const g = Number(v[1]);
+    if (p < 0.06) return 0.15 * g;
+    return (0.7 + p * 0.3) * g;
+  });
   const bandWidth = useTransform(power, [0, 1], [1.6, 3.4]);
   const aimed = region ?? facing;
   const place = REGIONS.find((r) => r.id === (region || facing));
+  const feels = ownedOf(fingerprint, 0.3).map((f) => f.id);
 
   const destRef = useRef<RegionId | null>(null);
   destRef.current = region ?? facing;
 
   useEffect(() => {
     if (reduce) {
-      enteredRef.current = true;
-      setEntered(true);
+      readyRef.current = true;
+      setBeat("ready");
+      bloomRef.current = emptyBloom(1);
+      awakeRef.current = 1;
       return;
     }
-    const t = window.setTimeout(() => {
-      enteredRef.current = true;
-      setEntered(true);
-    }, 480);
-    void animate(y, 0, spring.parent).then(() => {
-      enteredRef.current = true;
-      setEntered(true);
+
+    let cancelled = false;
+    let bloomTimer = 0;
+    const order = bloomOrder(feels);
+    sfxWhoosh();
+
+    const wake = (from: number, to: number, ms: number) => {
+      const t0 = performance.now();
+      const tick = (now: number) => {
+        if (cancelled) return;
+        const t = Math.min(1, (now - t0) / ms);
+        awakeRef.current = from + (to - from) * t;
+        if (t < 1) requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    };
+
+    const lightOne = (id: RegionId, done: () => void) => {
+      const t0 = performance.now();
+      const step = (now: number) => {
+        if (cancelled) return;
+        const t = Math.min(1, (now - t0) / 220);
+        bloomRef.current = { ...bloomRef.current, [id]: t };
+        if (t < 1) requestAnimationFrame(step);
+        else done();
+      };
+      sfxBloom();
+      if (typeof navigator !== "undefined" && navigator.vibrate) navigator.vibrate(8);
+      requestAnimationFrame(step);
+    };
+
+    const startBloom = () => {
+      if (cancelled) return;
+      setBeat("bloom");
+      let i = 0;
+      const next = () => {
+        if (cancelled) return;
+        const id = order[i++];
+        if (!id) {
+          readyRef.current = true;
+          setBeat("ready");
+          return;
+        }
+        lightOne(id, () => {
+          bloomTimer = window.setTimeout(next, 100);
+        });
+      };
+      next();
+    };
+
+    const dive = () => {
+      const aim = aimPoint();
+      wake(0.08, 0.62, 720);
+      void animate(y, aim.y, spring.launch);
+      void animate(x, aim.x, spring.launch);
+      void animate(rot, 16, spring.launch);
+      void animate(craftScale, 0.26, { duration: 0.62, ease: ease.exit });
+      void animate(globeScale, 1.05, spring.parent);
+      void animate(globeY, -4, spring.parent);
+      void animate(aperture, 0, { duration: 0.68, ease: ease.exit, delay: 0.22 });
+      window.setTimeout(() => {
+        if (cancelled || useGame.getState().phase !== "throw") return;
+        void animate(punch, 0, { type: "spring", stiffness: 420, damping: 22, velocity: 140 });
+        void animate(y, 0, spring.parent);
+        void animate(x, 0, spring.parent);
+        void animate(rot, 0, spring.settle);
+        void animate(craftScale, 1, spring.parent);
+        void animate(gear, 1, { duration: 0.36, ease: ease.enter });
+        wake(awakeRef.current, 1, 640);
+        startBloom();
+      }, 700);
+    };
+
+    const boot = window.requestAnimationFrame(() => {
+      if (!cancelled) dive();
     });
-    return () => window.clearTimeout(t);
-  }, [reduce, y]);
+
+    return () => {
+      cancelled = true;
+      window.cancelAnimationFrame(boot);
+      window.clearTimeout(bloomTimer);
+    };
+    // feels is stable enough for one arrival
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reduce]);
 
   useMotionValueEvent(power, "change", (v) => {
     chargeRef.current = v;
@@ -105,7 +198,7 @@ export function ThrowPhase() {
   });
 
   useEffect(() => {
-    if (reduce || thrown || dragging || !aimed || hinted.current || !entered) return;
+    if (reduce || thrown || dragging || !aimed || hinted.current || beat !== "ready") return;
     hintTimer.current = window.setTimeout(() => {
       if (Math.abs(y.get()) > 2 || start.current || thrownRef.current) return;
       hinted.current = true;
@@ -114,7 +207,7 @@ export function ThrowPhase() {
       });
     }, 1600);
     return () => window.clearTimeout(hintTimer.current);
-  }, [reduce, thrown, dragging, aimed, y, entered]);
+  }, [reduce, thrown, dragging, aimed, y, beat]);
 
   useEffect(() => {
     function onMove(e: PointerEvent) {
@@ -136,7 +229,7 @@ export function ThrowPhase() {
   }, []);
 
   function arm(clientX: number, clientY: number) {
-    if (!enteredRef.current || thrownRef.current) return;
+    if (!readyRef.current || thrownRef.current) return;
     y.stop();
     x.stop();
     rot.stop();
@@ -206,18 +299,19 @@ export function ThrowPhase() {
     const incomingY = y.getVelocity();
     const incomingX = x.getVelocity();
     const launchVel = -(Math.max(480, Math.abs(incomingY) * 1.55) + p * 1280);
-    const aim = aimPoint();
 
     const go = () => {
+      const aim = aimPoint();
       void animate(bandY, 0, spring.snap);
       void animate(bandX, 0, spring.snap);
       void animate(power, 0, { duration: 0.32, ease: [0.3, 0, 0.8, 0.15] });
       void animate(stretch, 0.78, { duration: 0.28, ease: [0.3, 0, 0.8, 0.15] });
+      void animate(craftScale, 0.22, { duration: 0.7, ease: ease.exit });
       void animate(y, aim.y, { ...spring.launch, velocity: launchVel });
       void animate(x, aim.x, { ...spring.launch, velocity: incomingX * 0.55 });
       void animate(rot, 18 + last.current.x * -0.08, spring.launch);
-      void animate(globeScale, 1.05, spring.parent);
-      void animate(globeY, -8, spring.parent);
+      void animate(globeScale, 1.08, spring.parent);
+      void animate(globeY, -10, spring.parent);
       void animate(punch, 0, { type: "spring", stiffness: 420, damping: 22, velocity: 150 });
       window.setTimeout(() => {
         if (useGame.getState().phase === "throw") launch(p);
@@ -239,54 +333,77 @@ export function ThrowPhase() {
     }
     return {
       x: globe.left + globe.width / 2 - (rest.left + rest.width / 2),
-      y: globe.top + globe.height * 0.4 - (rest.top + rest.height / 2),
+      y: globe.top + globe.height * 0.42 - (rest.top + rest.height / 2),
     };
   }
 
+  const guide =
+    beat === "dive"
+      ? { title: "飞进地球", body: "同一架飞机，从窗穿过去。" }
+      : beat === "bloom"
+        ? { title: "灯是别人的窗", body: "一盏一盏开。" }
+        : { title: "转地球，拉飞机", body: "转到那盏窗。拉满再放。" };
+
   const cue = thrown
     ? "在飞"
-    : !entered
-      ? "接住"
-      : full
-        ? "松手"
-        : reduce && aimed
-          ? "点飞机投出"
-          : aimed
-            ? "拉满再放"
-            : "先转地球";
+    : beat === "dive"
+      ? "飞进去"
+      : beat === "bloom"
+        ? "灯在开"
+        : full
+          ? "松手"
+          : reduce && aimed
+            ? "点飞机投出"
+            : aimed
+              ? "拉满再放"
+              : "先转地球";
 
   return (
     <motion.div className="relative flex min-h-0 flex-1 flex-col px-4" style={{ y: punch }}>
-      <Guide
-        tone="night"
-        title="转地球，拉飞机"
-        body="转到那个地方。没有按钮，拉满再放。夜里会找一个也说过类似话的人。"
-      />
+      <motion.div
+        className="pointer-events-none absolute inset-0 z-[8]"
+        style={{ opacity: aperture }}
+        aria-hidden
+      >
+        <div className="throw-window absolute inset-0" />
+      </motion.div>
+      <Guide tone="night" title={guide.title} body={guide.body} />
       <motion.div
         ref={globeRef}
-        className="mx-auto mt-1 w-[min(78vw,20rem)] flex-1 will-change-transform"
+        className="relative mx-auto mt-1 flex w-[min(82vw,21rem)] flex-1 items-center will-change-transform"
         style={{ scale: globeScale, y: globeY }}
       >
-        <Globe
-          selected={region}
-          throwing={thrown}
-          chargeRef={chargeRef}
-          onPick={pickRegion}
-          onFacing={setFacing}
-        />
+        <div className="relative w-full">
+          <motion.div
+            className="throw-window-ring pointer-events-none absolute inset-[-4%] rounded-full"
+            style={{ opacity: aperture }}
+            aria-hidden
+          />
+          <Globe
+            selected={region}
+            throwing={thrown}
+            chargeRef={chargeRef}
+            bloomRef={bloomRef}
+            awakeRef={awakeRef}
+            onPick={pickRegion}
+            onFacing={setFacing}
+          />
+        </div>
       </motion.div>
       <p className="min-h-6 text-center text-sm text-paper/80">
-        {region && place
-          ? `飞向 ${place.city}`
-          : place
-            ? `对着 ${place.city}，拉飞机`
-            : "转一转，找到一个亮点"}
+        {beat !== "ready"
+          ? "\u00a0"
+          : region && place
+            ? `飞向 ${place.city}`
+            : place
+              ? `对着 ${place.city}，拉飞机`
+              : "转一转，找到一个亮点"}
       </p>
       <div
         data-throw-well
         className="relative mx-auto mt-1 h-40 w-full max-w-md touch-none overflow-visible"
         onPointerDown={(e) => {
-          if (thrownRef.current || !enteredRef.current) return;
+          if (thrownRef.current || !readyRef.current) return;
           e.preventDefault();
           (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
           arm(e.clientX, e.clientY);
@@ -297,31 +414,31 @@ export function ThrowPhase() {
           viewBox="0 0 240 160"
           aria-hidden
         >
-          <circle cx="78" cy="30" r="3.8" className="sling-post" />
-          <circle cx="162" cy="30" r="3.8" className="sling-post" />
+          <motion.circle cx="78" cy="30" r="3.8" className="sling-post" style={{ opacity: gear }} />
+          <motion.circle cx="162" cy="30" r="3.8" className="sling-post" style={{ opacity: gear }} />
           <motion.path d={leftD} className="sling-band" style={{ opacity: bandOpacity, strokeWidth: bandWidth }} />
           <motion.path d={rightD} className="sling-band" style={{ opacity: bandOpacity, strokeWidth: bandWidth }} />
         </svg>
         {thrown ? (
           <>
-            <Trail x={x} y={y} rot={rot} scaleX={scaleX} stretch={stretch} fade={fade} offset={18} opacity={0.22} />
-            <Trail x={x} y={y} rot={rot} scaleX={scaleX} stretch={stretch} fade={fade} offset={36} opacity={0.12} />
-            <Trail x={x} y={y} rot={rot} scaleX={scaleX} stretch={stretch} fade={fade} offset={54} opacity={0.06} />
+            <Trail x={x} y={y} rot={rot} scaleX={planeScaleX} stretch={planeScaleY} fade={fade} offset={18} opacity={0.22} />
+            <Trail x={x} y={y} rot={rot} scaleX={planeScaleX} stretch={planeScaleY} fade={fade} offset={36} opacity={0.12} />
+            <Trail x={x} y={y} rot={rot} scaleX={planeScaleX} stretch={planeScaleY} fade={fade} offset={54} opacity={0.06} />
           </>
         ) : null}
         <motion.div
           ref={restRef}
           layoutId={CRAFT_ID}
           data-craft=""
-          className="absolute left-1/2 top-2 h-16 w-28 will-change-transform"
-          style={{ x, y, rotate: rot, scaleX, scaleY: stretch, opacity: fade, marginLeft: -56 }}
+          className="absolute left-1/2 top-1 h-20 w-36 will-change-transform"
+          style={{ x, y, rotate: rot, scaleX: planeScaleX, scaleY: planeScaleY, opacity: fade, marginLeft: -72 }}
         >
           <Plane className="h-full w-full" charged={full && !thrown} />
         </motion.div>
         <div className="pointer-events-none absolute bottom-3 left-1/2 w-36 -translate-x-1/2">
-          <div className="h-1 overflow-hidden rounded-full bg-paper/20">
+          <motion.div className="h-1 overflow-hidden rounded-full bg-paper/20" style={{ opacity: gear }}>
             <motion.div className="h-full origin-left rounded-full bg-coral" style={{ scaleX: power }} />
-          </div>
+          </motion.div>
         </div>
       </div>
       <p data-throw-cue className="pb-6 text-center text-xs text-paper/40">
@@ -366,8 +483,8 @@ function Trail({
   const ghost = useTransform(fade, (v) => v * opacity);
   return (
     <motion.div
-      className="pointer-events-none absolute left-1/2 top-2 h-16 w-28"
-      style={{ x, y: trailed, rotate: rot, scaleX, scaleY: stretch, opacity: ghost, marginLeft: -56 }}
+      className="pointer-events-none absolute left-1/2 top-1 h-20 w-36"
+      style={{ x, y: trailed, rotate: rot, scaleX, scaleY: stretch, opacity: ghost, marginLeft: -72 }}
     >
       <Plane className="h-full w-full" />
     </motion.div>

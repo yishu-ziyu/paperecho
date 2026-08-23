@@ -118,9 +118,9 @@ export function FoldPhase() {
         }
       />
       {folds >= 2 ? (
-        <div className="relative mx-auto mt-2 h-16 w-full max-w-md overflow-hidden rounded-t-3xl">
-          <div className="absolute inset-x-8 top-0 h-10 rounded-b-full bg-paper/20 blur-[1px]" />
-          <p className="relative z-[1] pt-3 text-center text-xs tracking-[0.2em] text-paper/70">窗</p>
+        <div className="relative mx-auto mt-2 h-20 w-full max-w-md overflow-hidden">
+          <div className="absolute left-1/2 top-[-2.2rem] h-[5.5rem] w-[5.5rem] -translate-x-1/2 rounded-[28%] bg-paper/16 shadow-[inset_0_0_0_3px_color-mix(in_oklab,var(--color-paper)_22%,transparent)]" />
+          <p className="relative z-[1] pt-8 text-center text-xs tracking-[0.2em] text-paper/70">窗</p>
         </div>
       ) : null}
       <div className="relative mx-auto mt-4 flex w-full max-w-md flex-1 items-center justify-center" style={{ perspective: 900 }}>

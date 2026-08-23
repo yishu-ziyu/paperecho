@@ -10,7 +10,7 @@ const STILL: Record<Phase, string | null> = {
   orbit: "/scenes/room.jpg",
   mirror: "/scenes/room.jpg",
   fold: "/scenes/room.jpg",
-  throw: "/scenes/sky.jpg",
+  throw: null,
   flight: "/scenes/sky.jpg",
   encounter: "/scenes/echo.jpg",
   return: "/scenes/echo.jpg",

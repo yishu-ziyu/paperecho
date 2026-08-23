@@ -1,6 +1,6 @@
 # Paper Echo · 会话交接文档（HANDOFF）
 
-> 写给下一个 AI 会话：本文件是一切上下文的地基。**先读这一份，再看 `agent.md`（Agent 设计）与 `docs/reports/social-story-pipeline.md`（社媒流水线设计）。**
+> 写给下一个 AI 会话：本文件是一切上下文的地基。**先读这一份，再看 `docs/game-logic-preview.md`（当前主循环与板块预览）、`agent.md`（Agent 设计）与 `docs/reports/social-story-pipeline.md`（社媒流水线设计）。**
 > 协作铁律：先结构后代码，simple first；用项目内安装的 agent-skills（`/Users/mahaoxuan/Desktop/黑客松/AI PING/.dsh/agent-skills`）与用户沟通，当前在用 `interview-me`（一次一个问题、每题附 GUESS）与 `idea-refine`（三步：听懂→压实→一页纸）。用户是产品思维，怕术语轰炸；**任何涉及产品口味的事必须先确认再动手。**
 
 ---

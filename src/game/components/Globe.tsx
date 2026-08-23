@@ -1,6 +1,7 @@
 import { useEffect, useRef, type MutableRefObject } from "react";
 import createGlobe from "cobe";
 import { cn } from "@/lib/utils";
+import { bloomPulse, emptyBloom, pickMarkerAt, type BloomMap } from "../globeBloom";
 import { REGIONS } from "../stories";
 import type { RegionId } from "../types";
 
@@ -49,6 +50,8 @@ export function Globe({
   selected,
   throwing,
   chargeRef,
+  bloomRef,
+  awakeRef,
   onPick,
   onFacing,
   className,
@@ -56,6 +59,8 @@ export function Globe({
   selected: RegionId | null;
   throwing?: boolean;
   chargeRef?: MutableRefObject<number>;
+  bloomRef?: MutableRefObject<BloomMap>;
+  awakeRef?: MutableRefObject<number>;
   onPick?: (id: RegionId) => void;
   onFacing?: (id: RegionId) => void;
   className?: string;
@@ -133,10 +138,19 @@ export function Globe({
       moved += Math.hypot(e.clientX - drag.x, e.clientY - drag.y);
       drag = { x: e.clientX, y: e.clientY };
     };
-    const onUp = () => {
+    const onUp = (e: PointerEvent) => {
       if (drag && moved < 14) {
-        const r = nearest(phi, theta);
-        pickRef.current?.(r.id);
+        const rect = canvas.getBoundingClientRect();
+        const bloom = bloomRef?.current ?? emptyBloom(1);
+        const hit = pickMarkerAt(
+          e.clientX - rect.left,
+          e.clientY - rect.top,
+          rect.width,
+          phi,
+          theta,
+          bloom,
+        );
+        if (hit) pickRef.current?.(hit);
       }
       drag = null;
     };
@@ -164,29 +178,32 @@ export function Globe({
       }
       const focus = focusId ? REGIONS.find((r) => r.id === focusId) : null;
       const hold = throwingRef.current;
+      const awake = Math.max(0, Math.min(1, awakeRef?.current ?? 1));
+      const bloom = bloomRef?.current ?? emptyBloom(1);
       globe.update({
         phi,
         theta,
-        dark: 0.18,
-        diffuse: 1.5,
-        mapBrightness: 3.2 + charged * 0.7,
-        mapBaseBrightness: 0.3,
+        dark: 0.52 - awake * 0.34,
+        diffuse: 1.15 + awake * 0.35,
+        mapBrightness: 1.15 + awake * 2.05 + charged * 0.7,
+        mapBaseBrightness: 0.08 + awake * 0.22,
         baseColor: LAND,
         markerColor: CORAL,
         glowColor: GLOW,
         scale: hold ? 1.06 : 0.96 - charged * 0.045,
-        markerElevation: 0.08 + charged * 0.04,
-        markers: REGIONS.map((r) => ({
-          location: [r.lat, r.lng],
-          size:
-            r.id === focusId
-              ? 0.14 + charged * 0.05
-              : r.id === facing.id
-                ? 0.1 + charged * 0.02
-                : 0.06,
-          color: r.id === focusId || r.id === facing.id ? CORAL : undefined,
-          id: r.id,
-        })),
+        markerElevation: 0.04 + awake * 0.04 + charged * 0.04,
+        markers: REGIONS.map((r) => {
+          const pop = bloomPulse(bloom[r.id] ?? 0);
+          const dim = r.id === "polar" ? 0.7 : 1;
+          const base =
+            r.id === focusId ? 0.14 + charged * 0.05 : r.id === facing.id ? 0.1 + charged * 0.02 : 0.06;
+          return {
+            location: [r.lat, r.lng] as [number, number],
+            size: pop <= 0.01 ? 0 : base * pop * dim,
+            color: r.id === focusId || r.id === facing.id ? CORAL : undefined,
+            id: r.id,
+          };
+        }),
         arcs:
           focus && hold
             ? [{ from: ORIGIN, to: [focus.lat, focus.lng], color: CORAL, id: "throw" }]
@@ -207,13 +224,14 @@ export function Globe({
       canvas.removeEventListener("pointercancel", onUp);
       globe.destroy();
     };
-  }, [chargeRef]);
+  }, [chargeRef, bloomRef, awakeRef]);
 
   return (
     <div className={cn("relative aspect-square w-full", className)}>
+      <div className="globe-halo pointer-events-none absolute inset-[-8%] rounded-full" />
       <canvas
         ref={canvasRef}
-        className="globe-canvas h-full w-full cursor-grab touch-none active:cursor-grabbing"
+        className="globe-canvas relative h-full w-full cursor-grab touch-none active:cursor-grabbing"
         aria-label="转动地球，点一下选择方向"
       />
     </div>

@@ -101,6 +101,10 @@ export function sfxMatch() {
 export function sfxPaper() {
   beep(1400, 0.04, "square", 0.015, -400);
 }
+export function sfxBloom() {
+  beep(740, 0.07, "square", 0.02, 80);
+  beep(980, 0.09, "triangle", 0.016, -40);
+}
 
 export function sfxThunder() {
   const c = ac();
