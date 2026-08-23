@@ -6,7 +6,9 @@ import {
   hashId,
   journeyForMemory,
   layoutCabinet,
+  scrapOf,
   signatureOf,
+  talkOf,
   WALL_SLOTS,
 } from "./cabinet.ts";
 import type { Journey, MemoryRecord } from "./types.ts";
@@ -15,8 +17,8 @@ const echo = {
   name: "林予",
   city: "杭州",
   felt: "灯还开着",
-  greeting: "十七稿我打成一包。",
-  replies: ["灯还开着。"],
+  greeting: "改到现在了",
+  replies: ["文件夹还开着", "手机扣了，先这样"],
   returnLetter: "抽屉那包还在。你要是也有一包，先别扔。",
   source: "archive" as const,
 };
@@ -26,12 +28,20 @@ function journey(id: string, createdAt = 1): Journey {
     id,
     createdAt,
     fingerprint: [{ id: "tired", closeness: 0.8 }],
-    mirror: "群里只回了收到，灯还开着。",
-    letter: "群里只回了收到，灯还开着。",
+    mirror: "群里回了个收到",
+    letter: "群里回了个收到",
     chips: [],
     region: "east",
     echo,
-    transcript: [],
+    transcript: [
+      { who: "echo", text: "改到现在了" },
+      { who: "you", text: "群里回了个收到" },
+      { who: "echo", text: "文件夹还开着" },
+      { who: "you", text: "灯我也没关" },
+      { who: "echo", text: "十七稿还在桌上" },
+      { who: "you", text: "已读亮着，懒得点" },
+      { who: "echo", text: "手机扣了，先这样" },
+    ],
     returnLetter: echo.returnLetter,
   };
 }
@@ -53,8 +63,8 @@ test("layout maps letters and memories onto their slots", () => {
   const journeys = [journey("j-a", 3), journey("j-b", 2), journey("j-c", 1)];
   journeys[1] = { ...journeys[1]!, echo: { ...echo, name: "Mara", city: "Lisbon" } };
   const archival: MemoryRecord[] = [
-    { id: "m1", memory: "群里只回了收到，灯还开着。", emotions: ["unseen"], echoName: "林予", createdAt: 9 },
-    { id: "m2", memory: "改到很晚。稿还在文件夹里。", emotions: ["tired"], createdAt: 8 },
+    { id: "m1", memory: "群里回了个收到", emotions: ["unseen"], echoName: "林予", createdAt: 9 },
+    { id: "m2", memory: "文件夹还开着", emotions: ["tired"], createdAt: 8 },
   ];
   const board = layoutCabinet(journeys, archival, "j-a");
   assert.equal(board.notes.filter((n) => n.kind === "journey").length, 3);
@@ -64,11 +74,14 @@ test("layout maps letters and memories onto their slots", () => {
   assert.equal(board.notes[0]?.attach, "string");
   assert.equal(board.notes[0]?.x, WALL_SLOTS[0]?.x);
   assert.equal(board.notes[0]?.y, WALL_SLOTS[0]?.y);
-  assert.equal(board.notes[0]?.category, "回信");
+  assert.equal(board.notes[0]?.category, "这一晚");
   assert.equal(board.notes[0]?.author, "林予");
   assert.equal(board.notes[0]?.city, "杭州");
-  assert.match(board.notes[0]?.text ?? "", /抽屉那包还在/);
-  assert.ok(board.notes.every((n) => n.category === "回信" || n.category === "还记得"));
+  assert.match(board.notes[0]?.text ?? "", /群里回了个收到/);
+  assert.match(board.notes[0]?.text ?? "", /文件夹还开着/);
+  assert.doesNotMatch(board.notes[0]?.text ?? "", /抽屉那包还在/);
+  assert.doesNotMatch(board.notes[0]?.text ?? "", /你要是也有一包/);
+  assert.ok(board.notes.every((n) => n.category === "这一晚" || n.category === "还记得"));
   assert.ok(board.notes.filter((n) => n.kind === "memory").every((n) => n.type !== "envelope"));
   assert.equal(board.notes.find((n) => n.id === "m1")?.category, "还记得");
   assert.equal(journeyForMemory(archival[0]!, journeys)?.id, "j-a");
@@ -81,6 +94,16 @@ test("excerpt and signature stay stable", () => {
   assert.equal(signatureOf("  林予  "), "林予");
   assert.equal(hashId("same"), hashId("same"));
   assert.notEqual(hashId("same"), hashId("other"));
+});
+
+test("wall scrap is two overheard turns, not the return-letter punchline", () => {
+  const night = journey("j-a");
+  assert.equal(scrapOf(night), "群里回了个收到 文件夹还开着");
+  assert.equal(talkOf(night).length, 7);
+  assert.equal(talkOf(night)[0]?.who, "echo");
+  const mute = { ...night, transcript: [] };
+  assert.equal(scrapOf(mute), "群里回了个收到 改到现在了");
+  assert.equal(talkOf(mute)[0]?.who, "you");
 });
 
 test("empty cabinet feeds an empty note list to their wall", () => {

@@ -9,8 +9,8 @@ const echo = {
   name: "林予",
   city: "杭州",
   felt: "灯还开着",
-  greeting: "十七稿我打成一包。",
-  replies: ["灯还开着。"],
+  greeting: "改到现在了",
+  replies: ["文件夹还开着", "手机扣了，先这样"],
   returnLetter: "抽屉那包还在。你要是也有一包，先别扔。",
   source: "archive",
 };
@@ -18,9 +18,9 @@ const echo = {
 const echo2 = {
   name: "Mara",
   city: "Lisbon",
-  felt: "the draft is still in the folder",
-  greeting: "I left the lamp on.",
-  replies: ["I left the lamp on."],
+  felt: "稿还在椅子上",
+  greeting: "稿还在椅子上",
+  replies: ["本来想明天再看", "那就先放着"],
   returnLetter: "The folder is still on the chair.",
   source: "archive",
 };
@@ -29,37 +29,59 @@ const echo3 = {
   name: "阿宁",
   city: "台北",
   felt: "已读不回",
-  greeting: "我把手机扣过去了。",
-  replies: ["我把手机扣过去了。"],
+  greeting: "手机扣过去了",
+  replies: ["不是不想回", "那就先扣着"],
   returnLetter: "那句已读我还留着。",
   source: "archive",
 };
 
-function journey(id, person, createdAt) {
+function journey(id, person, createdAt, transcript) {
   return {
     id,
     createdAt: createdAt || Date.UTC(2026, 7, 20),
     fingerprint: [{ id: "tired", closeness: 0.8 }],
-    mirror: "群里只回了收到，灯还开着。",
-    letter: "群里只回了收到，灯还开着。",
+    mirror: "群里回了个收到",
+    letter: "群里回了个收到",
     chips: [],
     region: "east",
     echo: person,
-    transcript: [],
+    transcript,
     returnLetter: person.returnLetter,
   };
 }
 
 const journeys = [
-  journey("j-a", echo, Date.UTC(2026, 7, 22)),
-  journey("j-b", echo2, Date.UTC(2026, 7, 21)),
-  journey("j-c", echo3, Date.UTC(2026, 7, 20)),
+  journey("j-a", echo, Date.UTC(2026, 7, 22), [
+    { who: "echo", text: "改到现在了" },
+    { who: "you", text: "群里回了个收到" },
+    { who: "echo", text: "文件夹还开着" },
+    { who: "you", text: "灯我也没关" },
+    { who: "echo", text: "十七稿还在桌上" },
+    { who: "you", text: "已读亮着，懒得点" },
+    { who: "echo", text: "手机扣了，先这样" },
+  ]),
+  journey("j-b", echo2, Date.UTC(2026, 7, 21), [
+    { who: "echo", text: "稿还在椅子上" },
+    { who: "you", text: "我灯也没关" },
+    { who: "echo", text: "本来想明天再看" },
+    { who: "you", text: "明天大概还在那儿" },
+    { who: "echo", text: "那就先放着" },
+    { who: "you", text: "嗯" },
+  ]),
+  journey("j-c", echo3, Date.UTC(2026, 7, 20), [
+    { who: "echo", text: "手机扣过去了" },
+    { who: "you", text: "那条消息我还没回" },
+    { who: "echo", text: "不是不想回" },
+    { who: "you", text: "亮着也不想先点" },
+    { who: "echo", text: "那就先扣着" },
+    { who: "you", text: "我也是" },
+  ]),
 ];
 
 const archival = [
-  { id: "m1", memory: "群里只回了收到，灯还开着。", emotions: ["unseen"], echoName: "林予", createdAt: Date.UTC(2026, 7, 22) },
-  { id: "m2", memory: "改到很晚。稿还在文件夹里。", emotions: ["tired"], createdAt: Date.UTC(2026, 7, 21) },
-  { id: "m3", memory: "那句已读我到现在都没回。", emotions: ["lonely"], echoName: "阿宁", createdAt: Date.UTC(2026, 7, 20) },
+  { id: "m1", memory: "群里回了个收到", emotions: ["unseen"], echoName: "林予", createdAt: Date.UTC(2026, 7, 22) },
+  { id: "m2", memory: "文件夹还开着", emotions: ["tired"], createdAt: Date.UTC(2026, 7, 21) },
+  { id: "m3", memory: "已读我没回", emotions: ["lonely"], echoName: "阿宁", createdAt: Date.UTC(2026, 7, 20) },
 ];
 
 const browser = await chromium.launch({
@@ -159,9 +181,9 @@ await page.evaluate(
       archival: nextA,
       reading: null,
       leftFrom: null,
-      letterChips: ["群里只回了收到，灯还开着。"],
+      letterChips: ["群里回了个收到"],
       extraLine: "",
-      selectedMirror: "群里只回了收到，灯还开着。",
+      selectedMirror: "群里回了个收到",
       fingerprint: [{ id: "tired", closeness: 0.8 }],
       recall: [],
     });
@@ -182,7 +204,7 @@ await page.waitForTimeout(800);
 await page.screenshot({ path: `${out}/pw_engine_endgame_slide_settled.png` });
 const title = await page.locator("[data-phase='archive'] h2").first().textContent();
 console.log("settled title:", title);
-if (title !== "这封刚滑进来") throw new Error(`unexpected title ${title}`);
+if (title !== "刚说完") throw new Error(`unexpected title ${title}`);
 
 const video = page.video();
 await context.close();

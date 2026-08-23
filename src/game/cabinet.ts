@@ -52,6 +52,28 @@ export function excerptOf(text: string, n = 36): string {
   return `${t.slice(0, n)}…`;
 }
 
+export function talkOf(journey: Journey): Journey["transcript"] {
+  const talk = journey.transcript.filter((t) => t.text.replace(/\s+/g, " ").trim());
+  if (talk.length) return talk;
+  const fallback: Journey["transcript"] = [];
+  const yours = (journey.letter || journey.mirror).trim();
+  if (yours) fallback.push({ who: "you", text: yours });
+  const theirs = journey.echo.greeting.trim();
+  if (theirs) fallback.push({ who: "echo", text: theirs });
+  return fallback;
+}
+
+/** Two overheard turns from that night — not the return-letter punchline. */
+export function scrapOf(journey: Journey, n = 16): string {
+  const talk = talkOf(journey);
+  if (!talk.length) return "";
+  const start = talk.length > 3 ? 1 : 0;
+  const a = talk[start]!;
+  const b = talk[start + 1];
+  if (!b) return excerptOf(a.text, n * 2);
+  return `${excerptOf(a.text, n)} ${excerptOf(b.text, n)}`;
+}
+
 export function signatureOf(name: string): string {
   return name.trim();
 }
@@ -114,12 +136,14 @@ export function layoutCabinet(
         kind: "journey",
         type: face,
         attach: face === "envelope" ? "string" : slot.attach,
-        text: excerptOf(journey.returnLetter || journey.letter),
-        body: journey.returnLetter || journey.letter,
+        text: scrapOf(journey),
+        body: talkOf(journey)
+          .map((t) => t.text)
+          .join("\n"),
         author: signatureOf(journey.echo.name),
         title: journey.echo.name,
         city: journey.echo.city,
-        category: "回信",
+        category: "这一晚",
         date: new Date(journey.createdAt).toLocaleDateString("zh-CN"),
         journey,
       }),

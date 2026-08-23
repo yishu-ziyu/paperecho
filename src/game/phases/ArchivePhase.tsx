@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { Craft, PullCommit } from "../continuum";
-import { layoutCabinet } from "../cabinet";
+import { layoutCabinet, talkOf } from "../cabinet";
 import { CabinetWall } from "../components/CabinetWall";
 import { Guide } from "../components/Guide";
 import { useGame } from "../store";
@@ -23,17 +23,19 @@ export function ArchivePhase() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden" data-phase="archive">
-      <Guide
-        className="relative z-20 shrink-0 px-4"
-        title={justFiled ? "这封刚滑进来" : "会回来的那些句子"}
-        body={
-          justFiled
-            ? "墙上是这一晚的回信。柜子记得。"
-            : journeys.length
-              ? "有的是便签，有的挂成信封。抽出一张空白，再折一架。"
-              : "墙还空着。抽出一张空白，折一架出去。"
-        }
-      />
+      {justFiled ? (
+        <Guide
+          className="relative z-20 shrink-0 px-4"
+          title="刚说完"
+          body="柜子把今晚的话钉上了。"
+        />
+      ) : journeys.length ? null : (
+        <Guide
+          className="relative z-20 shrink-0 px-4"
+          title="墙还空着"
+          body="抽出一张空白，折一架出去。"
+        />
+      )}
       <div className="relative min-h-0 flex-1">
         <CabinetWall
           notes={board.notes}
@@ -44,11 +46,6 @@ export function ArchivePhase() {
             if (reading) goBack();
           }}
         />
-        {journeys.length === 0 ? (
-          <p className="pointer-events-none absolute inset-x-0 bottom-6 text-center text-sm text-ink/50">
-            还没有回信。抽出一张空白。
-          </p>
-        ) : null}
         <AnimatePresence>
           {reading ? (
             <motion.div
@@ -61,13 +58,18 @@ export function ArchivePhase() {
             >
               <Craft className="pointer-events-auto w-full max-w-md">
                 <article className="clay rounded-2xl p-5" data-cabinet="letter">
-                  <p className="text-xs text-ink/45">
-                    {reading.echo.name} · {reading.echo.city}
-                  </p>
-                  <p className="mt-3 text-sm leading-relaxed text-ink/80">{reading.letter}</p>
-                  <p className="mt-4 font-display text-lg leading-snug text-ink">{reading.returnLetter}</p>
-                  <p className="mt-5 font-hand text-[1.7rem] leading-none text-ink/80">{reading.echo.name}</p>
-                  <p className="mt-1 text-[0.65rem] tracking-[0.18em] text-ink/40">{reading.echo.city}</p>
+                  <p className="font-hand text-lg leading-none text-ink">{reading.echo.name}</p>
+                  <p className="mt-1 text-xs text-ink/45">{reading.echo.city}</p>
+                  <ul className="mt-3 flex max-h-[42vh] flex-col gap-2 overflow-y-auto">
+                    {talkOf(reading).map((turn, i) => (
+                      <li
+                        key={`${i}-${turn.who}`}
+                        className={turn.who === "you" ? "w-[86%] self-end" : "w-[86%] self-start"}
+                      >
+                        <p className="clay-sm px-3 py-2 text-sm leading-relaxed text-ink">{turn.text}</p>
+                      </li>
+                    ))}
+                  </ul>
                 </article>
               </Craft>
             </motion.div>
@@ -85,10 +87,12 @@ export function ArchivePhase() {
         className="relative z-20 mx-auto mb-[max(0.5rem,env(safe-area-inset-bottom))] w-full max-w-xs shrink-0 px-4"
       >
         <Craft layout={!reading} className="clay h-[4.75rem] w-full rounded-t-2xl" />
-        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center px-5">
-          <p className="font-display text-lg text-ink">空白的一张</p>
-          <p className="mt-1 text-[0.65rem] tracking-[0.2em] text-ink/40">往上抽</p>
-        </div>
+        {!reading ? (
+          <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center px-5">
+            <p className="font-display text-lg text-ink">空白的一张</p>
+            <p className="mt-1 text-[0.65rem] tracking-[0.2em] text-ink/40">往上抽</p>
+          </div>
+        ) : null}
       </PullCommit>
     </div>
   );
