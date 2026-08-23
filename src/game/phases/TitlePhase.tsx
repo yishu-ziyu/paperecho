@@ -81,7 +81,7 @@ export function TitlePhase({
           ) : null}
           <motion.div
             className="absolute inset-0 flex flex-col items-center justify-center px-6 py-8"
-            style={{ ["--pop-delay" as string]: "2s" }}
+            style={{ ["--pop-delay" as string]: "1.15s" }}
             animate={{ opacity: diving ? 0 : Math.max(0, 1 - pull * 1.35) }}
             transition={{ duration: 0.1 }}
           >
@@ -100,7 +100,7 @@ export function TitlePhase({
               <span className={reduce ? undefined : "clip-up"}>纸上的回声</span>
             </p>
             <p className="mx-auto mt-4 max-w-[16rem] text-[0.82rem] font-medium leading-relaxed tracking-[0.04em] text-ink/55">
-              把靠近你的留下来，折成会回来的纸飞机。
+              未说出口的也值得回应。
             </p>
             <p className="mt-6 text-[0.7rem] tracking-[0.28em] text-ink/35">往下拉</p>
           </motion.div>
