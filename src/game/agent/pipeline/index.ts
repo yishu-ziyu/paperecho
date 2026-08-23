@@ -81,6 +81,6 @@ export async function runPipeline(
     }
   }
   const shadow = synthesize(posts, profile);
-  const reply = respond({ shadow, userLine });
+  const reply = await respond({ shadow, userLine });
   return { shadow, reply };
 }

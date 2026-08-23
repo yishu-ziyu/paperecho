@@ -23,15 +23,15 @@
 ```bash
 npm install
 cp .env.example .env
-# 填入 AI_PING_API_KEY 后，夜里会去找一个也说过类似话的人
+# 填入 MINIMAX_CN_API_KEY 后，夜里会去找一个也说过类似话的人
 npm run dev
 ```
 
 浏览器打开提示的地址。没有 API key / 请求超时时，自动回退到本地故事卡，旅程仍可完整走完。
 
-Agent 由 AI PING 提供（`https://aiping.cn/api/v1`），模型为 `DeepSeek-V4-Flash-0731`。
+Agent 默认 MiniMax CN（`MiniMax-M3`）。备选：`.env` 填 `AI_PING_API_KEY`，并设 `PAPER_ECHO_LLM=aiping`（无 MiniMax key 时也会自动落到 AI PING）。
 
-世界档案：12 张手写故事 + `src/game/collect.ts` 里的预采集改写稿。扔飞机时库先占满 5 条素材开口；现场可短预算爬公开页补空位，失败不影响。爬到的原文改写过闸后写入库。扩库也可 `npm run collect`（Firecrawl / AnySearch / AI PING；原文只落在本地 `corpus/`，不进游戏）。
+世界档案：12 张手写故事 + `src/game/collect.ts` 里的预采集改写稿。扔飞机时库先占满 5 条素材开口；现场可短预算爬公开页补空位，失败不影响。爬到的原文改写过闸后写入库。扩库也可 `npm run collect`（Firecrawl / AnySearch / MiniMax；原文只落在本地 `corpus/`，不进游戏）。
 
 ## 技术
 

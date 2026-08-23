@@ -2,7 +2,7 @@
 
 > 版本：v1.0　|　面向：评委 + 开发者　|　状态：与代码对齐（`src/game/**` 实读）
 > 项目：`/Users/mahaoxuan/Desktop/黑客松/AI PING/paper-echo`
-> 技术栈：React 19 · TanStack Start · Vite · Tailwind v4 · Pi Agent（`@earendil-works/pi-agent-core` + `pi-ai`）· LLM = AI PING（`aiping.cn/api/v1`，DeepSeek-V4-Flash-0731）
+> 技术栈：React 19 · TanStack Start · Vite · Tailwind v4 · Pi Agent（`@earendil-works/pi-agent-core` + `pi-ai`）· LLM = MiniMax CN（默认 MiniMax-M3）/ 备选 AI PING
 > 本文件只描述产品与系统，不改代码；「待核实」处为未在代码/文档中 100% 确认的点。
 
 ---
@@ -215,9 +215,9 @@
 |---|---|---|---|
 | **L1 游戏层** | 手势、状态机、store、渲染；**不读 LLM** | `src/game/store.ts`、`phases/**`、`components/**` | 只调用 server fn，消费结构化结果 |
 | **L2 Agent 业务层** | 三链编排、工具、记忆、校验闸门；**不直接 fetch** | `src/game/agent/chains.ts`（唯一生产运行时）、`server.ts`、`tools.ts`、`memory.ts`、`types.ts`、`config.ts`、`llm.ts` | 通过 `createServerFn` 暴露给客户端 |
-| **L3 基座** | Pi Agent（短命 agent + streamSimple）、LLM（AI PING DeepSeek-V4-Flash-0731） | `chains.ts` 的 `step()`（`new Agent` + `streamSimple`）、`config.ts` | **工具只做数据查询/写入，模型只负责说** |
+| **L3 基座** | Pi Agent（短命 agent + streamSimple）、LLM（默认 MiniMax-M3，备选 AI PING） | `chains.ts` 的 `step()`（`new Agent` + `streamSimple`）、`config.ts` | **工具只做数据查询/写入，模型只负责说** |
 
-**LLM 配置**（`src/game/agent/config.ts`）：`baseUrl = aiping.cn/api/v1`、`apiKeyEnv = "AI_PING_API_KEY"`、`modelId = DeepSeek-V4-Flash-0731`、`contextWindow = 131072`、`maxTokens = 1024`、`temperature = 0.7`、`timeoutMs = 15000`。
+**LLM 配置**（`src/game/agent/config.ts`）：默认 `baseUrl = https://api.minimaxi.com/anthropic`、`apiKeyEnv = "MINIMAX_CN_API_KEY"`、`modelId = MiniMax-M3`、`maxTokens = 2048`、`timeoutMs = 30000`。备选：`PAPER_ECHO_LLM=aiping` + `AI_PING_API_KEY`。
 
 ### 6.2 三条 Prompt Chain（match / turn / seal）
 
@@ -377,9 +377,9 @@ NightInput → （runMatch/runTurn/runSeal） → NightResult
 
 ## 8. 边界与回退
 
-**无 API Key**：`hasXai()`（`llm.ts`，检测 `AI_PING_API_KEY` 存在）为 false 时，三条链开头 `if (!hasXai()) return fallbackFor(...)`（`chains.ts`），走本地 echo/greeting/pool——**离线可完整走完一局**（本地故事卡 + chips/replies 兜底 + 手写）。
+**无 API Key**：`hasApiKey()`（`llm.ts`，检测 MiniMax / AI PING key）为 false 时，三条链开头 `if (!hasApiKey()) return fallbackFor(...)`（`chains.ts`），走本地 echo/greeting/pool——**离线可完整走完一局**（本地故事卡 + chips/replies 兜底 + 手写）。
 
-**超时**（`store.ts` 层 Promise.race）：match 22s / turn 12s / seal 14s；链内各步另有 7~15s（`config.timeoutMs=15000` + `step()` 内 race）。超时 → `fallbackEcho`（本地）或 `replies[round]` / 默认句「我那晚也没睡。电脑还亮着。」。
+**超时**（`store.ts` 层 Promise.race）：match 22s / turn 12s / seal 14s；链内各步另有 `LLM_CONFIG.timeoutMs`（默认 30000）+ `step()` 内 race。超时 → `fallbackEcho`（本地）或 `replies[round]` / 默认句「我那晚也没睡。电脑还亮着。」。
 
 **失败/校验不过**：`ownLine(spoken, fallbacks, archival)` 逐 fallback；`foreignPlace` 拦截串词；turn/seal 失败用本地 `replies` 或 `returnLetter` 兜底。
 

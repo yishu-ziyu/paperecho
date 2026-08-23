@@ -2,7 +2,7 @@
  * 匿名改写与确定性 QA。无文件系统。采集脚本与现场入库共用。
  */
 import { jaccard, parroted, tokensOf } from "../memory.ts";
-import { LLM_CONFIG } from "../config.ts";
+import { llmApiKey, LLM_CONFIG } from "../config.ts";
 import { STORIES } from "../../stories.ts";
 import type { EmotionId, RegionId, Story } from "../../types.ts";
 import type { CleanDoc } from "./web.ts";
@@ -103,18 +103,32 @@ export function qaStory(story: Story, original: string, pool: Story[]): QaFail |
   return null;
 }
 
+function anthropicText(content: unknown): string {
+  if (typeof content === "string") return content;
+  if (!Array.isArray(content)) return "";
+  return content
+    .map((block) => {
+      if (!block || typeof block !== "object") return "";
+      const b = block as { type?: string; text?: unknown };
+      return b.type === "text" && typeof b.text === "string" ? b.text : "";
+    })
+    .join("");
+}
+
 export async function rewriteStory(doc: CleanDoc, id: string): Promise<Story | null> {
-  const apiKey = process.env[LLM_CONFIG.apiKeyEnv]?.trim();
+  const apiKey = llmApiKey();
   if (!apiKey) return null;
   const user = `原文（只作情绪与物件参考，禁止照抄）：\n${doc.text.slice(0, 1600)}\n\n输出 JSON 字段：id 已定为 ${id}。请给出 name,city,region,feels,opening,lines,returnLetter。`;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), Math.max(LLM_CONFIG.timeoutMs, 45000));
   try {
-    const url = `${LLM_CONFIG.baseUrl.replace(/\/$/, "")}/chat/completions`;
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify({
+    let url: string;
+    let headers: Record<string, string>;
+    let body: Record<string, unknown>;
+    if (LLM_CONFIG.api === "openai-completions") {
+      url = `${LLM_CONFIG.baseUrl.replace(/\/$/, "")}/chat/completions`;
+      headers = { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` };
+      body = {
         model: LLM_CONFIG.modelId,
         messages: [
           { role: "system", content: REWRITE_SYSTEM },
@@ -122,14 +136,37 @@ export async function rewriteStory(doc: CleanDoc, id: string): Promise<Story | n
         ],
         max_tokens: 800,
         temperature: 0.7,
-      }),
+      };
+    } else {
+      url = `${LLM_CONFIG.baseUrl.replace(/\/$/, "")}/v1/messages`;
+      headers = {
+        "Content-Type": "application/json",
+        "anthropic-version": "2023-06-01",
+        "x-api-key": apiKey,
+      };
+      body = {
+        model: LLM_CONFIG.modelId,
+        system: REWRITE_SYSTEM,
+        messages: [{ role: "user", content: user }],
+        max_tokens: 800,
+        temperature: 0.7,
+      };
+    }
+    const res = await fetch(url, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(body),
       signal: controller.signal,
     });
     if (!res.ok) return null;
     const data = (await res.json()) as Record<string, unknown>;
-    const raw = String(
-      (data.choices as { message?: { content?: unknown } }[] | undefined)?.[0]?.message?.content ?? "",
-    );
+    const raw =
+      LLM_CONFIG.api === "openai-completions"
+        ? String(
+            (data.choices as { message?: { content?: unknown } }[] | undefined)?.[0]?.message?.content ??
+              "",
+          )
+        : anthropicText(data.content);
     return parseStoryJson(raw, id, doc);
   } catch {
     return null;

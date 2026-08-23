@@ -37,7 +37,7 @@
 | 项目名 | `app-builder-workspace`（应用本体名：「纸上的回声」/ paper-echo） |
 | 类型 | 单页全栈 Web 应用（SSR + Server Functions） |
 | 定位 | 情绪体验型游戏：10 阶段纸飞机叙事流 + AI 人格对话 |
-| AI 能力 | 由 AI PING（OpenAI 兼容端点）驱动 Pi-Style Agent，无 API Key 时回退到本地故事库生成的「离线回声」 |
+| AI 能力 | 默认 MiniMax CN（Anthropic Messages / MiniMax-M3）驱动 Pi-Style Agent；备选 AI PING。无 API Key 时回退到本地故事库生成的「离线回声」 |
 | 存储 | localStorage（旅程/记忆）+ 可选 Neon Postgres（缺省为嵌入式 PGLite） |
 | 平台 | Grok App Builder 模板（PWA、预览宿主桥、OG 卡片、Better Auth 三方模式） |
 
@@ -98,8 +98,8 @@
 │  chains.ts  echoChain.match/turn/seal    ←—  唯一生产运行时          │
 │     ├── tools.ts    search_cases / search_archive / remember        │
 │     ├── memory.ts   paper-echo-memory-v2 档案库检索 + 真实性守卫     │
-│     ├── llm.ts      hasXai() / meter 计量                           │
-│     └── config.ts   AI PING Provider（DeepSeek-V4-Flash-0731）      │
+│     ├── llm.ts      hasApiKey() / meter 计量                        │
+│     └── config.ts   MiniMax 主 / AI PING 备选                        │
 │                                                                    │
 │  旁路基础设施（不阻塞游戏主流程）                                      │
 │     ├─ lib/auth/*         Better Auth 三模式 + Gate Identity JWT     │
@@ -129,12 +129,12 @@ paper-echo/
 ├── src/
 │   ├── game/                        # 游戏核心
 │   │   ├── agent/                   # AI 代理层（下文详述）
-│   │   │   ├── config.ts            # LLM 配置 + AI PING Provider
+│   │   │   ├── config.ts            # LLM 配置：MiniMax 主 / AI PING 备选
 │   │   │   ├── server.ts            # runMatch/runTurn/runSeal Server Functions
 │   │   │   ├── chains.ts            # ★ echoChain 生产运行时（match/turn/seal 三链）
 │   │   │   ├── tools.ts             # 确定性工具执行器（search_cases/search_archive/remember）
 │   │   │   ├── memory.ts            # 信柜记忆（localStorage paper-echo-memory-v2）
-│   │   │   ├── llm.ts               # hasXai 门控 + token meter
+│   │   │   ├── llm.ts               # hasApiKey 门控 + token meter
 │   │   │   └── types.ts             # NightInput/NightResult/RecallItem/LlmConfig
 │   │   ├── components/              # Scene/Hud/JudgePanel/Globe/Plane/Blob/Guide/Starfield/Btn
 │   │   ├── phases/                  # 10 个阶段组件（Title→Archive）
@@ -175,7 +175,7 @@ paper-echo/
 ├── tsconfig.json
 ├── package.json
 ├── startup.sh                       # 一键启动脚本
-├── .env.example                     # AI_PING_API_KEY=
+├── .env.example                     # MINIMAX_CN_API_KEY= / 备选 AI_PING_API_KEY=
 └── README.md                        # 中文玩法说明（9 步流程）
 ```
 
@@ -306,14 +306,14 @@ title → orbit → mirror → compose → fold → throw → flight → encount
 | seal | research → seal-remember（LLM：仅 remember 工具）→ seal-write（LLM：零工具，≤48 字）→ validate | returnLetter + facts |
 
 - 每步 = 一个**短命 Pi Agent**（`@earendil-works/pi-agent-core`），初始态只暴露该步允许的工具；`shouldStopAfterTurn`：本步无工具调用即止，最多 maxTurns 轮。
-- 模型：`DeepSeek-V4-Flash-0731`（AI PING OpenAI-compatible 端点）；`thinkingLevel: "off"`。
+- 模型：默认 `MiniMax-M3`（MiniMax CN Anthropic Messages）；`PAPER_ECHO_LLM=aiping` 切 `DeepSeek-V4-Flash-0731`。`thinkingLevel: "off"`。
 - 确定性工具（tools.ts `runAgentTool`）：`search_cases`（12 故事世界档案）、`search_archive`（玩家信柜）、`remember`（写玩家事实）。`arrive` 是 chains.ts 内部的结构化工单（name/city/felt/lines 写入 draft，身份已锁时禁改名）。
 - 校验闸门（memory.ts）：`ownLine`（禁重复/禁越界）、`stolenVoice`（禁把玩家旧事改成「我……」）、`foreignPlace`（禁串城）。
 - 人格铁律（RULES 常量）：「你是深夜还没睡的一个普通人。只说你自己今晚的具体事，像微信，一两句。不安慰。禁止：看见、接住、值得、不是一个人、加油。」——硬编码进每条链的 system prompt。
 
 ### 7.2 无 Key / 超时回退
 
-`hasXai()`（llm.ts，检测 `AI_PING_API_KEY`）为 false → 直接 `fallbackFor`（本地故事卡 `fallbackEcho` + `chipPool`）。链内单步超时/失败 → 步级空输出，validate 回落本地句子。游戏层另有 store 级 `Promise.race` 超时（match 22s / turn 12s / seal 14s）。
+`hasApiKey()`（llm.ts，检测 MiniMax / AI PING key）为 false → 直接 `fallbackFor`（本地故事卡 `fallbackEcho` + `chipPool`）。链内单步超时/失败 → 步级空输出，validate 回落本地句子。游戏层另有 store 级 `Promise.race` 超时（match 22s / turn 12s / seal 14s）。
 
 ### 7.3 Server Functions（server.ts）
 
@@ -331,8 +331,8 @@ createServerFn({ method: "POST" }) × 3
 
 | 文件 | 内容 |
 |---|---|
-| `config.ts` | `LLM_CONFIG`：baseUrl `https://aiping.cn/api/v1`、模型 `DeepSeek-V4-Flash-0731`、contextWindow **131072**；`AGENT_MODEL`；`aiPingProvider()` 使用 `envApiKeyAuth`（`AI_PING_API_KEY`） |
-| `llm.ts` | `hasXai()`（探测 API Key 存在性）、`emptyMeter`/`addMeter`（token 计量） |
+| `config.ts` | `LLM_CONFIG`：默认 MiniMax CN `https://api.minimaxi.com/anthropic` / `MiniMax-M3`；备选 AI PING；`llmProvider()` |
+| `llm.ts` | `hasApiKey()`（探测 API Key 存在性）、`emptyMeter`/`addMeter`（token 计量） |
 
 ### 7.5 信柜记忆（memory.ts）
 
@@ -469,7 +469,7 @@ migrations/
 | `letterFromChips/fallbackEcho/buildJourney` | [kernel.ts](src/game/kernel.ts) | 离线回音内核 |
 | `searchArchival/perceptionOf/factsOf/keepPlayerFacts/applyFacts` | [memory.ts](src/game/agent/memory.ts) | 记忆检索与事实管线 |
 | `runAgentTool(name, args)` | [tools.ts](src/game/agent/tools.ts) | 工具确定性执行 |
-| `hasXai()/emptyMeter/addMeter` | [llm.ts](src/game/agent/llm.ts) | API Key 门控与 token 计量 |
+| `hasApiKey()/emptyMeter` | [llm.ts](src/game/agent/llm.ts) | API Key 门控与 token 计量 |
 | `getSql/getPglite/ensureDbReady` | [db.ts](src/lib/db.ts) | 双后端 SQL 访问 |
 | `auth/bearer/signIn/signOut` | [auth/*](src/lib/auth/) | 认证 | 
 | `P2PRoom(join/close/broadcast/send)` | [p2p.ts](src/lib/multiplayer/p2p.ts) | WebRTC 房间 |
@@ -517,7 +517,7 @@ migrations/
 ### 13.2 离线/降级路径
 
 ```text
-launch() 失败 / 无 AI_PING_API_KEY / 18s 超时
+launch() 失败 / 无 MiniMax 或 AI PING key / store race 超时
           │
           ▼
    fallbackEcho（本地故事库 + 情绪 + RULES 风格）
@@ -562,7 +562,7 @@ src/game/agent/chains.ts
       ├── tools.ts ──► stories.ts / memory.ts
       ├── memory.ts ──► localStorage
       ├── kernel.ts（fallback）
-      └── llm.ts ──► config.ts ──► AI PING (aiping.cn)
+      └── llm.ts ──► config.ts ──► MiniMax CN（备选 AI PING）
 ```
 
 ### 14.2 数据/Object 依赖
@@ -571,7 +571,7 @@ src/game/agent/chains.ts
 |---|---|---|
 | store | agent/server | `AgentPayload` JSON；`Match|Turn|SealResult` |
 | agent tools | memory/stories | 检索排名；mem 写入 |
-| chains | llm/config | provider + LLM_CONFIG + hasXai |
+| chains | llm/config | provider + LLM_CONFIG + hasApiKey |
 | db.ts | scripts/migration-plan | `pendingMigrations`（按 basename 去重） |
 | auth server | db.ts + migrations/auth | PGLite/Neon + 0001_auth.sql |
 | grok-pwa | scripts/grok-pwa-shared | 共享 head 注入逻辑 |
@@ -581,7 +581,8 @@ src/game/agent/chains.ts
 
 | 服务 | 用途 | 必需？ |
 |---|---|---|
-| AI PING（`https://aiping.cn/api/v1`） | LLM（DeepSeek-V4-Flash-0731） | 否（无 Key 走本地回退） |
+| MiniMax CN（`https://api.minimaxi.com/anthropic`） | LLM（MiniMax-M3，默认） | 否（无 Key 走本地回退） |
+| AI PING（`https://aiping.cn/api/v1`） | LLM 备选（`PAPER_ECHO_LLM=aiping`） | 否 |
 | Neon Postgres（`DATABASE_URL`） | 生产库 | 否（缺省 PGLite） |
 | Grok 预览宿主（allowlist） | 嵌入/路由同步 | 预览时 |
 | `og.grok.me` | OG 占位卡片 | 共享卡片 |
@@ -595,7 +596,8 @@ src/game/agent/chains.ts
 
 | 变量 | 说明 | 默认 |
 |---|---|---|
-| `AI_PING_API_KEY` | AI PING 密钥（`.env.example`）；**核心开关**——存在→live AI，缺失→archival 回退 | 无 |
+| `MINIMAX_CN_API_KEY` | MiniMax CN 密钥（默认主路径）；存在→live AI，缺失→看备选 / 本地回退 | 无 |
+| `AI_PING_API_KEY` | 备选密钥；`PAPER_ECHO_LLM=aiping` 强制切备选；MiniMax 无 key 时也会自动落到这里 | 无 |
 | `DATABASE_URL` | Neon Postgres 连接串；设置→Neon，否则嵌入式 PGLite | 无 |
 | `VITE_AUTH_ENABLED` | 认证开关；`false` → dev-user 直通 | true |
 | `VITE_PUBLIC_HOSTNAME` | 已发布应用的公共域名（OG 卡片 URL） | — |
@@ -649,12 +651,12 @@ npm run check:auth     # 校验 dev 服务器与下一构建的 VITE_AUTH_ENABLE
 | 1 | Server Functions 作为唯一 AI 入口 | 客户端绝不直接持 LLM 密钥；SSR 端统一超时/回退 |
 | 2 | Pi-Style harness（非裸 LLM） | 工具循环保证「先检索再回复」，人格约束（RULES）内联于 prompt |
 | 3 | Prompt Chaining 三链单实现（chains.ts） | 每步短命 Pi Agent 单工具、输出经确定性校验；历史上的 pi-echo/graph 实验版已删除收敛 |
-| 4 | 无 Key 亦能完整游戏 | `hasXai` 门控 + `fallbackEcho` 保证体验闭环与演示可用性 |
+| 4 | 无 Key 亦能完整游戏 | `hasApiKey` 门控 + `fallbackEcho` 保证体验闭环与演示可用性 |
 | 5 | localStorage 作为唯一持久层（旅程+记忆） | 0 基础设施就能玩；Neon 仅作为平台模板的可选深度 |
 | 6 | 双后端 SQL（Neon ⇄ PGLite） | 本地零配置、线上可扩展；`_migrations` 按 basename 记账避免两路径重复 |
 | 7 | WebRTC 全矩阵 + 轮询信令 | 免托管信令服务器；400ms/2s 节流平衡延迟与开销 |
 | 8 | `with-app-env` 统一 dev/build/preview | 从源头杜绝 `VITE_AUTH_ENABLED` 三端不一致 |
-| 9 | AI PING + DeepSeek-V4-Flash | OpenAI 兼容 + 131K 上下文；密钥仅存服务端环境 |
+| 9 | MiniMax-M3 主、AI PING 备选 | Anthropic Messages 默认；OpenAI 兼容作备选；密钥仅存服务端环境 |
 
 ---
 

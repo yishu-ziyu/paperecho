@@ -18,7 +18,7 @@ import { chipPool } from "../emotions.ts";
 import { fallbackEcho } from "../kernel.ts";
 import { foreignPlace } from "../stories.ts";
 import type { EchoPerson, TokenMeter } from "../types.ts";
-import { AGENT_MODEL, aiPingProvider, LLM_CONFIG } from "./config.ts";
+import { AGENT_MODEL, llmApiKey, llmProvider, LLM_CONFIG } from "./config.ts";
 import { emptyMeter, hasApiKey } from "./llm.ts";
 import { factsOf, isCompleteFact, ownLine, perceptionOf, renderBlocks, stolenVoice } from "./memory.ts";
 import { formatCaseHitsLive, runAgentTool, type ToolCtx } from "./tools.ts";
@@ -43,7 +43,7 @@ let models: ReturnType<typeof createModels> | null = null;
 function getModels() {
   if (!models) {
     models = createModels();
-    models.setProvider(aiPingProvider());
+    models.setProvider(llmProvider());
   }
   return models;
 }
@@ -149,7 +149,7 @@ async function step(
       tools,
     },
     streamFn: getModels().streamSimple.bind(getModels()),
-    getApiKey: async () => process.env[LLM_CONFIG.apiKeyEnv],
+    getApiKey: async () => llmApiKey(),
     shouldStopAfterTurn: async (ctx) => {
       turns += 1;
       return ctx.toolResults.length === 0 || turns >= maxTurns;

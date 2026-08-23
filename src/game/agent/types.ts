@@ -80,4 +80,5 @@ export interface LlmConfig {
   maxTokens: number;
   temperature: number;
   timeoutMs: number;
+  api: "anthropic-messages" | "openai-completions";
 }

@@ -106,7 +106,7 @@ export function isMainModule(moduleUrl) {
 
 /**
  * Load the local `.env` file (gitignored) before starting Vite.
- * Server-side secrets like AI_PING_API_KEY live there.
+ * Server-side secrets like MINIMAX_CN_API_KEY / AI_PING_API_KEY live there.
  * Existing process environment entries always win.
  */
 function loadLocalDotEnv(root) {

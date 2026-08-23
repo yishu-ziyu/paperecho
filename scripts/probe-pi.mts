@@ -1,9 +1,9 @@
 import { Agent, type AgentTool } from "@earendil-works/pi-agent-core";
 import { Type, createModels } from "@earendil-works/pi-ai";
-import { AGENT_MODEL, aiPingProvider, LLM_CONFIG } from "../src/game/agent/config.ts";
+import { AGENT_MODEL, llmApiKey, llmProvider } from "../src/game/agent/config.ts";
 
 const models = createModels();
-models.setProvider(aiPingProvider());
+models.setProvider(llmProvider());
 
 const ping: AgentTool = {
   name: "ping",
@@ -24,7 +24,7 @@ const agent = new Agent({
     tools: [ping],
   },
   streamFn: models.streamSimple.bind(models),
-  getApiKey: async () => process.env[LLM_CONFIG.apiKeyEnv],
+  getApiKey: async () => llmApiKey(),
 });
 
 await agent.prompt("改到凌晨，群里只回了收到。");

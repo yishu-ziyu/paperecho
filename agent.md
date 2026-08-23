@@ -22,7 +22,7 @@
 │   Pi Agent：一次有状态的工具循环                       │
 │   Tools：纯数据函数                                   │
 │   Memory：写入 / 检索 / 去重                          │
-│   LLM：AI PING + DeepSeek-V4-Flash-0731             │
+│   LLM：MiniMax CN + MiniMax-M3                      │
 └─────────────────────────────────────────────────────┘
 ```
 
@@ -117,13 +117,14 @@ interface MemoryRecord {
 
 ```ts
 interface LlmConfig {
-  providerId: "ai-ping"
-  baseUrl: "https://aiping.cn/api/v1"
-  apiKeyEnv: "AI_PING_API_KEY"
-  modelId: "DeepSeek-V4-Flash-0731"
-  maxTokens: 1024
+  providerId: "minimax-cn"
+  baseUrl: "https://api.minimaxi.com/anthropic"
+  apiKeyEnv: "MINIMAX_CN_API_KEY"
+  modelId: "MiniMax-M3"
+  maxTokens: 2048
   temperature: 0.7
-  timeoutMs: 15000
+  timeoutMs: 30000
+  api: "anthropic-messages"
 }
 ```
 
@@ -206,9 +207,8 @@ renderBlocks(persona, facts)              // # Persona + # Human 块
 
 ## 5. 模型接入
 
-- Base URL：`https://aiping.cn/api/v1`
-- 模型 ID：`DeepSeek-V4-Flash-0731`
-- 认证：`AI_PING_API_KEY` 环境变量（`.env`，gitignored）
+- 默认：MiniMax CN（`https://api.minimaxi.com/anthropic`）`MiniMax-M3`，`MINIMAX_CN_API_KEY`（兼读 `ANTHROPIC_AUTH_TOKEN`）
+- 备选：`PAPER_ECHO_LLM=aiping` + `AI_PING_API_KEY`；无 MiniMax key 且有 AI PING key 时自动落到备选
 - 运行时通过 `src/game/agent/config.ts` 统一注册 Provider
 
 ---
@@ -218,8 +218,8 @@ renderBlocks(persona, facts)              // # Persona + # Human 块
 ```
 src/game/agent/
 ├── types.ts      # 数据结构（NightInput / NightResult / RecallItem / LlmConfig）
-├── config.ts     # LLM Config + AI PING Provider + 模型定义
-├── llm.ts        # hasXai 门控 + token meter
+├── config.ts     # LLM Config：MiniMax 主 / AI PING 备选
+├── llm.ts        # hasApiKey 门控 + token meter
 ├── tools.ts      # 3 个纯数据工具（runAgentTool）
 ├── memory.ts     # 记忆写入 / 检索 / 校验
 ├── chains.ts     # match / turn / seal 三条 Prompt Chain（唯一生产实现）
@@ -241,7 +241,7 @@ src/game/agent/
 
 ## 8. 验收标准
 
-- 没有 AI_PING_API_KEY 时，自动走本地档案 fallback
+- 没有 MiniMax / AI PING key 时，自动走本地档案 fallback
 - match 产出：echo + greeting + suggestions
 - turn 产出：spoken + suggestions
 - seal 产出：returnLetter + facts

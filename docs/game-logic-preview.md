@@ -260,7 +260,7 @@ flowchart TB
 
 ### 4.3 离线完整可走
 
-没有 `AI_PING_API_KEY`，或任何一链超时，玩家仍能从标题走到信柜。
+没有 MiniMax / AI PING key，或任何一链超时，玩家仍能从标题走到信柜。
 
 ---
 

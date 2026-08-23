@@ -118,9 +118,8 @@ interface TurnOutput {
 }
 ```
 
-`respond(ctx)` 是对话循环的最小入口：从 `shadow.materials` 挑一条与 `userLine` 最相关的素材
-（情绪重叠 + 关键词命中，取不到就取第一条），结合 `shadow.voice`，拼一句「我也有过类似的 + 素材具体细节」；
-`materials` 为空则给占位回应。当前是确定性/人肉启发式，未来换成 LLM 生成（见「待办」）。
+`respond(ctx)` 是对话循环的最小入口：优先走真实 LLM（默认 MiniMax-M3），从 `shadow.materials` 取具体细节开口；
+无 key / 网络错 / 超时 / 空输出时回退启发式（情绪重叠 + 关键词命中，拼「我也有过类似的 + 素材具体细节」）。
 
 `runPipeline` 的返回也相应扩展为 `PipelineResult = { shadow: EchoShadow; reply: TurnOutput }`，
 把「倾听 → 搜索 → 整合 → 回应」串成完整闭环。
@@ -194,7 +193,7 @@ const src = sourceFor("local");
 
 ## 7. 对话质量规范（回应层 prompt 规范）
 
-未来 LLM 生成 `respond` 时的 prompt 规范，与 `pipeline/respond.ts` 头部注释保持一致：
+`respond` 的 prompt 规范，与 `pipeline/respond.ts` 头部注释保持一致：
 
 **声音**
 1. 写「事」，不写「状态」——有具体的时间/地点/动作/物件，不堆情绪形容词。
@@ -222,7 +221,7 @@ const src = sourceFor("local");
 - [ ] 实现 `crawlPostsFromPath` 的文件读取、缓存与过滤。
 - [x] 实现 `liveSearch` 的 AnySearch / Firecrawl 短预算检索；失败返回 []；后台改写入库。
 - [ ] **LLM 融合 `synthesize`（现在是人肉启发式）**：用 LLM 把一批帖子的语言风格融合成统一的 `voice`。
-- [ ] **LLM 生成 `respond`（现在是人肉启发式）**：遵守 `voice` 与对话质量规范，从素材库取具体细节生成回应；回应层骨架已落地（`respond` / `TurnContext` / `TurnOutput`）。
+- [x] **LLM 生成 `respond`**：遵守 `voice` 与对话质量规范，从素材库取具体细节生成回应；失败回退 `heuristicRespond`。
 - [x] 把 `search_cases` / match research 切到 `PostSource`（库优先 + live 短预算）。
 - [x] P0 预采集管线 `scripts/collect/`（搜公开页 → 洗 → 匿名改写 → QA → `src/game/collect.ts`）。
 - [ ] 离线评测：固定 profile 集 + 标注帖集，量化三个源的素材库质量与可复现性。
@@ -238,7 +237,7 @@ const src = sourceFor("local");
 | `pipeline/sources/crawl.ts` | CrawlPosts 占位源（JSONL schema + 接入 TODO） |
 | `pipeline/sources/live.ts` | LiveSearch 短预算现搜 |
 | `pipeline/web.ts` | 公开页检索与清洗 |
-| `pipeline/rewrite.ts` | 匿名改写 + QA（AI PING） |
+| `pipeline/rewrite.ts` | 匿名改写 + QA（默认 MiniMax，备选 AI PING） |
 | `pipeline/ingest.ts` | 现场命中后台入库 |
 | `pipeline/persona.ts` | `EchoShadow` + `synthesize` / `synthesizeLibraryFirst` |
 | `pipeline/respond.ts` | `TurnContext`/`TurnOutput` + `respond`（从素材库取细节开口回应） |

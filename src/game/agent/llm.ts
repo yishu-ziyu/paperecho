@@ -1,5 +1,5 @@
 import type { TokenMeter } from "../types.ts";
-import { LLM_CONFIG } from "./config.ts";
+import { llmApiKey, LLM_CONFIG } from "./config.ts";
 
 const MODEL = LLM_CONFIG.modelId;
 
@@ -15,5 +15,5 @@ export function emptyMeter(node = "", via: TokenMeter["via"] = "archive"): Token
 }
 
 export function hasApiKey(): boolean {
-  return Boolean(process.env[LLM_CONFIG.apiKeyEnv]);
+  return Boolean(llmApiKey());
 }

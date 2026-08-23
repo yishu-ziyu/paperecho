@@ -14,7 +14,7 @@
 ## 1. 项目真相（口径，已与代码对齐）
 
 - 项目在 `/Users/mahaoxuan/Desktop/黑客松/AI PING/paper-echo`。运行：`npm run dev`（with-app-env → vite :8080）；`npm run typecheck`；`npm run lint`。
-- env：`.env` 的 `AI_PING_API_KEY`；`.grok/app-env.json` 的 `VITE_AUTH_ENABLED=false`。LLM = AI PING（aiping.cn/api/v1）DeepSeek-V4-Flash-0731。
+- env：`.env` 的 `MINIMAX_CN_API_KEY`（主）；备选 `AI_PING_API_KEY` + `PAPER_ECHO_LLM=aiping`。`.grok/app-env.json` 的 `VITE_AUTH_ENABLED=false`。默认 LLM = MiniMax CN（`https://api.minimaxi.com/anthropic`）MiniMax-M3。
 - **Agent 只有一套实现：`src/game/agent/chains.ts`**。`server.ts` 三个 Server Function（runMatch/runTurn/runSeal）→ echoChain.match/turn/seal，每链 = 确定性 research → 单工具短命 Pi Agent 步 → 确定性 validate。match 的 research 读 `pipeline/`：库优先占满 5 条，live 短超时只填空位。记忆 = localStorage（journeys `paper-echo-v1` ≤24 局；memory `paper-echo-memory-v2` ≤48 条）+ Jaccard 多因子检索。
 - 超时：store 层 race match 22s / turn 12s / seal 14s；链内各步 7~15s。无 key/失败/超时三层兜底（fallbackEcho 本地故事卡）。
 - 数据：12 个手写 Story + `src/game/collect.ts` 的 `COLLECTED`（预采集改写稿）。玩家不点选故事卡。**Mirror 是手写**：玩家自己写下今晚那句；`echo` 起飞后由 match 链定名定城。现场可爬公开页（短预算约 4s，失败不影响开口）；**库占满 5 条素材**，live 只填空位；爬完改写过闸写入 `COLLECTED`。扩库也可用 `npm run collect`。
