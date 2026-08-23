@@ -499,6 +499,87 @@
   }
 }
 
+.flight-wait-stage {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 100%;
+}
+
+.flight-wait-stage::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 48%;
+  width: min(96%, 26rem);
+  height: 5.8rem;
+  transform: translate(-50%, -50%);
+  background: radial-gradient(
+    closest-side,
+    rgba(8, 14, 28, 0.94) 0%,
+    rgba(8, 14, 28, 0.62) 46%,
+    rgba(8, 14, 28, 0.18) 68%,
+    transparent 78%
+  );
+  pointer-events: none;
+}
+
+.flight-wait-mark {
+  position: relative;
+  display: inline-block;
+  pointer-events: none;
+  padding: 0.15em 0.2em 0.28em;
+  font-family: var(--font-display);
+  font-size: clamp(1.85rem, 8vw, 2.45rem);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  line-height: 1.15;
+  color: #fff8ee;
+  filter:
+    drop-shadow(0 1px 0 #fff8ee)
+    drop-shadow(0 2px 0 #0c1424)
+    drop-shadow(0 0 14px rgba(8, 14, 28, 0.95))
+    drop-shadow(0 10px 22px rgba(8, 14, 28, 0.55));
+}
+
+.flight-wait-fill {
+  position: relative;
+  display: inline-block;
+  padding: 0.42em 0.12em 0.5em;
+  color: #fff8ee;
+  clip-path: inset(-45% 0);
+}
+
+.flight-wait-fill::after {
+  content: "";
+  position: absolute;
+  top: 18%;
+  bottom: 22%;
+  left: 0;
+  width: 24%;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.15) 30%,
+    rgba(255, 255, 255, 0.8) 50%,
+    rgba(255, 231, 168, 0.55) 64%,
+    transparent 100%
+  );
+  transform: translateX(-160%) skewX(-22deg);
+  animation: flight-wait-sheen 2.4s var(--ease-emphasized) 1.15s infinite;
+  pointer-events: none;
+  mix-blend-mode: plus-lighter;
+}
+
+.flight-wait-ing {
+  display: inline-block;
+  margin-left: 0.04em;
+  font-family: var(--font-latin);
+  font-size: 0.78em;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+}
+
 .letter-pop {
   display: inline-block;
   transform-origin: 50% 80%;
@@ -554,6 +635,17 @@
   }
   to {
     transform: none;
+  }
+}
+
+@keyframes flight-wait-sheen {
+  0%,
+  12% {
+    transform: translateX(-160%) skewX(-22deg);
+  }
+  48%,
+  100% {
+    transform: translateX(430%) skewX(-22deg);
   }
 }
 
@@ -614,7 +706,12 @@
   .letter-pop,
   .clip-up,
   .enc-wait,
-  .enc-spoken {
+  .enc-spoken,
+  .flight-wait-fill::after {
     animation: none;
+  }
+
+  .flight-wait-fill::after {
+    display: none;
   }
 }

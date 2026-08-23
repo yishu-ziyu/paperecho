@@ -1,17 +1,22 @@
 import { motion, useReducedMotion } from "motion/react";
 import { Guide } from "../components/Guide";
+import { LetterPop } from "../components/LetterPop";
 import { Plane } from "../components/Plane";
 import { Craft, CRAFT_ID, PullCommit } from "../continuum";
 import { useGame } from "../store";
 
 function FlightWaitMark() {
   return (
-    <p
-      data-flight-wait
-      className="pointer-events-none px-5 text-center font-display text-[clamp(1.35rem,5.6vw,1.85rem)] font-medium tracking-[0.08em] text-paper/80"
-    >
-      寻找世另我ing
-    </p>
+    <div className="flight-wait-stage">
+      <p data-flight-wait className="flight-wait-mark">
+        <span className="flight-wait-fill">
+          <LetterPop text="寻找世另我" />
+          <span className="flight-wait-ing">
+            <LetterPop text="ing" start={5} />
+          </span>
+        </span>
+      </p>
+    </div>
   );
 }
 
@@ -37,12 +42,12 @@ export function FlightPhase() {
       >
         <motion.div
           className="pointer-events-none absolute left-[8%] top-[38%] h-10 w-[42%] rounded-full bg-paper/10 blur-md"
-          animate={reduce ? undefined : { x: ["0%", "18%", "0%"], opacity: [0.25, 0.4, 0.25] }}
+          animate={reduce ? undefined : { x: ["0%", "18%", "0%"], opacity: [0.08, 0.16, 0.08] }}
           transition={{ duration: 11, repeat: Infinity, ease: "easeInOut" }}
         />
         <motion.div
           className="pointer-events-none absolute right-[4%] top-[52%] h-8 w-[34%] rounded-full bg-paper/[0.08] blur-md"
-          animate={reduce ? undefined : { x: ["0%", "-22%", "0%"], opacity: [0.18, 0.32, 0.18] }}
+          animate={reduce ? undefined : { x: ["0%", "-22%", "0%"], opacity: [0.06, 0.12, 0.06] }}
           transition={{ duration: 14, repeat: Infinity, ease: "easeInOut", delay: 0.6 }}
         />
 
@@ -50,11 +55,11 @@ export function FlightPhase() {
           className={
             found
               ? "relative z-[1] flex min-h-0 w-full flex-1 items-center justify-center"
-              : "relative z-[1] flex min-h-0 w-full flex-1 flex-col items-center pt-[10%]"
+              : "relative z-[1] flex min-h-0 w-full flex-1 flex-col items-center"
           }
         >
           {!found ? (
-            <div className="mb-8 w-full">
+            <div className="mt-[max(0.4rem,env(safe-area-inset-top))] w-full shrink-0 text-center">
               <FlightWaitMark />
             </div>
           ) : null}
@@ -74,29 +79,31 @@ export function FlightPhase() {
               </Craft>
             </PullCommit>
           ) : (
-            <motion.div
-              layoutId={CRAFT_ID}
-              data-craft=""
-              className="pointer-events-none h-24 w-20 will-change-transform"
-              initial={{ x: 0, y: 28, rotate: -10, scale: 0.72, opacity: 0.5 }}
-              animate={
-                reduce
-                  ? { opacity: 1, scale: 0.9 }
-                  : {
-                      x: [0, 48, -24, 32],
-                      y: [18, -22, 10, 4],
-                      rotate: [-10, 8, -6, 4],
-                      scale: 0.9,
-                      opacity: 1,
-                    }
-              }
-              transition={
-                reduce ? { duration: 0.01 } : { duration: cruise, repeat: Infinity, ease: "easeInOut" }
-              }
-            >
-              <span className="plane-trail" />
-              <Plane className="h-full w-full" />
-            </motion.div>
+            <div className="flex min-h-0 w-full flex-1 items-center justify-center">
+              <motion.div
+                layoutId={CRAFT_ID}
+                data-craft=""
+                className="pointer-events-none h-24 w-20 will-change-transform"
+                initial={{ x: 0, y: 28, rotate: -10, scale: 0.72, opacity: 0.5 }}
+                animate={
+                  reduce
+                    ? { opacity: 1, scale: 0.9 }
+                    : {
+                        x: [0, 48, -24, 32],
+                        y: [18, -22, 10, 4],
+                        rotate: [-10, 8, -6, 4],
+                        scale: 0.9,
+                        opacity: 1,
+                      }
+                }
+                transition={
+                  reduce ? { duration: 0.01 } : { duration: cruise, repeat: Infinity, ease: "easeInOut" }
+                }
+              >
+                <span className="plane-trail" />
+                <Plane className="h-full w-full" />
+              </motion.div>
+            </div>
           )}
         </div>
       </div>

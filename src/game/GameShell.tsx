@@ -44,6 +44,16 @@ export function GameShell() {
         selectedMirror: "群里只回了收到，灯还开着。",
       });
     }
+    if (jump === "flight") {
+      useGame.setState({
+        phase: "flight",
+        folds: 2,
+        searching: true,
+        echo: null,
+        searchNote: "寻找世另我ing",
+        throwPower: 0.7,
+      });
+    }
   }, []);
 
   const launch = useCallback(
