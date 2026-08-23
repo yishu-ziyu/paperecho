@@ -46,17 +46,18 @@ await page.evaluate(
   { echo },
 );
 await page.locator("[data-flight-sky]").waitFor();
-await page.waitForTimeout(240);
+await page.waitForTimeout(900);
 await page.screenshot({ path: `${out}/idle.png` });
 
 const searching = await page.evaluate(() => {
   const text = document.body.innerText;
+  const compact = text.replace(/\s+/g, "");
+  const wait = document.querySelector("[data-flight-wait]")?.innerText ?? "";
   return {
     hasSteerHook: Boolean(window.__flightTest),
     hasFollowCopy: /跟着你|绕开|手可以带着飞/.test(text),
-    note: text.includes("在夜里找一个也说过类似话的人"),
-    waitMark: /PAPER/.test(document.querySelector("[data-flight-wait]")?.innerText ?? "") &&
-      /ECHO/.test(document.querySelector("[data-flight-wait]")?.innerText ?? ""),
+    note: compact.includes("在夜里找一个也说过类似话的人"),
+    waitMark: wait.includes("在夜里") && wait.includes("找一个"),
     progress: Boolean(document.querySelector("[data-flight-progress]")),
     pull: Boolean(document.querySelector('[data-pull="flight"]')),
   };

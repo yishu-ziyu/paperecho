@@ -1,13 +1,15 @@
-import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+import { motion, useReducedMotion } from "motion/react";
 import { Guide } from "../components/Guide";
 import { LetterPop } from "../components/LetterPop";
 import { Plane } from "../components/Plane";
 import { Craft, CRAFT_ID, PullCommit } from "../continuum";
-import { dur, ease } from "../motion";
 import { useGame } from "../store";
 
-/** Same 字标 stack as TitlePhase: LetterPop + clip-up, night clay on the sky. */
-function FlightWaitMark({ note }: { note: string }) {
+/**
+ * Title-page 字标 language (LetterPop + clip-up) with the night-search line,
+ * split so it reads as a stacked mark instead of a caption under a bar.
+ */
+function FlightWaitMark() {
   const reduce = useReducedMotion();
   return (
     <div
@@ -16,21 +18,18 @@ function FlightWaitMark({ note }: { note: string }) {
       style={{ ["--pop-delay" as string]: "80ms" }}
     >
       <h1
-        className="font-latin text-[clamp(2.4rem,12vw,4rem)] font-bold leading-[0.84] tracking-wide text-paper"
+        className="font-display text-[clamp(2.4rem,12vw,3.8rem)] font-bold leading-[0.88] tracking-wide text-paper"
         style={{ textShadow: "0 2px 0 #d5c7ab, 0 4px 0 #c3b394, 0 10px 18px rgba(10, 16, 32, 0.45)" }}
       >
         <span className="block">
-          <LetterPop text="PAPER" />
+          <LetterPop text="在夜里" />
         </span>
         <span className="block">
-          <LetterPop text="ECHO" start={5} />
+          <LetterPop text="找一个" start={3} />
         </span>
       </h1>
-      <p className="clip-up-mask mx-auto mt-4 max-w-[17rem] font-display text-[1.05rem] leading-snug tracking-[0.18em] text-paper/70">
-        <span className={reduce ? undefined : "clip-up"}>{note}</span>
-      </p>
-      <p className="mx-auto mt-3 max-w-[16rem] text-[0.82rem] font-medium leading-relaxed tracking-[0.04em] text-paper/50">
-        未说出口的也值得回应。
+      <p className="clip-up-mask mx-auto mt-4 font-display text-[1.05rem] tracking-[0.28em] text-paper/70">
+        <span className={reduce ? undefined : "clip-up"}>也说过类似话的人</span>
       </p>
     </div>
   );
@@ -67,20 +66,11 @@ export function FlightPhase() {
           transition={{ duration: 14, repeat: Infinity, ease: "easeInOut", delay: 0.6 }}
         />
 
-        <AnimatePresence>
-          {!found ? (
-            <motion.div
-              key="wait-mark"
-              className="pointer-events-none absolute inset-0 z-0 grid place-items-center pb-16"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: dur.exit, ease: ease.exit }}
-            >
-              <FlightWaitMark note={note || "在夜里找一个也说过类似话的人"} />
-            </motion.div>
-          ) : null}
-        </AnimatePresence>
+        {!found ? (
+          <div className="pointer-events-none absolute inset-x-0 top-[6%] z-0">
+            <FlightWaitMark />
+          </div>
+        ) : null}
 
         {found ? (
           <PullCommit
@@ -101,7 +91,7 @@ export function FlightPhase() {
           <motion.div
             layoutId={CRAFT_ID}
             data-craft=""
-            className="pointer-events-none relative z-[1] h-20 w-40 will-change-transform"
+            className="pointer-events-none relative z-[1] mt-16 h-20 w-40 will-change-transform"
             initial={{ x: 0, y: 28, rotate: -10, scale: 0.72, opacity: 0.5 }}
             animate={
               reduce
