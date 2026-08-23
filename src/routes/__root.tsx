@@ -1,9 +1,16 @@
+import { useEffect } from "react";
 import { createRootRoute, HeadContent, Outlet, Scripts } from "@tanstack/react-router";
 import { AuthProvider } from "@/lib/auth/provider";
 import { PreviewHostBridge } from "@/components/preview-host-bridge";
+import { watchGrokAppBuilderChrome } from "@/lib/wipe-grok-app-builder";
 import appCss from "../styles.css?url";
 
 const APP_NAME = "纸上的回声";
+
+function WipeGrokAppBuilder() {
+  useEffect(() => watchGrokAppBuilderChrome(), []);
+  return null;
+}
 
 export const Route = createRootRoute({
   head: () => ({
@@ -36,6 +43,7 @@ export const Route = createRootRoute({
         <HeadContent />
       </head>
       <body>
+        <WipeGrokAppBuilder />
         <PreviewHostBridge />
         <AuthProvider>
           <Outlet />

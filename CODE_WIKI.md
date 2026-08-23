@@ -39,7 +39,7 @@
 | 定位 | 情绪体验型游戏：10 阶段纸飞机叙事流 + AI 人格对话 |
 | AI 能力 | 默认 MiniMax CN（Anthropic Messages / MiniMax-M3）驱动 Pi-Style Agent；备选 AI PING。无 API Key 时回退到本地故事库生成的「离线回声」 |
 | 存储 | localStorage（旅程/记忆）+ 可选 Neon Postgres（缺省为嵌入式 PGLite） |
-| 平台 | Grok App Builder 模板（PWA、预览宿主桥、OG 卡片、Better Auth 三方模式） |
+| 平台 | 自有全栈模板（PWA、预览宿主桥、OG 卡片、Better Auth 三方模式） |
 
 核心体验闭环：**挑选世界角落 → 把心事写成信 → 折纸飞机掷出 → 飞行掠过城市 → 「回声」捡起并回信**。
 
@@ -422,7 +422,7 @@ Better Auth 自托管于 `/api/auth/*`，**三模式切换**：
 ### 10.2 PWA/平台
 
 - `grok-pwa-plugin.mjs` — Vite 侧 PWA 半段：manifest 路由、`?install=1` 教程页、`</head>` 注入（包装 `res.write/end` 流式注入，跳过已 content-encoding 的响应）；`configurePreviewServer` 在压缩中间件之后包裹。
-- `grok-pwa-shared.mjs` — 平台 head chrome 的**单一事实来源**：`injectGrokPwaHead`（PWA tags + OG tags + extensions.js + `x:creator`）、`createHeadInjector`（流式注入器）、`snapshotOgIdentity`、`renderWebManifest`、`appNameFromHost` 等。Vite 插件与 Nitro 中间件共用。
+- `grok-pwa-shared.mjs` — 平台 head chrome 的**单一事实来源**：`injectGrokPwaHead`（PWA tags + OG tags + `x:creator`，不注入 App Builder 角标）、`createHeadInjector`（流式注入器）、`snapshotOgIdentity`、`renderWebManifest`、`appNameFromHost` 等。Vite 插件与 Nitro 中间件共用。
 - `install-page.html` — iOS 安装教程模板（`{{APP_NAME}}` / `{{APP_URL}}` 占位）。
 
 ### 10.3 QA / 探针 / 杂项
@@ -586,7 +586,6 @@ src/game/agent/chains.ts
 | Neon Postgres（`DATABASE_URL`） | 生产库 | 否（缺省 PGLite） |
 | Grok 预览宿主（allowlist） | 嵌入/路由同步 | 预览时 |
 | `og.grok.me` | OG 占位卡片 | 共享卡片 |
-| `grok.com/grok-app-builder/extensions.js` | 平台扩展脚本 | 平台注入 |
 
 ---
 
