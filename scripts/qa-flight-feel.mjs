@@ -55,6 +55,9 @@ const searching = await page.evaluate(() => {
     hasSteerHook: Boolean(window.__flightTest),
     hasFollowCopy: /跟着你|绕开|手可以带着飞/.test(text),
     note: text.includes("在夜里找一个也说过类似话的人"),
+    waitMark: /PAPER/.test(document.querySelector("[data-flight-wait]")?.innerText ?? "") &&
+      /ECHO/.test(document.querySelector("[data-flight-wait]")?.innerText ?? ""),
+    progress: Boolean(document.querySelector("[data-flight-progress]")),
     pull: Boolean(document.querySelector('[data-pull="flight"]')),
   };
 });
@@ -78,17 +81,25 @@ await page.evaluate(({ echo }) => {
 await page.locator('[data-pull="flight"]').waitFor({ timeout: 4000 });
 await page.screenshot({ path: `${out}/found.png` });
 const foundTitle = await page.locator("h2").innerText();
+const foundWait = await page.evaluate(() => ({
+  waitMark: Boolean(document.querySelector("[data-flight-wait]")),
+  progress: Boolean(document.querySelector("[data-flight-progress]")),
+}));
 
 const report = {
   errors,
   searching,
   afterMouse,
   foundTitle,
+  foundWait,
   pass: {
     noSteerHook: !searching.hasSteerHook && !afterMouse,
     noFollowCopy: !searching.hasFollowCopy,
     searchingNote: searching.note,
+    waitMark: searching.waitMark,
+    noProgressBar: !searching.progress && !foundWait.progress,
     noPullWhileSearch: !searching.pull,
+    foundClearsWait: !foundWait.waitMark,
     foundTitle: foundTitle === "到了 Lisbon，Mara 读完了你的信",
     noErrors: errors.length === 0,
   },
