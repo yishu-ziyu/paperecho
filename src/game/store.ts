@@ -487,12 +487,16 @@ export const useGame = create<GameState>((set, get) => ({
       session: "",
       scorch: 0,
       exchange: initialExchange(),
+      judgeOpen: false,
     });
   },
   openJourney: (j) => set({ reading: j, phase: "archive" }),
   setMutedFlag: (v) => set({ muted: v }),
-  toggleJudge: () => set({ judgeOpen: !get().judgeOpen }),
+  toggleJudge: () => {
+    if (get().phase === "encounter") return;
+    set({ judgeOpen: !get().judgeOpen });
+  },
   goThrow: () => set({ phase: "throw" }),
-  arrive: () => set({ phase: "encounter", round: 0 }),
+  arrive: () => set({ phase: "encounter", round: 0, judgeOpen: false }),
   markScorch: () => set({ scorch: Math.min(2, get().scorch + 1) as 0 | 1 | 2 }),
 }));

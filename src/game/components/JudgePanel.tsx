@@ -4,9 +4,19 @@ import { useGame } from "../store";
 import { ownedOf } from "../emotions";
 import { EMOTION_MAP } from "../emotions";
 
+function judgeHotkeyBlocked(e: KeyboardEvent) {
+  if (e.isComposing || e.keyCode === 229) return true;
+  const el = e.target;
+  return (
+    el instanceof Element &&
+    Boolean(el.closest("textarea, input, select, [contenteditable]:not([contenteditable='false'])"))
+  );
+}
+
 export function JudgePanel() {
   const open = useGame((s) => s.judgeOpen);
   const toggle = useGame((s) => s.toggleJudge);
+  const phase = useGame((s) => s.phase);
   const meter = useGame((s) => s.meter);
   const fp = useGame((s) => s.fingerprint);
   const echo = useGame((s) => s.echo);
@@ -15,16 +25,20 @@ export function JudgePanel() {
   const recall = useGame((s) => s.recall);
   const core = useGame((s) => s.core);
   const exchange = useGame((s) => s.exchange);
+  const talking = phase === "encounter";
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "j" || e.key === "J") toggle();
+      if (e.key !== "j" && e.key !== "J") return;
+      if (talking || judgeHotkeyBlocked(e)) return;
+      e.preventDefault();
+      toggle();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [toggle]);
+  }, [toggle, talking]);
 
-  if (!open) return null;
+  if (talking || !open) return null;
   const owned = ownedOf(fp, 0.3);
 
   return (
