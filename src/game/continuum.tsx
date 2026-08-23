@@ -40,6 +40,17 @@ function rubber(raw: number, limit: number) {
   return limit + (extra * 36 * 0.55) / (36 + 0.55 * extra);
 }
 
+function isImeKey(e: { nativeEvent: { isComposing?: boolean }; keyCode: number }) {
+  return Boolean(e.nativeEvent.isComposing) || e.keyCode === 229;
+}
+
+function isTypingSurface(target: EventTarget | null) {
+  return (
+    target instanceof Element &&
+    Boolean(target.closest("textarea, input, select, [contenteditable]:not([contenteditable='false'])"))
+  );
+}
+
 /**
  * Apple Dynamic Motion: the finger is the object.
  * Pull past a threshold, release, momentum carries the commit.
@@ -92,10 +103,16 @@ export function PullCommit({
   const progressRef = useRef(onProgress);
   const enabledRef = useRef(enabled);
   const behaviorRef = useRef(commitBehavior);
+  const composing = useRef(false);
+  const composeLockUntil = useRef(0);
   commitRef.current = onCommit;
   progressRef.current = onProgress;
   enabledRef.current = enabled;
   behaviorRef.current = commitBehavior;
+
+  function composeLocked() {
+    return composing.current || performance.now() < composeLockUntil.current;
+  }
 
   useEffect(() => {
     function onMove(e: PointerEvent) {
@@ -183,11 +200,19 @@ export function PullCommit({
         dragging.current = true;
         pulled.current = false;
       }}
-      onClick={() => {
+      onCompositionStart={() => {
+        composing.current = true;
+      }}
+      onCompositionEnd={() => {
+        composing.current = false;
+        composeLockUntil.current = performance.now() + 320;
+      }}
+      onClick={(e) => {
         if (pulled.current) {
           pulled.current = false;
           return;
         }
+        if (composeLocked() || isTypingSurface(e.target)) return;
         if ((reduce || tapToCommit) && enabled && !locked.current) {
           locked.current = true;
           onCommit();
@@ -195,6 +220,7 @@ export function PullCommit({
       }}
       onKeyDown={(e) => {
         if (!enabled || locked.current) return;
+        if (composeLocked() || isImeKey(e) || isTypingSurface(e.target)) return;
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
           locked.current = true;

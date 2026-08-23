@@ -147,6 +147,8 @@ export function OrbitPhase() {
                 onChange={(e) => setDraft(e.target.value.slice(0, 56))}
                 onPointerDown={(e) => e.stopPropagation()}
                 onClick={(e) => e.stopPropagation()}
+                onKeyDown={(e) => e.stopPropagation()}
+                onKeyUp={(e) => e.stopPropagation()}
                 placeholder="一件具体的事。时间、物件、动作都行。"
                 rows={4}
                 className="min-h-28 flex-1 resize-none border-0 bg-transparent text-base leading-relaxed text-ink outline-none placeholder:text-ink/45"
