@@ -106,28 +106,6 @@ export function sfxBloom() {
   beep(980, 0.09, "triangle", 0.016, -40);
 }
 
-export function sfxThunder() {
-  const c = ac();
-  if (!c || !master) return;
-  const o = c.createOscillator();
-  const g = c.createGain();
-  const f = c.createBiquadFilter();
-  o.type = "sawtooth";
-  o.frequency.setValueAtTime(60, c.currentTime);
-  o.frequency.exponentialRampToValueAtTime(30, c.currentTime + 0.5);
-  f.type = "lowpass";
-  f.frequency.setValueAtTime(420, c.currentTime);
-  f.frequency.exponentialRampToValueAtTime(80, c.currentTime + 0.5);
-  g.gain.setValueAtTime(0.0001, c.currentTime);
-  g.gain.exponentialRampToValueAtTime(0.09, c.currentTime + 0.02);
-  g.gain.exponentialRampToValueAtTime(0.0001, c.currentTime + 0.55);
-  o.connect(f);
-  f.connect(g);
-  g.connect(master);
-  o.start();
-  o.stop(c.currentTime + 0.6);
-}
-
 export function startPad() {
   const c = ac();
   if (!c || !master || pad) return;

@@ -272,7 +272,7 @@ title → orbit → mirror → compose → fold → throw → flight → encount
 | `ComposePhase` | chips → 信，上拉触发折叠 |
 | `FoldPhase` | 双层折叠手势 |
 | `ThrowPhase` | 弹弓：0.22 释放阈值，力度→速度→功率 |
-| `FlightPhase` | 夜里跟飞找人；找到后用 searchNote 下拉落地，无穿梭窗光 |
+| `FlightPhase` | 夜里自动巡航等 match；找到后用 searchNote 下拉落地。无跟飞、无躲障 |
 | `EncounterPhase` | 建议卡片回复（非 chips），回合限制 |
 | `ReturnPhase` | 信封/信纸拉取 + 归档抽屉 |
 | `ArchivePhase` | 历史旅程 + 档案库记忆「列车」可视化 |

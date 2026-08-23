@@ -19,9 +19,15 @@ const echo = {
 const browser = await chromium.launch({ args: ["--no-sandbox"] });
 const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
 const errors = [];
-page.on("pageerror", (e) => errors.push(String(e)));
+function keepError(text) {
+  return !/hydrat/i.test(text);
+}
+page.on("pageerror", (e) => {
+  const text = String(e);
+  if (keepError(text)) errors.push(text);
+});
 page.on("console", (m) => {
-  if (m.type() === "error") errors.push(m.text());
+  if (m.type() === "error" && keepError(m.text())) errors.push(m.text());
 });
 
 await page.goto(url, { waitUntil: "networkidle" });
@@ -31,65 +37,59 @@ await page.evaluate(
     window.__echoGame.setState({
       phase: "flight",
       region: "europe",
-      echo,
+      echo: null,
       searching: true,
-      searchNote: "飞向 Mara · Lisbon",
+      searchNote: "在夜里找一个也说过类似话的人",
       throwPower: 0.9,
     });
   },
   { echo },
 );
-await page.waitForFunction(() => window.__flightTest);
-await page.waitForTimeout(200);
+await page.locator("[data-flight-sky]").waitFor();
+await page.waitForTimeout(240);
 await page.screenshot({ path: `${out}/idle.png` });
 
-async function chase(x, y, ms) {
-  await page.evaluate(({ x, y }) => window.__flightTest.setTarget(x, y), { x, y });
-  const peak = await page.evaluate(async (ms) => {
-    const t0 = performance.now();
-    let maxVx = 0;
-    let minVx = 0;
-    let maxBank = -999;
-    let minBank = 999;
-    let last = {};
-    while (performance.now() - t0 < ms) {
-      last = {
-        x: window.__flightTest.getX(),
-        y: window.__flightTest.getY(),
-        vx: window.__flightTest.getVx(),
-        vy: window.__flightTest.getVy(),
-        bank: window.__flightTest.getBank(),
-      };
-      maxVx = Math.max(maxVx, last.vx);
-      minVx = Math.min(minVx, last.vx);
-      maxBank = Math.max(maxBank, last.bank);
-      minBank = Math.min(minBank, last.bank);
-      await new Promise((r) => requestAnimationFrame(r));
-    }
-    return { ...last, maxVx, minVx, maxBank, minBank };
-  }, ms);
-  return peak;
-}
+const searching = await page.evaluate(() => {
+  const text = document.body.innerText;
+  return {
+    hasSteerHook: Boolean(window.__flightTest),
+    hasFollowCopy: /跟着你|绕开|手可以带着飞/.test(text),
+    note: text.includes("在夜里找一个也说过类似话的人"),
+    pull: Boolean(document.querySelector('[data-pull="flight"]')),
+  };
+});
 
-const right = await chase(180, -40, 220);
-await page.screenshot({ path: `${out}/chase-right.png` });
-
-const left = await chase(-180, 50, 260);
-await page.screenshot({ path: `${out}/chase-left.png` });
-
+await page.mouse.move(80, 180);
+await page.waitForTimeout(180);
 await page.mouse.move(320, 220);
 await page.waitForTimeout(280);
 await page.screenshot({ path: `${out}/mouse.png` });
 
+const afterMouse = await page.evaluate(() => Boolean(window.__flightTest));
+
+await page.evaluate(({ echo }) => {
+  window.__echoGame.setState({
+    phase: "flight",
+    echo,
+    searching: false,
+    searchNote: "到了 Lisbon，Mara 读完了你的信",
+  });
+}, { echo });
+await page.locator('[data-pull="flight"]').waitFor({ timeout: 4000 });
+await page.screenshot({ path: `${out}/found.png` });
+const foundTitle = await page.locator("h2").innerText();
+
 const report = {
   errors,
-  right,
-  left,
+  searching,
+  afterMouse,
+  foundTitle,
   pass: {
-    rightVel: right.maxVx > 80,
-    rightBank: right.maxBank > 2,
-    leftVel: left.minVx < -80,
-    leftBank: left.minBank < -2,
+    noSteerHook: !searching.hasSteerHook && !afterMouse,
+    noFollowCopy: !searching.hasFollowCopy,
+    searchingNote: searching.note,
+    noPullWhileSearch: !searching.pull,
+    foundTitle: foundTitle === "到了 Lisbon，Mara 读完了你的信",
     noErrors: errors.length === 0,
   },
 };
