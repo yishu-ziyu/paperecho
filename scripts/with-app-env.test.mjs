@@ -8,6 +8,7 @@ import { promisify } from "node:util";
 import {
   APP_ENV_REL_PATH,
   mergeAppEnv,
+  nodeAcceptsEnvProxyFlag,
   parseAppEnv,
   projectRoot,
   readAppEnv,
@@ -53,7 +54,13 @@ test("reads the app env from a workspace", () => {
 
 test("enables Node env proxy so fetch honors HTTPS_PROXY", () => {
   const out = withEnvProxy({ PATH: "/usr/bin" });
-  assert.match(out.NODE_OPTIONS, /--use-env-proxy/);
+  if (nodeAcceptsEnvProxyFlag()) {
+    assert.match(out.NODE_OPTIONS, /--use-env-proxy/);
+  } else {
+    // A node without the flag must get it dropped, not a poisoned NODE_OPTIONS
+    // that kills every wrapped command at startup.
+    assert.equal(out.NODE_OPTIONS, undefined);
+  }
   const again = withEnvProxy({ NODE_OPTIONS: "--use-env-proxy --trace-warnings" });
   assert.equal(again.NODE_OPTIONS.split("--use-env-proxy").length - 1, 1);
 });

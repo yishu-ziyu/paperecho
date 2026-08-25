@@ -19,7 +19,7 @@
  * Vite picks the values up because `loadEnv` prefix-matches entries already in
  * `process.env`, which is why the merge has to happen before Vite starts.
  */
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { constants as osConstants } from "node:os";
 import { dirname, join } from "node:path";
@@ -68,12 +68,38 @@ export function mergeAppEnv(appEnv, processEnv) {
 const ENV_PROXY_FLAG = "--use-env-proxy";
 
 /**
+ * Whether this node binary accepts `--use-env-proxy` inside NODE_OPTIONS.
+ * The flag is not NODE_OPTIONS-whitelisted on every node that knows it (and
+ * unknown to older builds), and a rejected NODE_OPTIONS kills every wrapped
+ * command before it starts. Probe once; skip the flag where unsupported —
+ * the undici EnvHttpProxyAgent installed by src/game/agent/config.ts stays
+ * the app's proxy path there.
+ */
+let envProxyFlagAccepted;
+
+export function nodeAcceptsEnvProxyFlag() {
+  if (envProxyFlagAccepted === undefined) {
+    try {
+      const probe = spawnSync(process.execPath, ["-e", ""], {
+        env: { ...process.env, NODE_OPTIONS: ENV_PROXY_FLAG },
+        stdio: "ignore",
+      });
+      envProxyFlagAccepted = probe.status === 0;
+    } catch {
+      envProxyFlagAccepted = false;
+    }
+  }
+  return envProxyFlagAccepted;
+}
+
+/**
  * Node fetch ignores HTTP(S)_PROXY unless this flag is on.
  * MiniMax 走系统代理才能出网；不加就会 DNS/直连超时，开口掉进启发式。
  */
 export function withEnvProxy(env) {
   const existing = env.NODE_OPTIONS || "";
   if (existing.split(/\s+/).filter(Boolean).includes(ENV_PROXY_FLAG)) return env;
+  if (!nodeAcceptsEnvProxyFlag()) return env;
   return { ...env, NODE_OPTIONS: `${existing} ${ENV_PROXY_FLAG}`.trim() };
 }
 
