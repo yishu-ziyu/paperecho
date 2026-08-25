@@ -211,7 +211,9 @@ function tokenIdentityKey(token: string): string {
             .digest("base64url");
         }
       }
-    } catch {}
+    } catch {
+      // best-effort：无效输入直接落到下方明文 token 哈希
+    }
   }
   return createHash("sha256").update(token).digest("base64url");
 }

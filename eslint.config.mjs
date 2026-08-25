@@ -41,7 +41,9 @@ export default tseslint.config(
         "warn",
         { argsIgnorePattern: "^_", varsIgnorePattern: "^_" },
       ],
-      "@typescript-eslint/no-explicit-any": "off",
+      // any 是绕过类型系统的逃生口——类型系统是这个项目最便宜的
+      // 跨模块破坏探测器。当前基线为 0 违规，保持为 0。
+      "@typescript-eslint/no-explicit-any": "error",
     },
   },
   // Disable rules that conflict with Prettier formatting.

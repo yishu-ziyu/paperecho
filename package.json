@@ -14,7 +14,8 @@
     "preview": "node scripts/with-app-env.mjs vite preview",
     "typecheck": "tsc --noEmit",
     "check:auth": "node scripts/check-auth-invariant.mjs",
-    "test": "node --test 'scripts/**/*.test.mjs' && node --experimental-strip-types --test src/lib/app-data/app-data.test.ts src/lib/auth/gate-identity.test.ts src/game/paperFlow.test.ts src/game/globeBloom.test.ts src/game/cabinet.test.ts src/game/phaseMotion.test.ts src/game/planeLook.test.ts src/game/emotions.test.ts src/game/agent/exchange.test.ts src/game/agent/tools.test.ts src/game/agent/project-env.test.ts scripts/collect/qa.test.ts",
+    "check:deps": "depcruise src server --config .dependency-cruiser.cjs",
+    "test": "node --test 'scripts/**/*.test.mjs' && node --experimental-strip-types --test 'src/**/*.test.ts' 'scripts/**/*.test.ts'",
     "collect": "node scripts/with-app-env.mjs npx -y tsx scripts/collect/run.mts",
     "lint": "eslint .",
     "format": "prettier --write ."
@@ -87,6 +88,7 @@
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "@vitejs/plugin-react": "^5.2.0",
+    "dependency-cruiser": "^18.2.0",
     "eslint": "^9.20.0",
     "eslint-config-prettier": "^10.1.1",
     "eslint-plugin-prettier": "^5.2.6",

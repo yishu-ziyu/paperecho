@@ -8,7 +8,8 @@ import type { Post } from "./pipeline/source.ts";
 import { makeProfile } from "./pipeline/profile.ts";
 import { archiveStories, storyToPost } from "./pipeline/sources/local.ts";
 import { queriesOf } from "./pipeline/sources/live.ts";
-import { cleanOneLine, keepSpoken } from "./chains.ts";
+import { cleanOneLine } from "./exchange.ts";
+import { keepSpoken } from "./chains.ts";
 import { heuristicRespond, spokenDetails, staysOnThread } from "./pipeline/respond.ts";
 import { blobOfShadow, formatCaseHits, formatCaseHitsLive, gatherShadow, runAgentTool, type ToolCtx } from "./tools.ts";
 

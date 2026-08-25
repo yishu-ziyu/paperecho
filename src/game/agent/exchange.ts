@@ -155,3 +155,46 @@ export function parseExchange(raw: unknown): ExchangeState {
   const silentTurns = Math.max(0, Math.min(8, Number(o?.silentTurns) || 0));
   return { unlocked, silentTurns };
 }
+
+/**
+ * 把模型输出收敛为一句可读的话：去工具调用残渣、并句、截长、补全悬挂引号。
+ * 原住 chains.ts，被 pipeline/respond.ts 反向引用成环，移入本模块
+ * （确定性落闸的家），运行时清洗只此一套。
+ */
+function closeHangingQuotes(s: string): string {
+  const pairs: [string, string][] = [
+    ["「", "」"],
+    ["『", "』"],
+    ["“", "”"],
+  ];
+  let out = s;
+  for (const [open, close] of pairs) {
+    const n = (out.split(open).length - 1) - (out.split(close).length - 1);
+    if (n > 0) out += close.repeat(n);
+  }
+  if ((out.match(/"/g) ?? []).length % 2 === 1) out += '"';
+  return out;
+}
+
+export function cleanOneLine(text: string, maxLen = 56): string {
+  const cut = text
+    .replace(/(?:^|\n)\s*(?:arrive|search_cases|search_archive|remember)\b[\s\S]*$/i, "")
+    .trim();
+  const lines = cut
+    .split(/\n+/)
+    .map((l) => l.trim())
+    .filter((l) => l && !/^(arrive|search_cases|search_archive|remember)\b/i.test(l));
+  const sentences = lines
+    .join(" ")
+    .split(/(?<=[。！？])\s*/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  let out = "";
+  for (const s of sentences.slice(0, 2)) {
+    if (out && (out + s).length > maxLen) break;
+    out += s;
+    if (out.length >= maxLen) break;
+  }
+  const raw = out || lines.slice(0, 1).join(" ").slice(0, maxLen);
+  return closeHangingQuotes(raw);
+}

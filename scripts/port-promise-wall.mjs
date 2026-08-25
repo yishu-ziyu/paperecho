@@ -12,7 +12,7 @@ if (open < 0 || close < 0) throw new Error("could not find Promise Wall IIFE");
 
 let body = html.slice(open + "      (function () {\n".length, close);
 
-body = body.replace(/        "use strict";\n        if \(!window\.THREE[\s\S]*?return;\n        \}\n/, "");
+body = body.replace(/ {8}"use strict";\n {8}if \(!window\.THREE[\s\S]*?return;\n {8}\}\n/, "");
 
 const header = `// @ts-nocheck
 /**

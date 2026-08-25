@@ -22,7 +22,7 @@ import { emptyMeter, hasApiKey } from "./llm.ts";
 import { factsOf, isCompleteFact, ownLine, perceptionOf, renderBlocks, stolenVoice } from "./memory.ts";
 import type { EchoShadow } from "./pipeline/persona.ts";
 import { blobOfShadow, gatherShadow, runAgentTool, type ToolCtx } from "./tools.ts";
-import { acceptFelt, advanceExchange, initialExchange, type SpeakMode, type StoryDepth } from "./exchange.ts";
+import { acceptFelt, advanceExchange, cleanOneLine, initialExchange, type SpeakMode, type StoryDepth } from "./exchange.ts";
 import type { ExchangeState } from "./exchange.ts";
 import type { NightInput, NightResult, RecallItem } from "./types.ts";
 
@@ -67,46 +67,10 @@ function lastAssistantText(messages: AgentMessage[]): string {
 }
 
 /**
- * 把模型输出收敛为一句可读的话。
- * （导出供 pipeline/respond.ts 复用，运行时清洗只此一套。）
+ * 把模型输出收敛为一句可读的话的清洗函数（cleanOneLine /
+ * closeHangingQuotes）住在 ./exchange.ts —— 确定性落闸的家。
+ * chains 与 pipeline/respond 共用同一套，避免循环依赖。
  */
-function closeHangingQuotes(s: string): string {
-  const pairs: [string, string][] = [
-    ["「", "」"],
-    ["『", "』"],
-    ["“", "”"],
-  ];
-  let out = s;
-  for (const [open, close] of pairs) {
-    const n = (out.split(open).length - 1) - (out.split(close).length - 1);
-    if (n > 0) out += close.repeat(n);
-  }
-  if ((out.match(/"/g) ?? []).length % 2 === 1) out += '"';
-  return out;
-}
-
-export function cleanOneLine(text: string, maxLen = 56): string {
-  const cut = text
-    .replace(/(?:^|\n)\s*(?:arrive|search_cases|search_archive|remember)\b[\s\S]*$/i, "")
-    .trim();
-  const lines = cut
-    .split(/\n+/)
-    .map((l) => l.trim())
-    .filter((l) => l && !/^(arrive|search_cases|search_archive|remember)\b/i.test(l));
-  const sentences = lines
-    .join(" ")
-    .split(/(?<=[。！？])\s*/)
-    .map((s) => s.trim())
-    .filter(Boolean);
-  let out = "";
-  for (const s of sentences.slice(0, 2)) {
-    if (out && (out + s).length > maxLen) break;
-    out += s;
-    if (out.length >= maxLen) break;
-  }
-  const raw = out || lines.slice(0, 1).join(" ").slice(0, maxLen);
-  return closeHangingQuotes(raw);
-}
 
 /** 素材开口留下。不因「杭州」等外地词打回故事卡。 */
 export function keepSpoken(

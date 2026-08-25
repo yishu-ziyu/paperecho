@@ -35,8 +35,7 @@
  */
 import { EMOTIONS } from "../../emotions.ts";
 import { llmApiKey, LLM_CONFIG } from "../config.ts";
-import { cleanOneLine } from "../chains.ts";
-import { exchangeCue, type SpeakMode, type StoryDepth } from "../exchange.ts";
+import { cleanOneLine, exchangeCue, type SpeakMode, type StoryDepth } from "../exchange.ts";
 import { parroted } from "../memory.ts";
 import type { EchoShadow } from "./persona.ts";
 import type { Post } from "./source.ts";
@@ -257,7 +256,7 @@ async function llmReply(ctx: TurnContext): Promise<string | null> {
 }
 
 /**
- * 出口清洗：复用 chains 的 cleanOneLine（去工具名/换行、截 56 字），再剥一层引号。
+ * 出口清洗：复用 exchange 的 cleanOneLine（去工具名/换行、截 56 字），再剥一层引号。
  * 洗不出话就返回 null，触发兜底。
  */
 function sanitize(raw: string): string | null {

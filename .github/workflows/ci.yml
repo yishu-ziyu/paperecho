@@ -1,0 +1,47 @@
+# CI 门禁 —— Agent 时代的代码护栏。
+#
+# 本地钩子可以被跳过（--no-verify），远端 CI 是唯一跳不掉的检查。
+# 规则口径与本地完全一致：typecheck / lint / test / check:deps / build。
+# 注意：check:auth 需要运行中的 dev server（探测 /__app-env），不进 CI；
+# 其逻辑由测试套件里的 check-auth-invariant.test.mjs 覆盖。
+name: CI
+
+on:
+  push:
+  pull_request:
+
+# 同一分支的新推送取消旧运行，省额度
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # 从最便宜的检查开始，快速失败
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm test
+
+      - name: Dependency rules
+        run: npm run check:deps
+
+      - name: Build
+        run: npm run build
