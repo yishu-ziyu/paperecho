@@ -7,7 +7,7 @@ import { LetterPop } from "@/game/components/LetterPop";
 
 /**
  * /login —— 认证系统声明的入口页（gates.tsx: SIGN_IN_PATH）。
- * 纸上的回声同款视觉：深夜 + 纸卡 + letterpress 标题。
+ * 纸上的回声同款视觉：纸卡 + letterpress 标题。
  * 开启认证时走 Google / X；未开启时提供「以游客身份进入」。
  */
 export const Route = createFileRoute("/login")({ component: LoginPage });
@@ -45,7 +45,7 @@ function NightShell({ children }: { children: ReactNode }) {
 function LoadingNight() {
   return (
     <NightShell>
-      <p className="text-sm tracking-[0.2em] text-paper/55">深夜准备中…</p>
+      <p className="text-sm tracking-[0.2em] text-paper/55">正在准备…</p>
     </NightShell>
   );
 }
@@ -124,7 +124,7 @@ function LoginPage() {
       </section>
 
       <p className="absolute bottom-[max(1.25rem,env(safe-area-inset-bottom))] text-xs tracking-[0.18em] text-paper/45">
-        回应，来自另一个还没睡的深夜。
+        回应，来自世界上另一个角落。
       </p>
     </NightShell>
   );
