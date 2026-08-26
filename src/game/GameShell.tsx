@@ -2,11 +2,9 @@ import { useCallback, useEffect, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { startPad, unlockAudio } from "./audio";
 import { Hud } from "./components/Hud";
-import { IntroGuide } from "./components/IntroGuide";
 import { JudgePanel } from "./components/JudgePanel";
 import { Scene } from "./components/Scene";
 import { TitleDive, type CardRect } from "./components/TitleDive";
-import { loadHasSeenGuide } from "./save";
 import { ArchivePhase } from "./phases/ArchivePhase";
 import { EncounterPhase } from "./phases/EncounterPhase";
 import { FlightPhase } from "./phases/FlightPhase";
@@ -35,8 +33,6 @@ export function GameShell() {
 
   useEffect(() => {
     (window as Window & { __echoGame?: typeof useGame }).__echoGame = useGame;
-    // 首夜引导：客户端挂载后再读本地记录，避免 SSR hydration 不一致。
-    if (!loadHasSeenGuide()) useGame.getState().openGuide();
     if (!import.meta.env.DEV) return;
     const jump = new URLSearchParams(window.location.search).get("phase");
     if (jump === "orbit") useGame.setState({ phase: "orbit" });
@@ -115,7 +111,6 @@ export function GameShell() {
         </AnimatePresence>
         {diveFrom ? <TitleDive from={diveFrom} seedU={seedU} onCovered={cover} onDone={finish} /> : null}
       </div>
-      <IntroGuide />
     </Scene>
   );
 }

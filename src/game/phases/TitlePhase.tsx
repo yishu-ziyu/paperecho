@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { motion, useReducedMotion } from "motion/react";
 import { startPad, unlockAudio } from "../audio";
 import { LetterPop } from "../components/LetterPop";
@@ -6,6 +6,7 @@ import { PaperSheet } from "../components/PaperSheet";
 import type { CardRect } from "../components/TitleDive";
 import { PullCommit } from "../continuum";
 import { flowPoints } from "../paperFlow";
+import { loadHasSeenGuide, persistHasSeenGuide } from "../save";
 import { useGame } from "../store";
 
 export function TitlePhase({
@@ -22,6 +23,13 @@ export function TitlePhase({
   const pullRef = useRef(0);
   const [pull, setPull] = useState(0);
   const [box, setBox] = useState({ w: 320, h: 352 });
+  /** 首夜：第一次进游戏时，纸面上多印两行字（行动 + 铁律）。拉卡进房后才算看过。
+   *  挂载后读 localStorage，避免服务端（无 window）与客户端二次访问的 hydration 不一致。 */
+  const [firstNight, setFirstNight] = useState(false);
+
+  useEffect(() => {
+    setFirstNight(!loadHasSeenGuide());
+  }, []);
 
   useLayoutEffect(() => {
     const el = cardRef.current;
@@ -37,6 +45,7 @@ export function TitlePhase({
   }, []);
 
   function enter() {
+    if (firstNight) persistHasSeenGuide(true);
     const r = cardRef.current?.getBoundingClientRect();
     if (!r) {
       unlockAudio();
@@ -102,6 +111,16 @@ export function TitlePhase({
             <p className="mx-auto mt-4 max-w-[16rem] text-[0.82rem] font-medium leading-relaxed tracking-[0.04em] text-ink/55">
               未说出口的也值得回应。
             </p>
+            {firstNight ? (
+              <>
+                <p className="mt-3 text-[0.82rem] font-medium leading-relaxed tracking-[0.04em] text-ink/60">
+                  <span className={reduce ? undefined : "clip-up"}>把一句没说完的话，折成纸飞机。</span>
+                </p>
+                <p className="mt-1.5 text-[0.7rem] tracking-[0.22em] text-ink/45">
+                  <span className={reduce ? undefined : "clip-up"}>手是唯一的提交 · 拖 折 拉 松开</span>
+                </p>
+              </>
+            ) : null}
             <p className="mt-6 text-[0.7rem] tracking-[0.28em] text-ink/35">往下拉</p>
           </motion.div>
         </div>

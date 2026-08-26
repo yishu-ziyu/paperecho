@@ -1,4 +1,4 @@
-import { Archive, ChevronLeft, HelpCircle, Volume2, VolumeX } from "lucide-react";
+import { Archive, ChevronLeft, Volume2, VolumeX } from "lucide-react";
 import { useEffect } from "react";
 import { cn } from "@/lib/utils";
 import { setMuted } from "../audio";
@@ -9,7 +9,6 @@ export function Hud() {
   const muted = useGame((s) => s.muted);
   const goArchive = useGame((s) => s.goArchive);
   const goBack = useGame((s) => s.goBack);
-  const openGuide = useGame((s) => s.openGuide);
   const setMutedFlag = useGame((s) => s.setMutedFlag);
   const phase = useGame((s) => s.phase);
   const leftFrom = useGame((s) => s.leftFrom);
@@ -77,14 +76,6 @@ export function Hud() {
       </ol>
 
       <div className="flex items-center">
-        <button
-          type="button"
-          className={cn("grid size-11 place-items-center rounded-full", quiet)}
-          aria-label="首夜引导"
-          onClick={openGuide}
-        >
-          <HelpCircle className="size-5" />
-        </button>
         <button
           type="button"
           className={cn("grid size-11 place-items-center rounded-full", quiet)}
