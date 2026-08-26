@@ -312,6 +312,24 @@ function Token({
       type="button"
       aria-label={e.label}
       {...bind()}
+      onKeyDown={(e) => {
+        const field = fieldRef.current;
+        if (!field) return;
+        let dx = 0;
+        let dy = 0;
+        if (e.key === "ArrowLeft") dx = -3;
+        else if (e.key === "ArrowRight") dx = 3;
+        else if (e.key === "ArrowUp") dy = -3;
+        else if (e.key === "ArrowDown") dy = 3;
+        else return;
+        e.preventDefault();
+        onHold();
+        const placed = clampToRing(token.x + dx, token.y + dy, token.id, live.current);
+        live.current = placed;
+        writePct(e.currentTarget, placed.x, placed.y);
+        flush.current();
+      }}
+      onBlur={() => onFree()}
       className={cn(
         "absolute z-10 flex w-16 touch-none flex-col items-center",
         near && "z-[25]",

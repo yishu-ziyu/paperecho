@@ -8,7 +8,6 @@ import { Starfield } from "./Starfield";
 const STILL: Record<Phase, string | null> = {
   title: "/scenes/title.jpg",
   orbit: "/scenes/room.jpg",
-  mirror: "/scenes/room.jpg",
   fold: "/scenes/room.jpg",
   throw: null,
   flight: "/scenes/sky.jpg",
@@ -19,7 +18,6 @@ const STILL: Record<Phase, string | null> = {
 
 const VIDEO: Partial<Record<Phase, string>> = {
   orbit: "/scenes/room.mp4",
-  mirror: "/scenes/room.mp4",
   fold: "/scenes/room.mp4",
   flight: "/scenes/flight.mp4",
 };
@@ -51,8 +49,7 @@ export function Scene({
   }, []);
   const video = allowVideo ? VIDEO[phase] : undefined;
   const still = STILL[phase];
-  const indoor =
-    phase === "orbit" || phase === "mirror" || phase === "fold";
+  const indoor = phase === "orbit" || phase === "fold";
   const sway = phase !== "throw" && phase !== "flight";
   const zoom = sway && closeUp;
   const camRef = useCameraSway(sway, zoom);

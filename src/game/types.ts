@@ -1,7 +1,6 @@
 export type Phase =
   | "title"
   | "orbit"
-  | "mirror"
   | "fold"
   | "throw"
   | "flight"

@@ -2,7 +2,6 @@ let ctx: AudioContext | null = null;
 let master: GainNode | null = null;
 let pad: OscillatorNode | null = null;
 let padGain: GainNode | null = null;
-let muted = false;
 
 function ac(): AudioContext | null {
   if (typeof window === "undefined") return null;
@@ -10,7 +9,7 @@ function ac(): AudioContext | null {
     const C = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
     ctx = new C({ latencyHint: "interactive" });
     master = ctx.createGain();
-    master.gain.value = muted ? 0 : 0.22;
+    master.gain.value = 0.22;
     master.connect(ctx.destination);
   }
   if (ctx.state === "suspended") void ctx.resume();
@@ -22,15 +21,20 @@ export function unlockAudio() {
   if (c && c.state === "suspended") void c.resume();
 }
 
+/** 静音是纯副作用：只落音量，不存状态。真相在 store 的 muted。 */
 export function setMuted(next: boolean) {
-  muted = next;
   if (master && ctx) {
     master.gain.setTargetAtTime(next ? 0 : 0.22, ctx.currentTime, 0.03);
   }
 }
 
-export function isMuted() {
-  return muted;
+/** 页面切走后整体静音：冻结整个音频图，回来再解冻。 */
+export function suspendAudio() {
+  if (ctx && ctx.state === "running") void ctx.suspend();
+}
+
+export function resumeAudio() {
+  if (ctx && ctx.state === "suspended") void ctx.resume();
 }
 
 function beep(freq: number, dur: number, type: OscillatorType, gain = 0.08, slide = 0) {

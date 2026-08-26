@@ -1,9 +1,21 @@
+import { useEffect, useState } from "react";
 import { motion, useReducedMotion } from "motion/react";
 import { Guide } from "../components/Guide";
 import { LetterPop } from "../components/LetterPop";
 import { Plane } from "../components/Plane";
 import { Craft, CRAFT_ID, PullCommit } from "../continuum";
 import { useGame } from "../store";
+
+/** 从某时刻起已过的整秒数；等待开始时计时，结束返回 0。 */
+function useElapsed(since: number) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!since) return;
+    const id = window.setInterval(() => setNow(Date.now()), 500);
+    return () => window.clearInterval(id);
+  }, [since]);
+  return since ? Math.max(0, Math.floor((now - since) / 1000)) : 0;
+}
 
 function FlightWaitMark() {
   return (
@@ -25,12 +37,15 @@ export function FlightPhase() {
   const note = useGame((s) => s.searchNote);
   const echo = useGame((s) => s.echo);
   const arrive = useGame((s) => s.arrive);
+  const abortFlight = useGame((s) => s.abortFlight);
+  const waitingSince = useGame((s) => s.waitingSince);
   const power = useGame((s) => s.throwPower);
   const reduce = useReducedMotion();
   const found = !searching && Boolean(echo);
   const cruise = 7.8 - Math.min(0.95, power) * 2.2;
   const title = note || (found && echo ? `到了 ${echo.city}` : "飞机在找一个相似的人");
   const body = found ? "往下拉" : undefined;
+  const elapsed = useElapsed(searching ? waitingSince : 0);
 
   return (
     <div className="relative flex flex-1 flex-col items-center justify-between overflow-hidden px-4 py-8">
@@ -61,6 +76,20 @@ export function FlightPhase() {
           {!found ? (
             <div className="mt-[max(0.4rem,env(safe-area-inset-top))] w-full shrink-0 text-center">
               <FlightWaitMark />
+              {searching ? (
+                <div className="mt-3 flex flex-col items-center gap-2.5">
+                  <p className="text-xs tracking-[0.2em] text-paper/55">
+                    {elapsed > 0 ? `已等 ${elapsed} 秒` : "正在找"}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={abortFlight}
+                    className="rounded-full border border-paper/25 px-4 py-1.5 text-xs tracking-[0.18em] text-paper/70 transition-[background-color,color] duration-(--motion-fast) hover:bg-paper/10 hover:text-paper"
+                  >
+                    不找了，回地球
+                  </button>
+                </div>
+              ) : null}
             </div>
           ) : null}
 

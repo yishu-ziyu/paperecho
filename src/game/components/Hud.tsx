@@ -1,7 +1,6 @@
 import { Archive, ChevronLeft, Volume2, VolumeX } from "lucide-react";
 import { useEffect } from "react";
 import { cn } from "@/lib/utils";
-import { setMuted } from "../audio";
 import { useGame } from "../store";
 import { CAN_BACK, JOURNEY } from "../types";
 
@@ -81,7 +80,6 @@ export function Hud() {
           className={cn("grid size-11 place-items-center rounded-full", quiet)}
           aria-label={muted ? "打开声音" : "静音"}
           onClick={() => {
-            setMuted(!muted);
             setMutedFlag(!muted);
           }}
         >

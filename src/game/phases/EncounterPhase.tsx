@@ -12,6 +12,17 @@ import { useGame } from "../store";
 const TILT = [-2.2, 1.6, -1.1, 2.4, -1.8, 1.2];
 const DEPTH = ["发生的事", "当时的感觉", "后来改了什么"] as const;
 
+/** 从某时刻起已过的整秒数；等待开始时计时，结束返回 0。 */
+function useElapsed(since: number) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!since) return;
+    const id = window.setInterval(() => setNow(Date.now()), 500);
+    return () => window.clearInterval(id);
+  }, [since]);
+  return since ? Math.max(0, Math.floor((now - since) / 1000)) : 0;
+}
+
 function encounterGuide(opts: {
   name: string;
   sealing: boolean;
@@ -43,6 +54,7 @@ export function EncounterPhase() {
   const round = useGame((s) => s.round);
   const reply = useGame((s) => s.reply);
   const waiting = useGame((s) => s.waitingEcho);
+  const waitingSince = useGame((s) => s.waitingSince);
   const recall = useGame((s) => s.recall);
   const scorch = useGame((s) => s.scorch);
   const exchange = useGame((s) => s.exchange);
@@ -91,6 +103,8 @@ export function EncounterPhase() {
   const firstEchoIndex = recall.findIndex((t) => t.who === "echo");
   const sealing = waiting && round >= 3;
   const showWait = waiting && !sealing && firstEchoIndex < 0;
+  const elapsed = useElapsed(waiting ? waitingSince : 0);
+  const waited = elapsed > 1 ? `已等 ${elapsed} 秒` : null;
 
   useLayoutEffect(() => {
     if (firstEchoIndex < 0) {
@@ -282,9 +296,15 @@ export function EncounterPhase() {
               </button>
             </form>
           ) : sealing ? (
-            <p className="py-3 text-center text-sm text-paper/70">回信正在折回来。</p>
+            <p className="py-3 text-center text-sm text-paper/70">
+              回信正在折回来。
+              {waited ? <span className="ml-1 text-paper/50">{waited}</span> : null}
+            </p>
           ) : waiting ? (
-            <p className="py-3 text-center text-sm text-paper/70">等他写完这一句。</p>
+            <p className="py-3 text-center text-sm text-paper/70">
+              等他写完这一句。
+              {waited ? <span className="ml-1 text-paper/50">{waited}</span> : null}
+            </p>
           ) : (
             <p className="py-3 text-center text-sm text-paper/60">先听完这一张。</p>
           )}

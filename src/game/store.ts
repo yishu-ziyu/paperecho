@@ -12,7 +12,17 @@ import {
   seedTokens,
 } from "./emotions";
 import { buildJourney, fallbackEcho, letterFromChips } from "./kernel";
-import { loadJourneys, persistJourneys } from "./save";
+import {
+  clearSnapshot,
+  loadJourneys,
+  loadMuted,
+  loadSnapshot,
+  persistJourneys,
+  persistMuted,
+  saveSnapshot,
+  SNAP_VERSION,
+  type JourneySnapshot,
+} from "./save";
 import type {
   CoreMemory,
   EchoPerson,
@@ -61,9 +71,9 @@ interface GameState {
   session: string;
   scorch: 0 | 1 | 2;
   exchange: ExchangeState;
+  waitingSince: number;
   setTokens: (tokens: TokenPos[]) => void;
   commitOrbit: () => void;
-  pickMirror: (storyId: string) => void;
   writeMirror: (text: string) => void;
   commitListen: (text: string, persona?: string) => void;
   setPersonaHint: (hint: string) => void;
@@ -75,6 +85,7 @@ interface GameState {
   launch: (power: number) => void;
   reply: (text: string) => void;
   saveReturn: () => void;
+  abortFlight: () => void;
   goArchive: () => void;
   goBack: () => void;
   startNew: () => void;
@@ -137,6 +148,54 @@ function agentPayload(
   };
 }
 
+const savedSnapshot = loadSnapshot();
+
+/**
+ * 把落盘快照还原成可继续的初始状态。异步等待段回不来：
+ * flight 匹配中 → 退回发射前（信与地区保留）；encounter 等回复 → 放平等待标志，
+ * seal 已提交但结果丢了 → 直接进回信。
+ */
+function resumeOf(snap: JourneySnapshot | null): Partial<GameState> {
+  if (!snap) return {};
+  const base: Partial<GameState> = {
+    tokens: snap.tokens,
+    fingerprint: snap.fingerprint,
+    selectedMirror: snap.selectedMirror,
+    personaHint: snap.personaHint,
+    chips: snap.chips,
+    letterChips: snap.letterChips,
+    extraLine: snap.extraLine,
+    folds: snap.folds,
+    region: snap.region,
+    throwPower: snap.throwPower,
+    echo: snap.echo,
+    round: snap.round,
+    replies: snap.replies,
+    chosenReplies: snap.chosenReplies,
+    recall: snap.recall,
+    session: snap.session,
+    core: snap.core,
+    exchange: snap.exchange,
+  };
+  if (snap.phase === "flight" && snap.searching) {
+    return { ...base, phase: "throw", searching: false, echo: null, searchNote: "", waitingSince: 0 };
+  }
+  if (snap.phase === "encounter" && snap.waitingEcho) {
+    if (snap.round >= 3) {
+      return { ...base, phase: "return", waitingEcho: false, waitingSince: 0 };
+    }
+    return { ...base, waitingEcho: false, waitingSince: 0 };
+  }
+  return {
+    ...base,
+    phase: snap.phase,
+    searching: snap.searching,
+    searchNote: snap.searchNote,
+    waitingEcho: snap.waitingEcho,
+    waitingSince: 0,
+  };
+}
+
 export const useGame = create<GameState>((set, get) => ({
   phase: "title",
   leftFrom: null,
@@ -160,7 +219,7 @@ export const useGame = create<GameState>((set, get) => ({
   chosenReplies: [],
   meter: null,
   journeys: loadJourneys(),
-  muted: false,
+  muted: loadMuted(),
   judgeOpen: false,
   reading: null,
   core: cabinetCore(),
@@ -172,6 +231,8 @@ export const useGame = create<GameState>((set, get) => ({
   session: "",
   scorch: 0,
   exchange: initialExchange(),
+  waitingSince: 0,
+  ...resumeOf(savedSnapshot),
 
   setTokens: (tokens) => set({ tokens, fingerprint: fingerprintOf(tokens) }),
 
@@ -182,10 +243,6 @@ export const useGame = create<GameState>((set, get) => ({
       chips: chipPool(fp),
       replies: replyPool(fp),
     });
-  },
-
-  pickMirror: () => {
-    /* 倾听同屏后不再走选卡镜认。文件仍留着，避免 Scene Record 崩。 */
   },
 
   writeMirror: (text) => {
@@ -247,6 +304,7 @@ export const useGame = create<GameState>((set, get) => ({
       suggestions: [],
       hits: [],
       waitingEcho: false,
+      waitingSince: Date.now(),
       session: "",
       exchange: initialExchange(),
     });
@@ -280,6 +338,7 @@ export const useGame = create<GameState>((set, get) => ({
           exchange: res.exchange ?? initialExchange(),
           recall: [{ who: "echo", text: greeting }],
           searching: false,
+          waitingSince: 0,
           searchNote: `到了 ${live.city}，${live.name} 读完了你的信`,
         });
       })
@@ -295,6 +354,7 @@ export const useGame = create<GameState>((set, get) => ({
           meter: emptyMeter(),
           recall: [{ who: "echo", text: local.greeting }],
           searching: false,
+          waitingSince: 0,
           searchNote: "线路不稳，改从本地故事里取一封相近的信",
         });
       });
@@ -312,6 +372,7 @@ export const useGame = create<GameState>((set, get) => ({
         round,
         recall,
         waitingEcho: true,
+        waitingSince: Date.now(),
         searchNote: "回信正在折回来",
       });
       void Promise.race([
@@ -330,12 +391,13 @@ export const useGame = create<GameState>((set, get) => ({
             session: res.session,
             meter: res.meter,
             waitingEcho: false,
+            waitingSince: 0,
             phase: "return",
           });
         })
         .catch(() => {
           if (get().phase !== "encounter") return;
-          set({ waitingEcho: false, phase: "return" });
+          set({ waitingEcho: false, waitingSince: 0, phase: "return" });
         });
       return;
     }
@@ -345,6 +407,7 @@ export const useGame = create<GameState>((set, get) => ({
       round,
       recall,
       waitingEcho: true,
+      waitingSince: Date.now(),
     });
     void Promise.race([
       runTurn({ data: agentPayload({ ...s, recall, round }, { playerLine: text }) }),
@@ -366,6 +429,7 @@ export const useGame = create<GameState>((set, get) => ({
           exchange: res.exchange ?? get().exchange,
           recall: [...get().recall, { who: "echo", text: spoken }],
           waitingEcho: false,
+          waitingSince: 0,
         });
       })
       .catch(() => {
@@ -373,13 +437,14 @@ export const useGame = create<GameState>((set, get) => ({
         const echo = get().echo;
         const line = (get().replies[round] || "我那晚也没睡。电脑还亮着。") as string;
         if (!echo) {
-          set({ waitingEcho: false });
+          set({ waitingEcho: false, waitingSince: 0 });
           return;
         }
         set({
           echo: { ...echo, replies: [...echo.replies, line] },
           recall: [...get().recall, { who: "echo", text: line }],
           waitingEcho: false,
+          waitingSince: 0,
         });
       });
   },
@@ -407,7 +472,21 @@ export const useGame = create<GameState>((set, get) => ({
       echoName: s.echo.name,
     });
     persistArchival(archival);
+    clearSnapshot();
     set({ journeys, archival, phase: "archive", reading: journey, leftFrom: null });
+  },
+
+  abortFlight: () => {
+    const s = get();
+    if (s.phase !== "flight") return;
+    set({
+      phase: "throw",
+      searching: false,
+      echo: null,
+      searchNote: "",
+      waitingEcho: false,
+      waitingSince: 0,
+    });
   },
 
   goArchive: () => {
@@ -447,6 +526,7 @@ export const useGame = create<GameState>((set, get) => ({
   },
 
   startNew: () => {
+    clearSnapshot();
     const tokens = seedTokens();
     set({
       phase: "orbit",
@@ -477,6 +557,7 @@ export const useGame = create<GameState>((set, get) => ({
       suggestions: [],
       hits: [],
       waitingEcho: false,
+      waitingSince: 0,
       session: "",
       scorch: 0,
       exchange: initialExchange(),
@@ -484,7 +565,10 @@ export const useGame = create<GameState>((set, get) => ({
     });
   },
   openJourney: (j) => set({ reading: j, phase: "archive" }),
-  setMutedFlag: (v) => set({ muted: v }),
+  setMutedFlag: (v) => {
+    persistMuted(v);
+    set({ muted: v });
+  },
   toggleJudge: () => {
     if (get().phase === "encounter") return;
     set({ judgeOpen: !get().judgeOpen });
@@ -493,3 +577,61 @@ export const useGame = create<GameState>((set, get) => ({
   arrive: () => set({ phase: "encounter", round: 0, judgeOpen: false }),
   markScorch: () => set({ scorch: Math.min(2, get().scorch + 1) as 0 | 1 | 2 }),
 }));
+
+/** 进行中旅程自动落盘：状态变动后防抖保存，切走页面时立即刷新。 */
+let snapshotTimer: number | undefined;
+
+function persistSnapshotNow() {
+  const s = useGame.getState();
+  if (s.phase === "title" || s.phase === "archive") {
+    clearSnapshot();
+    return;
+  }
+  saveSnapshot({
+    version: SNAP_VERSION,
+    createdAt: Date.now(),
+    phase: s.phase,
+    tokens: s.tokens,
+    fingerprint: s.fingerprint,
+    selectedMirror: s.selectedMirror,
+    personaHint: s.personaHint,
+    chips: s.chips,
+    letterChips: s.letterChips,
+    extraLine: s.extraLine,
+    folds: s.folds,
+    region: s.region,
+    throwPower: s.throwPower,
+    echo: s.echo,
+    searching: s.searching,
+    searchNote: s.searchNote,
+    round: s.round,
+    replies: s.replies,
+    chosenReplies: s.chosenReplies,
+    recall: s.recall,
+    waitingEcho: s.waitingEcho,
+    session: s.session,
+    core: s.core,
+    exchange: s.exchange,
+  });
+}
+
+function scheduleSnapshot() {
+  if (snapshotTimer !== undefined) return;
+  snapshotTimer = window.setTimeout(() => {
+    snapshotTimer = undefined;
+    persistSnapshotNow();
+  }, 400);
+}
+
+useGame.subscribe(() => scheduleSnapshot());
+
+if (typeof window !== "undefined") {
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) return;
+    if (snapshotTimer !== undefined) {
+      window.clearTimeout(snapshotTimer);
+      snapshotTimer = undefined;
+    }
+    persistSnapshotNow();
+  });
+}
