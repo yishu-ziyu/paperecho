@@ -12,7 +12,7 @@ import {
   seedTokens,
 } from "./emotions";
 import { buildJourney, fallbackEcho, letterFromChips } from "./kernel";
-import { loadJourneys, persistJourneys } from "./save";
+import { loadJourneys, persistHasSeenGuide, persistJourneys } from "./save";
 import type {
   CoreMemory,
   EchoPerson,
@@ -84,6 +84,9 @@ interface GameState {
   goThrow: () => void;
   arrive: () => void;
   markScorch: () => void;
+  guideOpen: boolean;
+  openGuide: () => void;
+  closeGuide: () => void;
 }
 
 const emptyMeter = (): TokenMeter => ({
@@ -172,6 +175,7 @@ export const useGame = create<GameState>((set, get) => ({
   session: "",
   scorch: 0,
   exchange: initialExchange(),
+  guideOpen: false,
 
   setTokens: (tokens) => set({ tokens, fingerprint: fingerprintOf(tokens) }),
 
@@ -492,4 +496,9 @@ export const useGame = create<GameState>((set, get) => ({
   goThrow: () => set({ phase: "throw" }),
   arrive: () => set({ phase: "encounter", round: 0, judgeOpen: false }),
   markScorch: () => set({ scorch: Math.min(2, get().scorch + 1) as 0 | 1 | 2 }),
+  openGuide: () => set({ guideOpen: true }),
+  closeGuide: () => {
+    persistHasSeenGuide(true);
+    set({ guideOpen: false });
+  },
 }));
