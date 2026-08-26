@@ -5,7 +5,10 @@ dist
 .tanstack
 .vercel
 .nitro
-.grok
+# .grok/*（而非 .grok）才能让下面的 negation 生效：目录本身被忽略时
+# git 不会进入它。app-env 是模板随库发布的默认配置，只放非密钥。
+.grok/*
+!.grok/app-env.json
 screenshots
 artifacts
 attachments
