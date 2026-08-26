@@ -91,7 +91,7 @@ function LoginPage() {
           <span className="clip-up">纸上的回声</span>
         </p>
         <p className="mt-5 font-hand text-lg leading-relaxed text-ink/65">
-          在深夜，把一句没说完的话交给世界。
+          未能说出口的，也能够被回应。
         </p>
 
         <div className="mx-auto mt-7 h-px w-24 bg-ink/15" />
