@@ -61,9 +61,9 @@
 
 ## 5. 待办清单（本会话 todo 的镜像）
 
-已完成(5)：死代码盘点 / 口径核对 / 死代码清理 / JudgePanel / 文档对齐。
+已完成(6)：死代码盘点 / 口径核对 / 死代码清理 / JudgePanel / 文档对齐 / #16 server fn 鉴权+限流（三 fn 挂 authMiddleware + agentRateLimit 固定窗口 10/60/10 每小时；超限 429 → store catch 回退本地故事卡，旅程不断；depcruise 豁免 agent/server.ts→auth/middleware 一条边）。
 进行中(2)：#6 turn 链记忆（等 B 确认）；#11 hasXai 改名 + session 减重 + avoidNames 死参数（顺手项）。
-待办(14)：#7 match 链 AI 产出上 UI（现在大半被 store 丢弃，AI 必要性议题）；#8 facts 管线取舍（turn/seal 的 remember 结果现被丢弃，用则接线、弃则删步省 token）；#9 meter 补记 remember 步；#10 step() 失败短路 + 日志；#12 命题审计；#13 镜子「选句+选人」捆绑；#14 Throw 区域选择意义弱；#15 12 故事×24 局重玩多样性验证；#16 server fn 鉴权/限流（AI key 裸奔）；#17 A1 崩溃安全存档（return 阶段关页即丢整局）；#18 A2 文案（已顺手完成）；#19 A3 meter 重置（已顺手完成）；#20 回归验证（typecheck/lint/build + 真 key 全流程一局 + J 面板数据）；#21 演示材料终审（README 九步 vs 实际 phase、评委讲解稿）。
+待办(13)：#7 match 链 AI 产出上 UI（现在大半被 store 丢弃，AI 必要性议题）；#8 facts 管线取舍（turn/seal 的 remember 结果现被丢弃，用则接线、弃则删步省 token）；#9 meter 补记 remember 步；#10 step() 失败短路 + 日志；#12 命题审计；#13 镜子「选句+选人」捆绑；#14 Throw 区域选择意义弱；#15 12 故事×24 局重玩多样性验证；#17 A1 崩溃安全存档（return 阶段关页即丢整局）；#18 A2 文案（已顺手完成）；#19 A3 meter 重置（已顺手完成）；#20 回归验证（typecheck/lint/build + 真 key 全流程一局 + J 面板数据）；#21 演示材料终审（README 九步 vs 实际 phase、评委讲解稿）。
 
 ## 6. 建议的下一步顺序（供新会话开场用）
 

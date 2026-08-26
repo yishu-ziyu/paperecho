@@ -18,13 +18,25 @@ module.exports = {
       to: { circular: true },
     },
 
-    /* ── 2. 游戏域与认证域双向隔离 ─────────────────────────── */
+    /* ── 2. 游戏域与认证域双向隔离 ───────────────────────────
+     * 唯一豁免：src/game/agent/server.ts 是 server fn 边界层
+     * （controller 角色），在那里挂 authMiddleware 是分层的标准形
+     * 态——auth 中间件本就为 server fn 设计。边界层之外，游戏内部
+     * （chains/store/kernel/UI）仍禁止感知认证。
+     */
     {
       name: "game-not-to-auth",
       comment: "游戏逻辑不感知认证。混入后每次 auth 变更都会波及游戏流程。",
       severity: "error",
-      from: { path: "^src/game/" },
+      from: { path: "^src/game/", pathNot: "^src/game/agent/server\\.ts$" },
       to: { path: "^src/lib/auth/" },
+    },
+    {
+      name: "agent-server-auth-surface",
+      comment: "边界层只准挂 authMiddleware，不准深挖 auth 内部模块。",
+      severity: "error",
+      from: { path: "^src/game/agent/server\\.ts$" },
+      to: { path: "^src/lib/auth/", pathNot: "^src/lib/auth/middleware\\.ts$" },
     },
     {
       name: "auth-not-to-game",

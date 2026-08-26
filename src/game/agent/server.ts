@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import { authMiddleware } from "@/lib/auth/middleware";
 import type {
   CoreMemory,
   EchoPerson,
@@ -9,6 +10,7 @@ import type {
 } from "../types";
 import type { ExchangeState } from "./exchange";
 import { initialExchange } from "./exchange";
+import { agentRateLimit } from "./guard";
 import type { NightInput } from "./types";
 
 export interface AgentPayload {
@@ -94,6 +96,7 @@ function asNight(data: AgentPayload): NightInput {
 }
 
 export const runMatch = createServerFn({ method: "POST" })
+  .middleware([authMiddleware, agentRateLimit("match")])
   .validator((input: AgentPayload) => input)
   .handler(async ({ data }): Promise<MatchResult> => {
     const { echoChain } = await import("./chains");
@@ -111,6 +114,7 @@ export const runMatch = createServerFn({ method: "POST" })
   });
 
 export const runTurn = createServerFn({ method: "POST" })
+  .middleware([authMiddleware, agentRateLimit("turn")])
   .validator((input: AgentPayload) => input)
   .handler(async ({ data }): Promise<TurnResult> => {
     const { echoChain } = await import("./chains");
@@ -127,6 +131,7 @@ export const runTurn = createServerFn({ method: "POST" })
   });
 
 export const runSeal = createServerFn({ method: "POST" })
+  .middleware([authMiddleware, agentRateLimit("seal")])
   .validator((input: AgentPayload) => input)
   .handler(async ({ data }): Promise<SealResult> => {
     const { echoChain } = await import("./chains");
