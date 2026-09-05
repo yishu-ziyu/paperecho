@@ -10,7 +10,7 @@ import { archiveStories, storyToPost } from "./pipeline/sources/local.ts";
 import { queriesOf } from "./pipeline/sources/live.ts";
 import { cleanOneLine } from "./exchange.ts";
 import { keepSpoken } from "./chains.ts";
-import { heuristicRespond, spokenDetails, staysOnThread } from "./pipeline/respond.ts";
+import { acceptLive, heuristicRespond, spokenDetails, staysOnThread } from "./pipeline/respond.ts";
 import { blobOfShadow, formatCaseHits, formatCaseHitsLive, gatherShadow, runAgentTool, type ToolCtx } from "./tools.ts";
 
 describe("match research via PostSource", () => {
@@ -161,6 +161,47 @@ describe("heuristicRespond", () => {
       userLine: "今晚睡不着。",
     });
     assert.equal(out.reply, "我也有一件，后来就没再动。");
+  });
+
+  it("fallback follows the current story layer", () => {
+    const shadow = {
+      handle: "回声",
+      voice: "短句",
+      materials: [
+        {
+          platform: "archive" as const,
+          emotion: ["tired" as const],
+          situation: "电脑亮着",
+          content: "今天电脑还亮着，群里没人回。",
+        },
+        {
+          platform: "archive" as const,
+          emotion: ["tired" as const],
+          situation: "后来没打开",
+          content: "后来那页我没再打开过。",
+        },
+      ],
+    };
+    const l1 = heuristicRespond({ shadow, userLine: "我被老板点名了。", speak: 1, mode: "full" });
+    const l3 = heuristicRespond({ shadow, userLine: "我被老板点名了。", speak: 3, mode: "full" });
+    assert.notEqual(l1.reply, l3.reply);
+    assert.match(l3.reply, /后来|没再/);
+    const emptyL3 = heuristicRespond({
+      shadow: { handle: "回声", voice: "", materials: [] },
+      userLine: "今晚睡不着。",
+      speak: 3,
+      mode: "full",
+    });
+    assert.equal(emptyL3.reply, "后来我也就没再打开过。");
+  });
+
+  it("keeps a parallel live line that does not repeat the player's object", () => {
+    const you = "抽屉我到现在都没再打开。";
+    const parallel = "我也把灯关了，茶已经凉了。";
+    assert.equal(staysOnThread(parallel, you), false);
+    assert.equal(acceptLive(parallel, you), true);
+    assert.equal(acceptLive("夜色像没拧紧的水龙头", you), false);
+    assert.equal(acceptLive("我懂你，你不是一个人", you), false);
   });
 
   it("drawer stays on the drawer, not the harbour lamps", () => {

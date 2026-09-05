@@ -28,14 +28,23 @@ export interface ExchangeAdvance {
   judgment: ExchangeJudgment;
 }
 
+/** seal 链两步各自允许的时间。游戏层放弃封信不得短于二者之和。 */
+export const SEAL_REMEMBER_TIMEOUT_MS = 20_000;
+export const SEAL_WRITE_TIMEOUT_MS = 25_000;
+export const SEAL_CLIENT_TIMEOUT_MS = SEAL_REMEMBER_TIMEOUT_MS + SEAL_WRITE_TIMEOUT_MS;
+
 const GENERIC =
-  /^(我懂|我也是|我也一样|一样|嗯+|好的|是啊|对啊|谢谢|抱抱|没事|好吧|哦+)([。！？.\s]*)$/;
+  /^(我懂|我也是|我也一样|一样|嗯+|好的|是啊|对啊|谢谢|抱抱|没事|好吧|哦+|我知道|我没事|我还好)(了|的)?([。！？.\s]*)$/;
 const ASK_THEM = /你(呢|怎么看|为什么|感觉怎么样|那边)/;
+const FEELING_ONLY =
+  /^我(觉得|感觉|真的|好)?(很难受|难受|难过|委屈|焦虑|好累|累|孤单|郁闷|生气|不开心|还好|没事|懂了|知道了)(一直.*)?$/;
 const OBJECT =
-  /灯|杯|车|门|窗|饭|手机|稿|图层|面包|地铁|冰箱|电视|客厅|指甲|原稿|清单|抽屉|外卖|天花板|便利贴|语音|群里/;
+  /灯|杯|车|门|窗|饭|手机|稿|图层|面包|地铁|冰箱|电视|客厅|指甲|原稿|清单|抽屉|外卖|天花板|便利贴|语音|群里|老板|消息|邮件|会议|闹钟|被子|钥匙|电梯|工位|同事|通知|已读|罚单|电脑|沙发|茶|截图|文件夹|票|店门口|聊天/;
 const ACTION =
-  /开着|坐了|洗了|划掉|掐|翻出来|点头|睡着|加班|预演|塞进|删了|回了/;
-const TIME_PLACE = /[0-9一二三四五六七八九十半两]+(次|分钟|小时|天|周|遍|层)|凌晨|下班|楼下|桌上/;
+  /开着|坐了|洗了|划掉|掐|翻出来|点头|睡着|加班|预演|塞进|删了|回了|点名|没回|打开|关了|压着|翻了|看了|站了|扣过|凉了|没动|发给|骂了|放鸽子|睡不着/;
+const TIME_PLACE =
+  /[0-9一二三四五六七八九十半两]+(次|分钟|小时|天|周|遍|层)|凌晨|下班|楼下|桌上|今天|今晚|昨天|早上|夜里|刚才|路上|公司/;
+const PASSIVE = /被.{1,12}了/;
 
 export function initialExchange(): ExchangeState {
   return { unlocked: 1, silentTurns: 0 };
@@ -72,6 +81,10 @@ export function acceptFelt(raw: string | undefined, previous = ""): string {
   return t;
 }
 
+function feelingOnly(t: string): boolean {
+  return FEELING_ONLY.test(t.replace(/[。！？.\s]/g, ""));
+}
+
 /**
  * 玩家这句是否算「新的、具体的、自己的真细节」。
  * 三要素缺一不可；缺了就不当作交换。
@@ -84,12 +97,14 @@ export function isNewPersonalDetail(
   const t = line.trim();
   if (t.length < 8) return false;
   if (GENERIC.test(t)) return false;
+  if (feelingOnly(t)) return false;
   if (ASK_THEM.test(t) && !/我/.test(t)) return false;
   if (priorPlayer.some((p) => tooClose(t, p))) return false;
   if (lastEcho && tooClose(t, lastEcho)) return false;
   const own = /我|咱/.test(t);
-  const specific = OBJECT.test(t) || ACTION.test(t) || TIME_PLACE.test(t) || t.length >= 18;
-  return own && specific;
+  const hasScene = OBJECT.test(t) || ACTION.test(t) || PASSIVE.test(t);
+  const longComplete = t.length >= 12 && /[了着过]/.test(t);
+  return own && (hasScene || longComplete);
 }
 
 export function advanceExchange(
@@ -133,6 +148,43 @@ export function advanceExchange(
     mode: "full",
     judgment: { new_detail: false, depth: prev.unlocked },
   };
+}
+
+/** L3 已经完全交出：这一句玩家开口直接封信。 */
+export function shouldSealNow(prev: ExchangeState): boolean {
+  return prev.unlocked >= 3;
+}
+
+/** 连续 3 轮静默刚软解锁：先让影子把该层说完，再封信。 */
+export function isSilentUnlock(prev: ExchangeState, step: ExchangeAdvance): boolean {
+  return !step.judgment.new_detail && step.state.unlocked > prev.unlocked;
+}
+
+export function fallbackReturnLetter(playerLine = ""): string {
+  const t = playerLine.trim();
+  return t ? `你那句「${t.slice(0, 16)}」我还留着。灯还开着。` : "灯还开着。你那句话我没扔。";
+}
+
+/** 兜底句按当前该讲的层取，不要永远用开场句。 */
+export function lineForLayer(
+  echo: { greeting?: string; replies?: string[] },
+  speak: StoryDepth,
+  mode: SpeakMode = "full",
+): string {
+  const raw = [echo.greeting, ...(echo.replies ?? [])]
+    .map((l) => l?.trim() ?? "")
+    .filter(Boolean);
+  const uniq: string[] = [];
+  for (const l of raw) {
+    if (!uniq.includes(l)) uniq.push(l);
+  }
+  const layered =
+    speak === 3 ? "后来我也就没再打开过。" : speak === 2 ? "那件事落在身上，我没跟人说。" : "我也有一件，后来就没再动。";
+  const line = uniq[speak - 1] || uniq.at(-1) || layered;
+  if (mode !== "half") return line;
+  const cut = line.split(/[，,]/)[0]?.trim() ?? line;
+  const body = cut.replace(/[。！？…]+$/, "");
+  return body.length >= 4 ? `${body}…` : line;
 }
 
 /** 注入 prompt 的层指令。禁止模型把层号写给玩家。 */

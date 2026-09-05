@@ -11,7 +11,7 @@ import type {
 import type { ExchangeState } from "./exchange";
 import { initialExchange } from "./exchange";
 import { agentRateLimit } from "./guard";
-import type { NightInput } from "./types";
+import type { NightInput, VoiceInput } from "./types";
 
 export interface AgentPayload {
   fingerprint: Fingerprint[];
@@ -28,6 +28,7 @@ export interface AgentPayload {
   avoidNames?: string[];
   session?: string;
   exchange?: ExchangeState;
+  days?: { date: string; text: string }[];
 }
 
 export interface MatchResult {
@@ -92,6 +93,7 @@ function asNight(data: AgentPayload): NightInput {
     avoidNames: data.avoidNames,
     session: unpackSession(data.session),
     exchange: data.exchange ?? initialExchange(),
+    days: data.days,
   };
 }
 
@@ -128,6 +130,14 @@ export const runTurn = createServerFn({ method: "POST" })
       meter: res.meter,
       exchange: res.exchange,
     };
+  });
+
+export const runVoice = createServerFn({ method: "POST" })
+  .validator((input: VoiceInput) => input)
+  .handler(async ({ data }): Promise<{ text: string }> => {
+    const { echoChain } = await import("./chains");
+    const text = await echoChain.voice(data);
+    return { text };
   });
 
 export const runSeal = createServerFn({ method: "POST" })

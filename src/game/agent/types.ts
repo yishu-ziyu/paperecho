@@ -7,6 +7,7 @@
  */
 import type {
   EchoPerson,
+  EmotionId,
   Fingerprint,
   MemoryRecord,
   RegionId,
@@ -49,6 +50,23 @@ export interface NightInput {
   session?: unknown[]; // 链运行标记账本（非 LLM 消息）
   /** 故事交换落闸（match 开场为 L1；turn 由本轮玩家话推进）。 */
   exchange?: ExchangeState;
+  /** 日子本：再开口前先读这些已经写下的日子。 */
+  days?: { date: string; text: string }[];
+}
+
+/** 补日子 / 离开后那件：把日子本、上次的话、今晚情绪交给同一条模型。 */
+export interface VoiceInput {
+  name: string;
+  city: string;
+  lastEcho: string;
+  lastYou: string;
+  lastEmotions: EmotionId[];
+  prev: string;
+  date?: string;
+  days?: { date: string; text: string }[];
+  letter?: string;
+  kind: "day" | "away" | "greet" | "turn";
+  timeoutMs?: number;
 }
 
 /** 链的最终产出。这是 game store 唯一需要关心的输出形状。 */

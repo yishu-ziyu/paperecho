@@ -18,9 +18,10 @@ export function letterFromChips(chips: string[], extra: string, mirror = ""): st
 export function fallbackEcho(
   fp: Fingerprint[],
   region: RegionId,
+  avoid: string[] = [],
 ): EchoPerson {
   const feels = ownedOf(fp, 0.3).map((f) => f.id) as EmotionId[];
-  return storyToEcho(matchStory(feels, region));
+  return storyToEcho(matchStory(feels, region, avoid));
 }
 
 export function newJourneyId(): string {

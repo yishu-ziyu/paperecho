@@ -34,11 +34,13 @@
  * 注明：已删除「只说自己 / 不安慰」这条铁律，允许适度共情，但守住上面 5 条质量线。
  */
 import { EMOTIONS } from "../../emotions.ts";
+import type { EmotionId } from "../../types.ts";
 import { llmApiKey, LLM_CONFIG } from "../config.ts";
 import { cleanOneLine, exchangeCue, type SpeakMode, type StoryDepth } from "../exchange.ts";
 import { parroted } from "../memory.ts";
 import type { EchoShadow } from "./persona.ts";
 import type { Post } from "./source.ts";
+import type { VoiceInput } from "../types.ts";
 
 /** 回应层的一次对话上下文。 */
 export interface TurnContext {
@@ -53,6 +55,8 @@ export interface TurnContext {
   /** 这一句影子该讲到的层（交换闸）。 */
   speak?: StoryDepth;
   mode?: SpeakMode;
+  /** 补日子/离开后那件：覆盖默认「对方刚说」模板，仍走同一条 llmReply。 */
+  prompt?: string;
 }
 
 /** 回应层的一次输出。 */
@@ -220,7 +224,7 @@ async function llmReply(ctx: TurnContext): Promise<string | null> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), ctx.timeoutMs ?? LLM_CONFIG.timeoutMs);
   const endpoint = llmEndpoint();
-  const user = buildUserPrompt(ctx);
+  const user = ctx.prompt ?? buildUserPrompt(ctx);
   if (LLM_CONFIG.api === "openai-completions") {
     const messages = endpoint.body.messages as { role: string; content: string }[];
     messages[1] = { role: "user", content: user };
@@ -334,10 +338,18 @@ function closeLine(s: string): string {
   return cleanOneLine(`${t}。`, 56);
 }
 
-function spokenScore(s: string, userLine: string): number {
+function layerFit(s: string, speak: StoryDepth): number {
+  const aftermath = /后来|到现在|没再|改了|还留|从此|再也|没打开过/;
+  const feeling = /感觉|身上|压着|心里|没敢|没跟人/;
+  if (speak === 3) return aftermath.test(s) ? 6 : 0;
+  if (speak === 2) return feeling.test(s) ? 6 : aftermath.test(s) ? 0 : 2;
+  return aftermath.test(s) ? 0 : 3;
+}
+
+function spokenScore(s: string, userLine: string, speak: StoryDepth): number {
   if (!s || parroted(s, userLine) || META.test(s)) return -100;
   if (LITERARY.test(s) || /^你/.test(s)) return -50;
-  let n = 0;
+  let n = layerFit(s, speak);
   if (CONCRETE.test(s)) n += 3;
   if (ACTION.test(s)) n += 3;
   if (/我/.test(s)) n += 2;
@@ -349,28 +361,42 @@ function spokenScore(s: string, userLine: string): number {
 }
 
 /** 从最近的那条素材里挑一句能当微信发的话。不要金句，不要「我也有过类似的」。 */
+function clipHalf(s: string): string {
+  const cut = s.split(/[，,]/)[0]?.trim() ?? s;
+  const body = cut.replace(/[。！？…]+$/, "");
+  return body.length >= 4 ? `${body}…` : s;
+}
+
+function fallbackForSpeak(speak: StoryDepth, mode: SpeakMode): string {
+  if (mode === "half") return "我也有一件，刚起了个头。";
+  if (speak === 2) return "那件事落在身上，我没跟人说。";
+  if (speak === 3) return "后来我也就没再打开过。";
+  return HUMAN_FALLBACK;
+}
+
 export function pickSpokenLine(
   materials: Post[],
   userLine: string,
   used: Iterable<string> = [],
+  speak: StoryDepth = 1,
+  mode: SpeakMode = "full",
 ): string {
   const banned = [...used].filter(Boolean);
   const needThread = objectsOf(userLine).length > 0;
+  let best: { line: string; score: number } | undefined;
   for (const post of rankedMaterials(materials, userLine)) {
     const postHits = !needThread || staysOnThread(`${post.content} ${post.situation}`, userLine);
-    const ranked = [...sentencesOf(post.content), post.situation.trim()]
-      .map((raw) => closeLine(raw))
-      .filter((line) => line && !banned.some((b) => parroted(line, b)))
-      .map((line) => ({ line, score: spokenScore(line, userLine) }))
-      .sort((a, b) => b.score - a.score);
-    const best = ranked.find((c) => {
-      if (c.score <= 0) return false;
-      if (!needThread) return true;
-      return staysOnThread(c.line, userLine) || postHits;
-    });
-    if (best) return best.line;
+    for (const raw of [...sentencesOf(post.content), post.situation.trim()]) {
+      const line = closeLine(raw);
+      if (!line || banned.some((b) => parroted(line, b))) continue;
+      if (needThread && !staysOnThread(line, userLine) && !postHits) continue;
+      const score = spokenScore(line, userLine, speak);
+      if (score <= 0) continue;
+      if (!best || score > best.score) best = { line, score };
+    }
   }
-  return "";
+  if (!best) return "";
+  return mode === "half" ? clipHalf(best.line) : best.line;
 }
 
 /** 给模型看的口语细节：按对方这句排序，丢掉剧场腔整段。 */
@@ -390,28 +416,127 @@ export function spokenDetails(materials: Post[], userLine: string, used: Iterabl
  */
 export function heuristicRespond(ctx: TurnContext): TurnOutput {
   const { shadow, userLine, history } = ctx;
+  const speak = ctx.speak ?? 1;
+  const mode = ctx.mode ?? "full";
   const used = [userLine, ...(history ?? []).map((h) => h.text)];
-  const line = pickSpokenLine(shadow.materials, userLine, used);
-  return { reply: line || HUMAN_FALLBACK, via: "archive" };
+  const line = pickSpokenLine(shadow.materials, userLine, used, speak, mode);
+  return { reply: line || fallbackForSpeak(speak, mode), via: "archive" };
 }
 
-/**
- * 回应层：优先真实 LLM（拿素材的具体细节说自己那件相似的事）；
- * 无 key / 网络错 / 超时 / 空输出时回退到 `heuristicRespond`。
- */
-function acceptLive(reply: string, userLine: string, materials: Post[]): boolean {
+/** 丢掉只留给真的不像回声：金句、咨询腔、复读玩家。不因漏写玩家物件词而丢。 */
+export function acceptLive(reply: string, userLine: string): boolean {
   if (!reply) return false;
   if (LITERARY.test(reply) || META.test(reply)) return false;
   if (parroted(reply, userLine)) return false;
-  if (staysOnThread(reply, userLine)) return true;
-  const post = rankedMaterials(materials, userLine)[0];
-  if (!post || !staysOnThread(`${post.content} ${post.situation}`, userLine)) return false;
-  const allowed = new Set([...objectsOf(userLine), ...objectsOf(`${post.content} ${post.situation}`)]);
-  return objectsOf(reply).every((o) => allowed.has(o));
+  if (/^你(应该|要|太|一定)|别想太多|会好的/.test(reply)) return false;
+  return true;
 }
 
 export async function respond(ctx: TurnContext): Promise<TurnOutput> {
   const llm = await llmReply(ctx);
-  if (llm && acceptLive(llm, ctx.userLine, ctx.shadow.materials)) return { reply: llm, via: "live" };
+  if (llm && acceptLive(llm, ctx.userLine)) return { reply: llm, via: "live" };
   return heuristicRespond(ctx);
+}
+
+function voicePrompt(input: VoiceInput): string {
+  const you = input.lastYou.trim();
+  const letter = input.letter?.trim() ?? "";
+  const feels = input.lastEmotions.join("、");
+  if (input.kind === "away") {
+    return [
+      you ? `对方最后说：${you}` : "",
+      letter ? `今晚信上：${letter}` : "",
+      feels ? `今晚情绪（不出口）：${feels}` : "",
+      `你上一句：${input.lastEcho}`,
+      "你们刚聊完。离开后你自己接着过一件事，不要想对方，不要自我介绍。一两句，≤56 字。",
+    ]
+      .filter(Boolean)
+      .join("\n");
+  }
+  if (input.kind === "greet") {
+    return [
+      you ? `对方上次说：${you}` : "",
+      letter ? `今晚对方折来：${letter}` : "",
+      feels ? `今晚情绪（不出口）：${feels}` : "",
+      `从你的日子本开口。不要自我介绍，不要说想对方，不要复述「${input.lastEcho}」。一两句，≤56 字。`,
+    ]
+      .filter(Boolean)
+      .join("\n");
+  }
+  if (input.kind === "turn") {
+    const dayLines = (input.days ?? [])
+      .slice(-5)
+      .map((d) => `${d.date} ${d.text}`)
+      .join("\n");
+    return [
+      you ? `对方刚说：${you}` : "",
+      letter && letter !== you ? `今晚信上：${letter}` : "",
+      feels ? `今晚情绪（不出口）：${feels}` : "",
+      input.lastEcho ? `你上一句：「${input.lastEcho}」。禁止原样重复这一句。` : "",
+      dayLines ? `日子本：\n${dayLines}` : "",
+      "接住对方刚说的这件事，说你一件平行的具体事。一两句，≤56 字。不要自我介绍，不要说想对方。",
+    ]
+      .filter(Boolean)
+      .join("\n");
+  }
+  return [
+    input.date ? `今天是 ${input.date}。` : "",
+    `上一页你写：${input.prev}`,
+    you ? `对方上次说：${you}` : "",
+    feels ? `今晚情绪（不出口）：${feels}` : "",
+    "写下你自己过的这一天。必须是新的一句，禁止原样照抄上一页。不是写给对方的信，不要想对方。一两句，≤56 字。",
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
+function voiceMaterials(input: VoiceInput): Post[] {
+  const emotions: EmotionId[] = input.lastEmotions;
+  const out: Post[] = [];
+  for (const d of input.days ?? []) {
+    if (!d.text.trim()) continue;
+    out.push({ platform: "daybook", content: d.text, emotion: emotions, situation: d.date });
+  }
+  if (input.lastEcho.trim()) {
+    out.push({
+      platform: "daybook",
+      content: input.lastEcho,
+      emotion: emotions,
+      situation: "上次开口",
+    });
+  }
+  if (input.prev.trim() && input.prev !== input.lastEcho) {
+    out.push({
+      platform: "daybook",
+      content: input.prev,
+      emotion: emotions,
+      situation: "上一页",
+    });
+  }
+  return out;
+}
+
+/** 补日子 / 离开后那件 / 再见面：同一条 llmReply。启发式不当他的一天。 */
+export async function voiceAsPerson(input: VoiceInput): Promise<TurnOutput> {
+  const prompt = voicePrompt(input);
+  const shadow: EchoShadow = {
+    handle: `${input.name}，在${input.city}`,
+    voice: "第一人称、短句、说具体物件、不说教。像微信，不写诗。",
+    materials: voiceMaterials(input),
+  };
+  const userLine =
+    input.kind === "day"
+      ? `写下${input.date ?? "今天"}你自己过的一天，不要照抄上一页。`
+      : input.kind === "turn"
+        ? input.letter?.trim() || input.lastYou.trim() || "接住对方刚说的这件事，不要复述上一句。"
+        : input.letter?.trim() || "接着你自己的日子开口，不要复述上一句。";
+  const llm = await llmReply({
+    shadow,
+    userLine,
+    prompt,
+    timeoutMs: input.timeoutMs,
+  });
+  const line = (llm ?? "").trim().slice(0, 56);
+  if (!line) return { reply: "", via: "archive" };
+  return { reply: line, via: "live" };
 }

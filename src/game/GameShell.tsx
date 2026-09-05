@@ -14,7 +14,9 @@ import { ReturnPhase } from "./phases/ReturnPhase";
 import { ThrowPhase } from "./phases/ThrowPhase";
 import { TitlePhase } from "./phases/TitlePhase";
 import { phaseFrame } from "./phaseMotion";
+import { pulseHeartbeat } from "./heartbeat";
 import { useGame } from "./store";
+import { speakDay } from "./voice";
 
 /**
  * Continuum: chrome may overlap, the craft morphs via layoutId.
@@ -47,8 +49,9 @@ export function GameShell() {
   }, []);
 
   useEffect(() => {
-    if (!import.meta.env.DEV) return;
     (window as Window & { __echoGame?: typeof useGame }).__echoGame = useGame;
+    void pulseHeartbeat(new Date(), useGame.getState().journeys, undefined, speakDay);
+    if (!import.meta.env.DEV) return;
     const jump = new URLSearchParams(window.location.search).get("phase");
     if (jump === "orbit") useGame.setState({ phase: "orbit" });
     if (jump === "throw") useGame.setState({ phase: "throw", folds: 2, region: null });

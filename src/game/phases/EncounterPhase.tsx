@@ -55,6 +55,7 @@ export function EncounterPhase() {
   const reply = useGame((s) => s.reply);
   const waiting = useGame((s) => s.waitingEcho);
   const waitingSince = useGame((s) => s.waitingSince);
+  const searchNote = useGame((s) => s.searchNote);
   const recall = useGame((s) => s.recall);
   const scorch = useGame((s) => s.scorch);
   const exchange = useGame((s) => s.exchange);
@@ -101,7 +102,7 @@ export function EncounterPhase() {
   }, [recall, waiting, reduce]);
 
   const firstEchoIndex = recall.findIndex((t) => t.who === "echo");
-  const sealing = waiting && round >= 3;
+  const sealing = waiting && searchNote.includes("回信正在折");
   const showWait = waiting && !sealing && firstEchoIndex < 0;
   const elapsed = useElapsed(waiting ? waitingSince : 0);
   const waited = elapsed > 1 ? `已等 ${elapsed} 秒` : null;

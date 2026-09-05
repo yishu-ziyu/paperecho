@@ -218,19 +218,25 @@ export function matchStoriesTagged(
 export function matchStory(
   feels: EmotionId[],
   region: RegionId,
+  avoid: string[] = [],
 ): Story {
-  let best = STORIES[0];
-  let score = -1;
-  for (const s of STORIES) {
-    const overlap = s.feels.filter((f) => feels.includes(f)).length;
-    const bonus = s.region === region ? 1.4 : 0;
-    const n = overlap * 2 + bonus;
-    if (n > score) {
-      score = n;
-      best = s;
+  const skip = new Set(avoid.filter(Boolean));
+  const pick = (useAvoid: boolean) => {
+    let best: Story | undefined;
+    let score = -1;
+    for (const s of STORIES) {
+      if (useAvoid && skip.has(s.name)) continue;
+      const overlap = s.feels.filter((f) => feels.includes(f)).length;
+      const bonus = s.region === region ? 1.4 : 0;
+      const n = overlap * 2 + bonus;
+      if (n > score) {
+        score = n;
+        best = s;
+      }
     }
-  }
-  return best;
+    return best;
+  };
+  return pick(true) ?? pick(false) ?? STORIES[0]!;
 }
 
 export function storyToEcho(story: Story): import("./types").EchoPerson {

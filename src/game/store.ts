@@ -1,5 +1,13 @@
 import { create } from "zustand";
-import { initialExchange, type ExchangeState } from "./agent/exchange";
+import {
+  advanceExchange,
+  fallbackReturnLetter,
+  initialExchange,
+  isSilentUnlock,
+  SEAL_CLIENT_TIMEOUT_MS,
+  shouldSealNow,
+  type ExchangeState,
+} from "./agent/exchange";
 import { applyFacts, factsOf, keepPlayerFacts, loadArchival, ownLine, persistArchival } from "./agent/memory";
 import { runMatch, runSeal, runTurn } from "./agent/server";
 import type { AgentPayload } from "./agent/server";
@@ -11,6 +19,22 @@ import {
   replyPool,
   seedTokens,
 } from "./emotions";
+import {
+  companionFromJourney,
+  journeyForName,
+  lockedEchoForMatch,
+  makeCompanion,
+  rememberNight,
+} from "./companion";
+import {
+  loadDaybook,
+  nightLine,
+  openingLine,
+  pulseHeartbeat,
+  recordTalk,
+  persistDaybook,
+  todayStamp,
+} from "./heartbeat";
 import { buildJourney, fallbackEcho, letterFromChips } from "./kernel";
 import {
   clearSnapshot,
@@ -23,6 +47,7 @@ import {
   SNAP_VERSION,
   type JourneySnapshot,
 } from "./save";
+import { speakAway, speakDay, speakGreet, speakTurn } from "./voice";
 import type {
   CoreMemory,
   EchoPerson,
@@ -72,6 +97,7 @@ interface GameState {
   scorch: 0 | 1 | 2;
   exchange: ExchangeState;
   waitingSince: number;
+  seekName: string | null;
   setTokens: (tokens: TokenPos[]) => void;
   commitOrbit: () => void;
   writeMirror: (text: string) => void;
@@ -89,6 +115,7 @@ interface GameState {
   goArchive: () => void;
   goBack: () => void;
   startNew: () => void;
+  seekPerson: (name: string) => void;
   openJourney: (j: Journey) => void;
   setMutedFlag: (v: boolean) => void;
   toggleJudge: () => void;
@@ -128,7 +155,7 @@ function agentPayload(
     session?: string;
     exchange?: ExchangeState;
   },
-  extra: { playerLine?: string } = {},
+  extra: { playerLine?: string; days?: { date: string; text: string }[] } = {},
 ): AgentPayload {
   return {
     fingerprint: s.fingerprint,
@@ -145,6 +172,7 @@ function agentPayload(
     avoidNames: s.journeys.map((j) => j.echo.name).filter(Boolean).slice(0, 8),
     session: s.session ?? "",
     exchange: s.exchange ?? initialExchange(),
+    days: extra.days ?? (s.echo?.name ? loadDaybook(undefined, s.echo.name)?.days : undefined),
   };
 }
 
@@ -181,7 +209,7 @@ function resumeOf(snap: JourneySnapshot | null): Partial<GameState> {
     return { ...base, phase: "throw", searching: false, echo: null, searchNote: "", waitingSince: 0 };
   }
   if (snap.phase === "encounter" && snap.waitingEcho) {
-    if (snap.round >= 3) {
+    if (snap.exchange && shouldSealNow(snap.exchange)) {
       return { ...base, phase: "return", waitingEcho: false, waitingSince: 0 };
     }
     return { ...base, waitingEcho: false, waitingSince: 0 };
@@ -232,6 +260,7 @@ export const useGame = create<GameState>((set, get) => ({
   scorch: 0,
   exchange: initialExchange(),
   waitingSince: 0,
+  seekName: null,
   ...resumeOf(savedSnapshot),
 
   setTokens: (tokens) => set({ tokens, fingerprint: fingerprintOf(tokens) }),
@@ -292,6 +321,10 @@ export const useGame = create<GameState>((set, get) => ({
     const s = get();
     const dest = s.region ?? "east";
     const archival = loadArchival();
+    const seekName = s.seekName;
+    const locked = lockedEchoForMatch(s.journeys, seekName);
+    const lastNight = locked ? journeyForName(s.journeys, locked.name) : undefined;
+    const metNames = s.journeys.map((j) => j.echo.name).filter(Boolean);
     set({
       throwPower: power,
       phase: "flight",
@@ -307,87 +340,144 @@ export const useGame = create<GameState>((set, get) => ({
       waitingSince: Date.now(),
       session: "",
       exchange: initialExchange(),
+      seekName: null,
     });
     const letter = letterFromChips(s.letterChips, s.extraLine, s.selectedMirror ?? "");
-    const local = fallbackEcho(s.fingerprint, dest);
-    void Promise.race([
-      runMatch({
-        data: {
-          ...agentPayload({ ...s, archival, session: "", echo: null }),
-          letter,
-          region: dest,
-          echo: null,
-        },
-      }),
-      new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error("timeout")), 22000),
-      ),
-    ])
-      .then((res) => {
+    void (async () => {
+      const book = locked
+        ? await pulseHeartbeat(new Date(), s.journeys, undefined, speakDay, locked.name)
+        : null;
+      const local = locked ?? fallbackEcho(s.fingerprint, dest, metNames);
+      try {
+        const res = await Promise.race([
+          runMatch({
+            data: {
+              ...agentPayload(
+                {
+                  ...s,
+                  archival,
+                  session: "",
+                  echo: locked,
+                  recall: lastNight?.transcript ?? [],
+                },
+                { days: book?.days },
+              ),
+              letter,
+              region: dest,
+              echo: locked,
+              avoidNames: metNames,
+            },
+          }),
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error("timeout")), 40000),
+          ),
+        ]);
         if (get().phase !== "flight") return;
         sfxMatch();
         const live = res.echo;
-        const greeting = live.greeting?.trim() || local.greeting;
+        const greeting = openingLine(
+          live.greeting,
+          book,
+          lastNight ? companionFromJourney(lastNight).lastEcho : local.greeting,
+        );
+        const grown = applyFacts(archival, res.facts, {
+          emotions: ownedOf(s.fingerprint, 0.3).map((f) => f.id),
+          region: dest,
+          echoName: locked?.name ?? live.name,
+        });
+        persistArchival(grown);
         set({
-          echo: { ...live, greeting },
+          echo: { ...live, name: locked?.name ?? live.name, city: locked?.city ?? live.city, greeting },
           core: res.core,
+          archival: grown,
           suggestions: [],
           hits: res.hits,
           meter: res.meter,
           session: res.session,
           exchange: res.exchange ?? initialExchange(),
-          recall: [{ who: "echo", text: greeting }],
+          recall: greeting.trim() ? [{ who: "echo", text: greeting }] : [],
           searching: false,
           waitingSince: 0,
           searchNote: `到了 ${live.city}，${live.name} 读完了你的信`,
         });
-      })
-      .catch(() => {
+      } catch {
         if (get().phase !== "flight") return;
+        const companion = lastNight ? companionFromJourney(lastNight) : null;
+        const greeted = locked
+          ? await speakGreet({
+              name: locked.name,
+              city: locked.city,
+              lastEcho: companion?.lastEcho || "",
+              lastYou: companion?.lastYou || "",
+              lastEmotions: companion?.lastEmotions ?? [],
+              letter,
+              days: book?.days,
+            })
+          : null;
+        const greeting = openingLine(greeted, book, companion?.lastEcho || local.greeting);
+        const echo = { ...local, greeting };
         set({
-          echo: local,
+          echo,
           core: {
             human: "",
-            persona: `你是${local.name}，在${local.city}。`,
+            persona: companion
+              ? `你是${echo.name}，在${echo.city}。你还是上次那个人。离开后你自己过了：「${companion.awayThing}」。`
+              : `你是${echo.name}，在${echo.city}。`,
           },
           suggestions: [],
           meter: emptyMeter(),
-          recall: [{ who: "echo", text: local.greeting }],
+          recall: greeting.trim() ? [{ who: "echo", text: greeting }] : [],
           searching: false,
           waitingSince: 0,
-          searchNote: "线路不稳，改从本地故事里取一封相近的信",
+          searchNote: companion
+            ? `到了 ${echo.city}，${echo.name} 读完了你的信`
+            : "线路不稳，改从本地故事里取一封相近的信",
         });
-      });
+      }
+    })();
   },
 
   reply: (text) => {
     const s = get();
     if (s.waitingEcho) return;
+    const priorPlayer = s.recall.filter((t) => t.who === "you").map((t) => t.text);
+    const lastEcho = s.recall.filter((t) => t.who === "echo").at(-1)?.text ?? "";
+    const prevEx = s.exchange;
+    const step = advanceExchange(prevEx, text, priorPlayer, lastEcho);
     const round = s.round + 1;
     const chosen = [...s.chosenReplies, text];
     const recall = [...s.recall, { who: "you" as const, text }];
-    if (round >= 3) {
-      set({
-        chosenReplies: chosen,
-        round,
-        recall,
-        waitingEcho: true,
-        waitingSince: Date.now(),
-        searchNote: "回信正在折回来",
-      });
+    const silentUnlock = isSilentUnlock(prevEx, step);
+
+    const beginSeal = () => {
+      set({ waitingEcho: true, waitingSince: Date.now(), searchNote: "回信正在折回来" });
+      const cur = get();
       void Promise.race([
-        runSeal({ data: agentPayload({ ...s, recall, round }, { playerLine: text }) }),
+        runSeal({ data: agentPayload(cur, { playerLine: text }) }),
         new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error("timeout")), 14000),
+          setTimeout(() => reject(new Error("timeout")), SEAL_CLIENT_TIMEOUT_MS),
         ),
       ])
         .then((res) => {
           if (get().phase !== "encounter") return;
           const echo = get().echo;
           if (!echo) return;
-          const nextEcho = { ...echo, returnLetter: ownLine(res.returnLetter, [echo.returnLetter, echo.greeting], get().archival) };
+          const fallback = fallbackReturnLetter(text);
+          const base = get();
+          const grown = applyFacts(base.archival, res.facts, {
+            emotions: ownedOf(base.fingerprint, 0.3).map((f) => f.id),
+            region: base.region ?? "east",
+            echoName: echo.name,
+          });
+          persistArchival(grown);
           set({
-            echo: nextEcho,
+            echo: {
+              ...echo,
+              returnLetter: ownLine(res.returnLetter || fallback, [fallback, echo.greeting], base.archival, [
+                echo.returnLetter,
+              ]),
+            },
+            archival: grown,
             session: res.session,
             meter: res.meter,
             waitingEcho: false,
@@ -397,8 +487,29 @@ export const useGame = create<GameState>((set, get) => ({
         })
         .catch(() => {
           if (get().phase !== "encounter") return;
-          set({ waitingEcho: false, waitingSince: 0, phase: "return" });
+          const echo = get().echo;
+          if (!echo) {
+            set({ waitingEcho: false, waitingSince: 0 });
+            return;
+          }
+          set({
+            echo: { ...echo, returnLetter: fallbackReturnLetter(text) },
+            waitingEcho: false,
+            waitingSince: 0,
+            phase: "return",
+          });
         });
+    };
+
+    if (shouldSealNow(prevEx)) {
+      set({
+        chosenReplies: chosen,
+        round,
+        recall,
+        waitingEcho: true,
+        searchNote: "回信正在折回来",
+      });
+      beginSeal();
       return;
     }
 
@@ -410,42 +521,76 @@ export const useGame = create<GameState>((set, get) => ({
       waitingSince: Date.now(),
     });
     void Promise.race([
-      runTurn({ data: agentPayload({ ...s, recall, round }, { playerLine: text }) }),
+      runTurn({ data: agentPayload({ ...s, recall, round, exchange: prevEx }, { playerLine: text }) }),
       new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error("timeout")), 12000),
+        setTimeout(() => reject(new Error("timeout")), 40000),
       ),
     ])
-      .then((res) => {
+      .then(async (res) => {
         if (get().phase !== "encounter") return;
         const echo = get().echo;
         if (!echo) return;
-        const spoken = res.spoken.trim() || echo.greeting;
+        const book = loadDaybook(undefined, echo.name);
+        let spoken = nightLine(res.spoken, lastEcho, book);
+        if (!spoken) {
+          const again = await speakTurn({
+            name: echo.name,
+            city: echo.city,
+            lastEcho,
+            lastYou: text,
+            lastEmotions: ownedOf(get().fingerprint).map((f) => f.id),
+            letter: text,
+            days: book?.days,
+          });
+          spoken = nightLine(again, lastEcho, book);
+        }
+        if (!spoken) {
+          set({ waitingEcho: false });
+          return;
+        }
+        const base = get();
+        const grown = applyFacts(base.archival, res.facts, {
+          emotions: ownedOf(base.fingerprint, 0.3).map((f) => f.id),
+          region: base.region ?? "east",
+          echoName: echo.name,
+        });
+        persistArchival(grown);
         set({
           echo: { ...echo, replies: [...echo.replies, spoken] },
+          archival: grown,
           suggestions: [],
           hits: res.hits,
           meter: res.meter,
           session: res.session,
-          exchange: res.exchange ?? get().exchange,
+          exchange: res.exchange ?? step.state,
           recall: [...get().recall, { who: "echo", text: spoken }],
-          waitingEcho: false,
-          waitingSince: 0,
+          waitingEcho: silentUnlock,
+          waitingSince: silentUnlock ? Date.now() : 0,
+          searchNote: silentUnlock ? "回信正在折回来" : get().searchNote,
         });
+        if (silentUnlock) beginSeal();
       })
       .catch(() => {
         if (get().phase !== "encounter") return;
         const echo = get().echo;
-        const line = (get().replies[round] || "我那晚也没睡。电脑还亮着。") as string;
         if (!echo) {
           set({ waitingEcho: false, waitingSince: 0 });
           return;
         }
+        const spoken = nightLine("", lastEcho, loadDaybook(undefined, echo.name));
+        if (!spoken) {
+          set({ waitingEcho: false });
+          return;
+        }
         set({
-          echo: { ...echo, replies: [...echo.replies, line] },
-          recall: [...get().recall, { who: "echo", text: line }],
-          waitingEcho: false,
-          waitingSince: 0,
+          echo: { ...echo, replies: [...echo.replies, spoken] },
+          exchange: step.state,
+          recall: [...get().recall, { who: "echo", text: spoken }],
+          waitingEcho: silentUnlock,
+          waitingSince: silentUnlock ? Date.now() : 0,
+          searchNote: silentUnlock ? "回信正在折回来" : get().searchNote,
         });
+        if (silentUnlock) beginSeal();
       });
   },
 
@@ -453,18 +598,63 @@ export const useGame = create<GameState>((set, get) => ({
     const s = get();
     if (!s.echo || !s.region) return;
     const letter = letterFromChips(s.letterChips, s.extraLine, s.selectedMirror ?? "");
+    const grown = makeCompanion({
+      echo: s.echo,
+      transcript: s.recall,
+      fingerprint: ownedOf(s.fingerprint),
+      letter,
+    });
+    const remembered = rememberNight({
+      echo: s.echo,
+      transcript: s.recall,
+      fingerprint: ownedOf(s.fingerprint),
+      letter,
+    });
     const journey = buildJourney({
       fingerprint: ownedOf(s.fingerprint),
       mirror: s.selectedMirror ?? "",
       letter,
       chips: s.letterChips,
       region: s.region,
-      echo: s.echo,
+      echo: remembered.echo,
       transcript: s.recall,
-      returnLetter: s.echo.returnLetter,
+      returnLetter: remembered.echo.returnLetter,
+      awayThing: remembered.awayThing,
     });
     const journeys = [journey, ...s.journeys].slice(0, 24);
     persistJourneys(journeys);
+    const companion = makeCompanion({
+      echo: remembered.echo,
+      transcript: s.recall,
+      fingerprint: ownedOf(s.fingerprint),
+      letter,
+      awayThing: remembered.awayThing,
+    });
+    const talk = {
+      name: companion.name,
+      city: companion.city,
+      lastEcho: companion.lastEcho,
+      lastYou: companion.lastYou,
+      lastEmotions: companion.lastEmotions,
+      page: remembered.awayThing,
+    };
+    void recordTalk(loadDaybook(undefined, companion.name), talk, todayStamp(), speakDay).then(
+      persistDaybook,
+    );
+    void speakAway({
+      name: grown.name,
+      city: grown.city,
+      lastEcho: grown.lastEcho,
+      lastYou: grown.lastYou,
+      lastEmotions: grown.lastEmotions,
+      letter,
+      days: loadDaybook(undefined, grown.name)?.days,
+    }).then((spoken) => {
+      if (!spoken) return;
+      void recordTalk(loadDaybook(undefined, companion.name), { ...talk, page: spoken }, todayStamp()).then(
+        persistDaybook,
+      );
+    });
     const playerBits = keepPlayerFacts([], [letter, s.extraLine, ...s.letterChips, ...s.chosenReplies]);
     const archival = applyFacts(s.archival, playerBits, {
       emotions: ownedOf(s.fingerprint, 0.3).map((f) => f.id),
@@ -562,7 +752,13 @@ export const useGame = create<GameState>((set, get) => ({
       scorch: 0,
       exchange: initialExchange(),
       judgeOpen: false,
+      seekName: null,
     });
+  },
+  seekPerson: (name) => {
+    get().startNew();
+    const who = name.trim();
+    if (who) set({ seekName: who });
   },
   openJourney: (j) => set({ reading: j, phase: "archive" }),
   setMutedFlag: (v) => {

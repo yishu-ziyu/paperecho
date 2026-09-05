@@ -89,6 +89,8 @@ export interface EchoPerson {
   replies: string[];
   returnLetter: string;
   source: "live" | "archive";
+  /** 离开之后他自己过的一件事。再见面时带着。 */
+  awayThing?: string;
 }
 
 export interface Journey {
@@ -102,6 +104,8 @@ export interface Journey {
   echo: EchoPerson;
   transcript: { who: "you" | "echo"; text: string }[];
   returnLetter: string;
+  /** 这局离开后他长出的一件事。下一晚读回。 */
+  awayThing?: string;
 }
 
 export interface TokenMeter {

@@ -15,16 +15,30 @@
  */
 import { Agent, type AgentMessage, type AgentTool } from "@earendil-works/pi-agent-core";
 import { Type, createModels } from "@earendil-works/pi-ai";
+import { echoFromCompanion, makeCompanion } from "../companion.ts";
+import { isCannedDay, nightLine, openingLine, type Daybook } from "../heartbeat.ts";
 import { fallbackEcho } from "../kernel.ts";
 import type { EchoPerson, TokenMeter } from "../types.ts";
 import { AGENT_MODEL, llmApiKey, llmProvider, LLM_CONFIG } from "./config.ts";
 import { emptyMeter, hasApiKey } from "./llm.ts";
-import { factsOf, isCompleteFact, ownLine, perceptionOf, renderBlocks, stolenVoice } from "./memory.ts";
+import { factsOf, isCompleteFact, ownLine, parroted, perceptionOf, renderBlocks, stolenVoice } from "./memory.ts";
 import type { EchoShadow } from "./pipeline/persona.ts";
+import type { Post } from "./pipeline/source.ts";
 import { blobOfShadow, gatherShadow, runAgentTool, type ToolCtx } from "./tools.ts";
-import { acceptFelt, advanceExchange, cleanOneLine, initialExchange, type SpeakMode, type StoryDepth } from "./exchange.ts";
-import type { ExchangeState } from "./exchange.ts";
-import type { NightInput, NightResult, RecallItem } from "./types.ts";
+import {
+  acceptFelt,
+  advanceExchange,
+  cleanOneLine,
+  fallbackReturnLetter,
+  initialExchange,
+  lineForLayer,
+  SEAL_REMEMBER_TIMEOUT_MS,
+  SEAL_WRITE_TIMEOUT_MS,
+  type ExchangeState,
+  type SpeakMode,
+  type StoryDepth,
+} from "./exchange.ts";
+import type { NightInput, NightResult, RecallItem, VoiceInput } from "./types.ts";
 
 /** 人设与回应规范：所有步骤共用的产品约束。 */
 const RULES = `你是深夜还没睡的一个普通人。像微信，一两句纯口语。
@@ -162,7 +176,7 @@ interface ChainRuntime {
 }
 
 function makeRuntime(input: NightInput): ChainRuntime {
-  const local = input.echo ?? fallbackEcho(input.fingerprint, input.region);
+  const local = input.echo ?? fallbackEcho(input.fingerprint, input.region, input.avoidNames);
   const perception = perceptionOf(
     input.fingerprint,
     input.letter,
@@ -171,9 +185,15 @@ function makeRuntime(input: NightInput): ChainRuntime {
     input.playerPersona ?? "",
   );
   const live = {
-    persona:
-      input.corePersona ||
-      (input.echo ? `你是${input.echo.name}，在${input.echo.city}。${input.echo.greeting}` : ""),
+    persona: input.days?.length && input.echo
+      ? `你是${input.echo.name}，在${input.echo.city}。先读你的日子本，从这些日子开口，不要自我介绍，不要说想对方。\n${input.days
+          .slice(-5)
+          .map((d) => `${d.date} ${d.text}`)
+          .join("\n")}`
+      : input.echo?.awayThing
+      ? `你是${input.echo.name}，在${input.echo.city}。你还是上次那个人。离开后你自己过了：「${input.echo.awayThing}」。今晚接着做你自己，不安慰。`
+      : input.corePersona ||
+        (input.echo ? `你是${input.echo.name}，在${input.echo.city}。${input.echo.greeting}` : ""),
     facts: factsOf(input.archival),
   };
   const ctx: ToolCtx = {
@@ -211,14 +231,14 @@ async function speakFromMaterials(
   rt: ChainRuntime,
   userLine: string,
   history: RecallItem[] | undefined,
-  fallback: string,
+  _fallback: string,
   timeoutMs: number,
   speak: StoryDepth = 1,
   mode: SpeakMode = "full",
 ): Promise<{ text: string; via: TokenMeter["via"] }> {
   const shadow = rt.shadow;
   if (!shadow?.materials.length) {
-    return { text: fallback, via: "archive" };
+    return { text: "", via: "archive" };
   }
   const { respond } = await import("./pipeline/respond.ts");
   const out = await respond({
@@ -229,14 +249,40 @@ async function speakFromMaterials(
     speak,
     mode,
   });
-  return {
-    text: keepSpoken(out.reply, fallback, rt.input.archival, [
-      userLine,
-      rt.input.letter,
-      rt.input.mirror,
-    ]),
-    via: out.via === "live" ? "live" : "archive",
-  };
+  const priorEcho = (history ?? []).filter((h) => h.who === "echo").map((h) => h.text);
+  if (out.via !== "live") {
+    return { text: "", via: "archive" };
+  }
+  const text = keepSpoken(out.reply, "", rt.input.archival, [
+    userLine,
+    rt.input.letter,
+    rt.input.mirror,
+    ...priorEcho,
+  ]);
+  if (text && !priorEcho.some((p) => parroted(text, p))) {
+    return { text, via: "live" };
+  }
+  const live = (out.reply ?? "").trim();
+  if (live && !priorEcho.some((p) => parroted(live, p))) {
+    return { text: live.slice(0, 56), via: "live" };
+  }
+  return { text: "", via: "live" };
+}
+
+const VOICE_CANNED = new Set([
+  "我也有一件，后来就没再动。",
+  "我也有一件，刚起了个头。",
+  "那件事落在身上，我没跟人说。",
+  "后来我也就没再打开过。",
+]);
+
+function liveOrPrev(text: string, prev: string): string {
+  const line = text.trim().slice(0, 56);
+  if (!line || VOICE_CANNED.has(line) || isCannedDay(line) || /想你|接住|加油|不是一个人/.test(line)) {
+    const fallback = prev.trim().slice(0, 56);
+    return isCannedDay(fallback) ? "" : fallback;
+  }
+  return line;
 }
 
 function makeRememberTool(rt: ChainRuntime): AgentTool {
@@ -316,19 +362,119 @@ function fallbackFor(kind: "match" | "turn" | "seal", rt: ChainRuntime): NightRe
 async function runMatchChain(input: NightInput): Promise<NightResult> {
   const rt = makeRuntime(input);
   const opened: ExchangeState = initialExchange();
+  const returning = Boolean(
+    input.echo?.name && (input.echo.awayThing || input.recall?.some((t) => t.who === "echo")),
+  );
 
   await researchStep("match", rt);
+  if (returning && input.echo) {
+    const companion = makeCompanion({
+      echo: input.echo,
+      transcript: input.recall,
+      fingerprint: input.fingerprint,
+      letter: input.letter,
+      awayThing: input.echo.awayThing,
+    });
+    const days = input.days ?? [];
+    const extra = [
+      ...days.slice(-8).map((d) => ({
+        platform: "daybook",
+        content: d.text,
+        emotion: companion.lastEmotions,
+        situation: d.date,
+      })),
+      companion.lastEcho
+        ? {
+            platform: "daybook",
+            content: companion.lastEcho,
+            emotion: companion.lastEmotions,
+            situation: "上次开口",
+          }
+        : null,
+    ].filter((row): row is Post => Boolean(row?.content));
+    if (rt.shadow) {
+      rt.shadow = {
+        ...rt.shadow,
+        handle: `${companion.name}，在${companion.city}`,
+        materials: [...extra, ...rt.shadow.materials].slice(0, 8),
+      };
+    } else {
+      rt.shadow = {
+        handle: `${companion.name}，在${companion.city}`,
+        voice: "第一人称、短句、说具体物件、不说教。",
+        materials: extra,
+      };
+    }
+    const { voiceAsPerson } = await import("./pipeline/respond.ts");
+    const greet = await voiceAsPerson({
+      kind: "greet",
+      name: companion.name,
+      city: companion.city,
+      lastEcho: companion.lastEcho,
+      lastYou: companion.lastYou,
+      lastEmotions: companion.lastEmotions,
+      prev: days.at(-1)?.text || companion.lastEcho,
+      days,
+      letter: input.letter,
+      timeoutMs: 28000,
+    });
+    const book: Daybook = {
+      name: companion.name,
+      city: companion.city,
+      lastEcho: companion.lastEcho,
+      lastYou: companion.lastYou,
+      lastEmotions: companion.lastEmotions,
+      page: days.at(-1)?.text || companion.awayThing,
+      days,
+      lastWritten: days.at(-1)?.date || "",
+    };
+    const spoken = openingLine(greet.via === "live" ? greet.reply : "", book, companion.lastEcho);
+    const builtEcho = echoFromCompanion(companion, spoken);
+    const dayLines = days
+      .slice(-5)
+      .map((d) => `${d.date} ${d.text}`)
+      .join("\n");
+    return {
+      echo: builtEcho,
+      spoken,
+      suggestions: [],
+      facts: rt.ctx.remembered.filter((f) => isCompleteFact(f) && !/玩家靠近|今晚靠近/.test(f)),
+      hits: rt.hits.slice(-4),
+      session: [
+        ...(input.session ?? []),
+        { chain: "match", steps: ["research", "return"] },
+      ],
+      persona: dayLines
+        ? `你是${builtEcho.name}，在${builtEcho.city}。先读你的日子本，从这些日子开口，不要自我介绍，不要说想对方。上次你说「${companion.lastEcho}」。对方上次说「${companion.lastYou}」。\n${dayLines}`
+        : `你是${builtEcho.name}，在${builtEcho.city}。上次说过「${companion.lastEcho}」。`,
+      human: rt.live.facts.join("\n"),
+      meter: {
+        ...emptyMeter("match", greet.via === "live" ? "live" : "archive"),
+        model: greet.via === "live" ? AGENT_MODEL.id : "archive",
+      },
+      exchange: opened,
+      speak: 1,
+      speakMode: "full",
+    };
+  }
+
   const spokenRes = await speakFromMaterials(
     rt,
     input.letter || input.mirror,
     undefined,
-    "十七稿我打成一包，塞进抽屉最下层。",
+    rt.local.greeting,
     14000,
     1,
     "full",
   );
-  const spoken = spokenRes.text;
   const via = spokenRes.via;
+  let spoken = via === "live" ? liveOrPrev(spokenRes.text, "") : "";
+  if (!spoken || (spoken === "十七稿我打成一包，塞进抽屉最下层。" && rt.draft.name !== "林予")) {
+    spoken = rt.local.greeting;
+  }
+  if (spoken === "十七稿我打成一包，塞进抽屉最下层。" && rt.draft.name !== "林予") {
+    spoken = "";
+  }
   const felt = rt.local.felt === rt.local.greeting ? "" : acceptFelt(rt.local.felt, "");
 
   const builtEcho: EchoPerson = {
@@ -365,6 +511,26 @@ async function runMatchChain(input: NightInput): Promise<NightResult> {
   };
 }
 
+async function askTurnLive(input: NightInput, echo: EchoPerson, lastEcho: string, timeoutMs: number): Promise<string> {
+  const { voiceAsPerson } = await import("./pipeline/respond.ts");
+  const prev = lastEcho.trim();
+  const out = await voiceAsPerson({
+    kind: "turn",
+    name: echo.name,
+    city: echo.city,
+    lastEcho,
+    lastYou: input.playerLine || "",
+    lastEmotions: input.fingerprint.map((f) => f.id),
+    prev: lastEcho,
+    days: input.days,
+    letter: input.playerLine || input.letter,
+    timeoutMs,
+  });
+  const line = out.via === "live" ? (out.reply ?? "").trim().slice(0, 56) : "";
+  if (line && line !== prev) return line;
+  return "";
+}
+
 /** turn 链：玩家回复后，对方回一句话。 */
 async function runTurnChain(input: NightInput): Promise<NightResult> {
   const rt = makeRuntime(input);
@@ -382,20 +548,26 @@ async function runTurnChain(input: NightInput): Promise<NightResult> {
   const echo = input.echo ?? rt.local;
   await researchStep("turn", rt);
 
-  const fallbackLine =
-    [echo.greeting, ...echo.replies, "我也有一件，后来就没再动。"].find((l) => l && l.trim()) ||
-    "我也有一件，后来就没再动。";
-  const spokenRes = await speakFromMaterials(
-    rt,
-    input.playerLine || "",
-    recallWithoutCurrent(input.recall, input.playerLine),
-    fallbackLine,
-    10000,
-    stepEx.speak,
-    stepEx.mode,
-  );
-  const spoken = spokenRes.text;
-  const via = spokenRes.via;
+  let spoken = await askTurnLive(input, echo, lastEcho, 16000);
+  let via: TokenMeter["via"] = spoken ? "live" : "archive";
+  if (!spoken) {
+    spoken = await askTurnLive(input, echo, lastEcho, 16000);
+    if (spoken) via = "live";
+  }
+  if (!spoken) {
+    const days = input.days ?? [];
+    const book: Daybook = {
+      name: echo.name,
+      city: echo.city,
+      lastEcho: echo.greeting || lastEcho,
+      lastYou: input.playerLine || "",
+      lastEmotions: input.fingerprint.map((f) => f.id),
+      page: days.at(-1)?.text || echo.awayThing || echo.greeting,
+      days,
+      lastWritten: days.at(-1)?.date || "",
+    };
+    spoken = nightLine("", lastEcho, book);
+  }
 
   const nextEcho: EchoPerson = {
     ...echo,
@@ -448,7 +620,7 @@ async function runSealChain(input: NightInput): Promise<NightResult> {
     `对话：\n${dialogue}`,
     [makeRememberTool(rt)],
     4,
-    20000,
+    SEAL_REMEMBER_TIMEOUT_MS,
   );
 
   // Step 2: 写回信。无工具，避免模型再去做别的事。
@@ -470,7 +642,7 @@ ${quoteHint}
     `对话：\n${dialogue}\n\n你的回信：`,
     [],
     1,
-    25000,
+    SEAL_WRITE_TIMEOUT_MS,
   );
 
   const liveLetter = step2.text ? cleanOneLine(step2.text, 48) : "";
@@ -479,9 +651,7 @@ ${quoteHint}
     .map((t) => t.text.trim())
     .filter(Boolean)
     .at(-1);
-  const sealFallback = tonight
-    ? `你那句「${tonight.slice(0, 16)}」我还留着。灯还开着。`
-    : "灯还开着。你那句话我没扔。";
+  const sealFallback = fallbackReturnLetter(tonight);
   const returnLetter = ownLine(
     liveLetter || sealFallback,
     [sealFallback, echo.greeting],
@@ -511,8 +681,16 @@ ${quoteHint}
   };
 }
 
+async function runVoiceChain(input: VoiceInput): Promise<string> {
+  const { voiceAsPerson } = await import("./pipeline/respond.ts");
+  const out = await voiceAsPerson(input);
+  if (out.via !== "live") return "";
+  return liveOrPrev(out.reply ?? "", "");
+}
+
 export const echoChain = {
   match: runMatchChain,
   turn: runTurnChain,
   seal: runSealChain,
+  voice: runVoiceChain,
 };

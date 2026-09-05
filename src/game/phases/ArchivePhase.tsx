@@ -11,6 +11,7 @@ export function ArchivePhase() {
   const reading = useGame((s) => s.reading);
   const openJourney = useGame((s) => s.openJourney);
   const startNew = useGame((s) => s.startNew);
+  const seekPerson = useGame((s) => s.seekPerson);
   const goBack = useGame((s) => s.goBack);
   const archival = useGame((s) => s.archival);
   const leftFrom = useGame((s) => s.leftFrom);
@@ -73,18 +74,28 @@ export function ArchivePhase() {
         enabled
         sign={-1}
         threshold={36}
-        hint="松开，抽出一张"
+        hint={reading ? "松开，再去找他" : "松开，抽出一张"}
         commitBehavior="morph"
-        onCommit={startNew}
+        onCommit={() => {
+          if (reading) seekPerson(reading.echo.name);
+          else startNew();
+        }}
         className="relative z-20 mx-auto mb-[max(0.5rem,env(safe-area-inset-bottom))] w-full max-w-xs shrink-0 px-4"
       >
         <Craft layout={!reading} className="clay h-[4.75rem] w-full rounded-t-2xl" />
-        {!reading ? (
-          <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center px-5">
-            <p className="font-display text-lg text-ink">空白的一张</p>
-            <p className="mt-1 text-[0.65rem] tracking-[0.2em] text-ink/40">往上抽</p>
-          </div>
-        ) : null}
+        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center px-5">
+          {reading ? (
+            <>
+              <p className="font-display text-lg text-ink">再去找他</p>
+              <p className="mt-1 text-[0.65rem] tracking-[0.2em] text-ink/40">{reading.echo.name}</p>
+            </>
+          ) : (
+            <>
+              <p className="font-display text-lg text-ink">空白的一张</p>
+              <p className="mt-1 text-[0.65rem] tracking-[0.2em] text-ink/40">往上抽</p>
+            </>
+          )}
+        </div>
       </PullCommit>
     </div>
   );
