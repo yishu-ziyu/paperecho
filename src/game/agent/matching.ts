@@ -1,9 +1,12 @@
 /**
  * Paper Echo — 统一可解释匹配链（Task 2A）。
  *
- * 「为什么是这个人」必须来自同一条可解释的链：anchor Story 决定 Echo 是谁。
- * decideMatch 从 archiveStories()（手写 STORIES + 已 rewrite+QA 的 COLLECTED，22 条）
- * 里选出 anchor，并给出逐候选 evidence（textRank/emotionRank/regionRank/fusedRank/source）。
+ * display identity（Echo.name / Echo.city）由同一条链决定：decideMatch 在 safe candidate
+ * pool（archiveStories() = 手写 STORIES + 已 rewrite+QA 的 COLLECTED）里选出 anchor Story，
+ * storyToEcho(anchor) 产出 Echo.name / city / greeting 种子 / replies 种子 / returnLetter；
+ * 逐候选 evidence（textRank/emotionRank/regionRank/fusedRank/source）只进 hits/MatchTrace，
+ * 不进 prompt。match 阶段的 generation material allowlist = anchor Story + approved
+ * supporting Stories；raw live discovery 不参与本函数（候选池只有安全池）。
  *
  * - 纯函数：无网络、不读 localStorage/window、不取时间戳、同输入必同输出。
  * - 三路 signal（全池排序，并列 tie-break 一律 story.id 字典序）：
@@ -24,8 +27,10 @@
  *   k=60 时 f04 也丢。把 text 保留为连续分数、emotion/region 用原始计数/二元偏好，
  *   是 18 条全部通过的最小公式。
  * - avoid：与 matchStory 同语义——按 story.name 硬避让，池空才回退全池。
- * - supporting：fused 序中 anchor 之后、text rank ≤ SUPPORTING_TEXT_RANK_MAX（处境相关）
- *   的前 ≤2 条；不达标就是空数组。「一个人是一个人」：materials 里 anchor 永远第一。
+ * - supporting：fused 序中 anchor 之后、同时满足 textRank ≤ SUPPORTING_TEXT_RANK_MAX
+ *   且 coverage > 0 的前 ≤2 条；无满足条件者为空数组。approved supporting 与 anchor Story
+ *   构成 match 阶段的 generation material allowlist（respond() 的 materials 中 anchor 恒为
+ *   第一项，其余未批准 Story 一律不进 materials）。
  */
 import type { EmotionId, RegionId, Story } from "../types.ts";
 import { tokensOf } from "./memory.ts";

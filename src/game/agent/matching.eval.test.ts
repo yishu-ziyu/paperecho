@@ -4,10 +4,10 @@
  * Phase 1 部分：fixtures 质量规则 + baselineMatchFn（Before，冻结不动的旧评分）的数字。
  * Phase 2 部分：decideMatch（After）过 contract 门槛（Top1 ≥ 80%、Top3 ≥ 95%、
  * collectedTop1 ≥ 3）、region sanity、avoid、信号/融合单测、identity coherence e2e
- * （no-key fetch=0）、gatherShadow live 三态（注入缝）。
+ * （no-key fetch=0）、gatherShadow live 三态（经 liveSource 参数注入）。
  *
  * 关于旧「baselineMatchFn 与真实 fallbackEcho 逐条对拍」断言：fallbackEcho 自 Phase 2 起
- * 内部改走 decideMatch（contract 明确要求：候选池 = archiveStories，COLLECTED 可成为身份），
+ * 内部改走 decideMatch（contract 明确要求：候选池 = archiveStories，COLLECTED 可成为 display identity），
  * 再对拍会变成「新实现对拍新实现」。baselineMatchFn 保留为 Phase 1 冻结实现（Before 记录），
  * 对真实 fallbackEcho 的结构性断言见下方「fallbackEcho（空 query）走新 matcher」。
  */
@@ -119,9 +119,9 @@ describe("harness 诚实性（口径自检 + Before 冻结）", () => {
     }
   });
 
-  it("fallbackEcho（空 query）走新 matcher：身份必出自 archiveStories 池", () => {
-    // Phase 2 起 fallbackEcho 内部 = decideMatch(空 query)；COLLECTED 也可以成为身份，
-    // 这里断言的是结构性事实（身份来自安全池），不再逐条对拍旧评分。
+  it("fallbackEcho（空 query）走新 matcher：display identity 必出自 safe candidate pool（archiveStories）", () => {
+    // Phase 2 起 fallbackEcho 内部 = decideMatch(空 query)；COLLECTED 也可以成为 display identity，
+    // 这里断言的是结构性事实（identity 来自 safe candidate pool），不再逐条对拍旧评分。
     const identities = new Set(POOL.map((s) => `${storyToEcho(s).name}/${storyToEcho(s).city}`));
     for (const f of MATCH_FIXTURES) {
       const id = fallbackIdentityFor(f);
@@ -143,7 +143,7 @@ describe("harness 诚实性（口径自检 + Before 冻结）", () => {
 });
 
 function fallbackIdentityFor(f: MatchFixture): string {
-  // 与 kernel.fallbackEcho 同一条链：decideMatch(空 query) → storyToEcho 的 name/city。
+  // display identity = decideMatch(空 query) → storyToEcho(anchor) 的 name/city，与 kernel.fallbackEcho 同一条链。
   const d = decideMatch({
     letter: "",
     feels: fingerprintFromEmotions(f.emotions).map((x) => x.id),
@@ -220,7 +220,7 @@ describe("decideMatch（After）— contract Evaluator 1 门槛", () => {
 });
 
 describe("decideMatch 单元：信号 / evidence / supporting / 确定性", () => {
-  it("evidence 与 ranked 对齐，anchor 必为 fused#1，supporting ≤2 且 text rank 达标", () => {
+  it("evidence 与 ranked 对齐，anchor 必为 fused#1，supporting ≤2 且 textRank ≤ SUPPORTING_TEXT_RANK_MAX、coverage > 0", () => {
     for (const f of MATCH_FIXTURES) {
       const d = decideOf(f);
       assert.equal(d.evidence.length, d.ranked.length, `${f.id} evidence 与 ranked 不对齐`);
@@ -303,7 +303,8 @@ describe("region sanity / avoid（contract Evaluator 1 尾两条）", () => {
 
 // ---------------------------------------------------------------------------
 // Identity coherence e2e（contract Evaluator 2）：no-key、无假流、fetch=0。
-// matcher 选出的 anchor 必须决定 Echo 的 name/city/greeting/replies/returnLetter，
+// decideMatch 选出的 anchor Story 必须唯一决定 display identity（Echo.name/city）与
+// anchor narrative source（greeting/replies/returnLetter 种子）；material provenance：
 // shadow materials 首位含 anchor 自己的 story 行，hits 里有 anchor 证据行。
 // ---------------------------------------------------------------------------
 
@@ -343,7 +344,7 @@ async function withoutNetwork<T>(fn: () => Promise<T>): Promise<{ out: T; fetchC
 }
 
 describe("identity coherence e2e（no-key，fetch=0）", () => {
-  it("COLLECTED anchor（f08 → c002）：阿枳/厦门，returnLetter=greeting=素材=hits 全部同源", async () => {
+  it("COLLECTED anchor（f08 → c002）：阿枳/厦门，returnLetter/greeting/materials/hits 全部同源", async () => {
     const c002 = POOL.find((s) => s.id === "c002")!;
     const { out: res, fetchCalls } = await withoutNetwork(() => echoChain.match(matchInput(fixtureById("f08"))));
     assert.equal(fetchCalls, 0, "no-key match 不得触网");
@@ -370,7 +371,7 @@ describe("identity coherence e2e（no-key，fetch=0）", () => {
     assert.ok(joined.includes("anchor=s1"));
     assert.ok(joined.includes(s1.lines[0]!));
     assert.equal(res.match?.anchorSource, "handwritten");
-    // 身份不分裂：greeting/replies 的种子全部来自 s1。
+    // material provenance 不分裂：greeting/replies 的种子全部来自 anchor Story s1。
     for (const line of res.echo.replies.slice(0, s1.lines.length)) {
       assert.equal(
         [...s1.lines, s1.opening].some((own) => line === own || line === res.echo.greeting),
@@ -382,11 +383,11 @@ describe("identity coherence e2e（no-key，fetch=0）", () => {
 });
 
 // ---------------------------------------------------------------------------
-// gatherShadow live 三态（contract Evaluator 3）：注入缝 liveSource。
+// gatherShadow live 三态（contract Evaluator 3）：经 liveSource 参数注入 fake/slow/failed。
 // ---------------------------------------------------------------------------
 
 function livePost(content: string): Post {
-  // live raw 的结构证明：Post 类型上就没有 name/city 字段。
+  // raw live discovery 的结构证明：Post 类型上没有 name/city 字段。
   return { platform: "web", content, emotion: ["tired"], situation: "现场摘要" };
 }
 
@@ -456,7 +457,7 @@ describe("gatherShadow live 三态（注入 fake/slow/failed liveSource）", () 
     assert.ok(shadow.materials.length >= 5);
   });
 
-  it("live raw 结构上无法成为身份：Post 无 name/city；anchor 恒出自 archiveStories 安全池", async () => {
+  it("raw live discovery 结构上无法成为 display identity：Post 无 name/city；anchor 恒出自 safe candidate pool（archiveStories = STORIES + COLLECTED）", async () => {
     const p = livePost("现场帖：我把台灯搬到窗边，纸箱还没拆。");
     assert.equal("name" in p, false);
     assert.equal("city" in p, false);
@@ -471,15 +472,15 @@ describe("gatherShadow live 三态（注入 fake/slow/failed liveSource）", () 
     }
   });
 
-  it("Test B — zero-affinity supporting：全池 cov=0 的 dense 并列不得自动产生 supporting", () => {
-    // 空 query：所有候选 cov=0、dense textRank 并列 1。旧闸（只看 rank）会让
-    // anchor 之后的任意两条成为 supporting；cov>0 闸必须一票否决。
+  it("Test B — zero-affinity supporting：全池 coverage=0 的 dense 并列不得自动产生 supporting", () => {
+    // 空 query：所有候选 coverage=0、dense textRank 并列 1。旧闸（只看 rank）会让
+    // anchor 之后的任意两条成为 supporting；coverage > 0 闸必须一票否决。
     const d = decideMatch({ letter: "", feels: ["tired"], region: "east" });
     assert.ok(d.evidence.every((e) => e.textRank === 1), "空 query 的 text 榜应全并列");
     assert.equal(d.supporting.length, 0, "零文本相关时不得出现 supporting");
   });
 
-  it("Test C — approved supporting 仍可用：真实相关的 supporting 进入 materials", async () => {
+  it("Test C — approved supporting 仍可用：真实相关的 supporting 进入 generation materials", async () => {
     // f10（厨房/冰箱/洗碗）锚定 c008，c014 共享「冰箱/嗡嗡」处境词，是真正的 approved supporting。
     const d = decideOf(fixtureById("f10"));
     assert.equal(d.anchor.id, "c008");
@@ -493,7 +494,7 @@ describe("gatherShadow live 三态（注入 fake/slow/failed liveSource）", () 
 });
 
 // ---------------------------------------------------------------------------
-// review 第二轮（docs/contract-matching-review-fixes.md）：材料白名单 + raw live discovery-only。
+// review 第二轮（docs/contract-matching-review-fixes.md）：generation material allowlist + raw live discovery-only。
 // ---------------------------------------------------------------------------
 
 /** hits 里那份 world-archive blob（= respond 实际收到的 materials 的原文块）。 */
@@ -501,12 +502,12 @@ function materialsBlob(hits: string[]): string {
   return hits.find((h) => h.includes("\n---\n")) ?? "";
 }
 
-describe("Finding 1 — speakable materials 白名单（一个人是一个人）", () => {
-  it("Test A — 未经 MatchDecision 批准的 Story 不得出现在 respond materials（含 userLine 高相关者）", async () => {
+describe("Finding 1 — match generation material allowlist（anchor Story + approved supporting Stories）", () => {
+  it("Test A — generation material allowlist 之外的 Story 不得出现在 respond materials（含 userLine 高相关者）", async () => {
     // f08 锚定 c002（车间/模具/十二小时白班）。旧实现的 base.materials 会把情绪同分的
     // 其它 Story（c001 凉茶 / c014 手账 / s1 方案……）回填进 materials，respond 按
-    // userLine 重排后任何一条都可能被当前 Echo 说成自己的经历。白名单化后，
-    // blob（= respond 收到的素材原文）里只允许 anchor 与 approved supporting 出现。
+    // userLine 重排后任何一条都可能被当前 Echo 说成自己的经历。allowlist 化后，
+    // blob（= respond 收到的 materials 原文）里只允许 anchor 与 approved supporting 出现。
     const f = fixtureById("f08");
     const d = decideOf(f);
     const allowed = new Set([d.anchor.id, ...d.supporting.map((s) => s.id)]);
@@ -548,7 +549,7 @@ describe("Finding 2 — raw live = discovery only（cleanHit 不是匿名化）"
     for (const banned of ["张三", "腾讯", "南山区", "weibo.com", "zhangsan@qq.com", "13800138000", "@zhangsan_vip", UNIQUE_SENTENCE]) {
       assert.equal(joined.includes(banned), false, `raw live 内容「${banned}」泄漏进 materials`);
     }
-    // discovery 仍然被记录（观测面），只是不进可说素材。
+    // raw live discovery 仍保留在 shadow.livePosts 供观测与后台 ingest，只是不进当前 generation materials。
     assert.equal(shadow.livePosts?.length, 3, "live discovery 结果应保留在 livePosts 供观测/ingest");
   });
 

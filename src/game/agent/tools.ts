@@ -74,7 +74,8 @@ export async function gatherShadow(
 }
 
 /**
- * 库占满 5 条素材；live 短超时只填空位。live 失败仍返回库。原文不进 blob。
+ * world-archive 检索 blob（hits/JudgePanel 观测面用）。live 与 local 并行起步、独立预算；
+ * raw live discovery 不进 materials / blob，只挂 shadow.livePosts 供观测与后台 ingest。
  */
 export async function formatCaseHitsLive(ctx: ToolCtx): Promise<string> {
   return blobOfShadow(await gatherShadow(ctx, true));

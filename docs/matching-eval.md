@@ -32,7 +32,7 @@ node --experimental-strip-types --test src/game/agent/matching.eval.test.ts
    只扫手写 `STORIES`（12 条）——`COLLECTED`（10 条）不在候选池里，**结构性不可见**；
    avoid 硬避让，全被避开才回退全池；评分平局时按数组扫描顺序（严格大于才替换）；
 3. `storyToEcho(...)` 用这条 story 定下 Echo 的 name/city/greeting/replies/returnLetter；
-4. 之后 `researchStep → gatherShadow` 只产出 supporting 材料（影子素材），**不回写身份**；
+4. 之后 `researchStep → gatherShadow` 只产出检索 materials（EchoShadow），**不回写身份**；
    材料库 ≥5 条时 live 被跳过。
 
 harness 的口径：`fixture.emotions` 直接当作 `ownedOf(fp, 0.3)` 之后的 feels（以 closeness=1 的
@@ -88,13 +88,16 @@ Fingerprint 喂真实 `fallbackEcho` 时 `ownedOf(·, 0.3)` 原样返回该集�
 
 1. **makeRuntime**（`chains.ts`）：新遇（`input.echo` 为空）先跑 `decideMatch({letter, mirror,
    playerLine, feels=ownedOf(fp,0.3), region, avoid})`，`storyToEcho(anchor)` 定下 Echo 的
-   name/city/greeting 种子/replies 种子/returnLetter——身份字段全部同源；revisit（locked echo）
-   路径不进 matcher，零改动。
-2. **researchStep("match")**：`gatherShadow`（live 始终与 local 并行起步，~4s 预算，失败→[]）之后
-   `alignShadowToAnchor` 把素材重排为 anchor 自己的行第一、supporting ≤2（text rank ≤5 才算处境
-   相关）、live 帖处境相关才入且 ≤2；evidence 证据行与结构化 `NightResult.match` 只进
-   hits/JudgePanel，不进 prompt。
-3. **respond**：只做措辞。live 开口过 guard 就用，否则落回 anchor 自己的 greeting；
+   name/city/greeting 种子/replies 种子/returnLetter——身份字段全部同源；revisit（locked echo，
+   revisit identity lock）路径不进 matcher，零改动。
+2. **researchStep("match")**：`gatherShadow`（live 始终与 local 并行起步，~4s 预算，失败→[]；
+   raw live discovery-only——结果只挂 `shadow.livePosts` 供观测并后台 ingest，不进当前
+   generation materials）之后 `alignShadowToAnchor` 将 respond() 的 generation materials
+   重建为 allowlist：anchor Story 第一项 + approved supporting Stories（textRank ≤
+   SUPPORTING_TEXT_RANK_MAX 且 coverage > 0，≤2 条），其余项一律不回填；evidence 证据行与
+   结构化 `NightResult.match` 只进 hits/JudgePanel，不进 prompt。
+3. **respond**：只基于 allowlist 内的 materials 生成措辞；生成结果经 keepSpoken guard 后作为
+   spoken，失败/被拒时回退 anchor narrative source（storyToEcho 的 greeting 基底）；
    returnLetter/felt 恒为 anchor 基底。旧「十七稿特判」删除（它只在身份固定为林予时才有意义）。
 4. **fallbackEcho**（`kernel.ts`）：签名不变，内部改走 `decideMatch`（query 文本为空 → text 项
    整体为 0，由 emotion+region 决定）；`store.launch` catch 路径与 `session.restoreEchoSession`
@@ -137,7 +140,7 @@ query 无有效 token（maxCov=0）时 text 项整体为 0，自然退化为 emo
 「text#1 vs #2」只差一档，权重再大也只是同比例放大，永远翻不过 emotion 的名次差；
 把 text 保留为**连续分数**（覆盖率归一后 3 分封顶，emotion 计数最大 2×重叠、region 0.3），
 text 仍主导（18 条里 17 条 anchor 是 text#1），emotion/region 只在 text 近并列时有发言权。
-这是 18 条全过的最小公式，没有更大的魔法数。复现：`node --experimental-strip-types
+这是 18 条全过的最小公式，没有更大的权重取值。复现：`node --experimental-strip-types
 --test src/game/agent/matching.eval.test.ts`（打印 Before/After 两张表）。
 
 ## After 结果（Top1 18/18）
@@ -174,10 +177,11 @@ After 修复了 Before 的三类失败：COLLECTED 结构性不可见（8 条全
 - **门槛断言**（`matching.eval.test.ts`）：Top1 ≥ 80%、Top3 ≥ 95%、collectedTop1 ≥ 3、
   region sanity（f03/f06/f07 的 anchor 都是跨 region 的 text#1——B 高文本相关不因 region 不同
   被压过；f05 作 region 一致时的对照）、avoid（f14 避开 Mara → s6，硬避让、池空回退全池）、
-  evidence 与 ranked 对齐 / anchor 恒 fused#1 / supporting ≤2 且 text rank ≤5 / 同输入同输出。
+  evidence 与 ranked 对齐 / anchor 恒 fused#1 / supporting ≤2 且 textRank ≤
+  SUPPORTING_TEXT_RANK_MAX、coverage > 0 / 同输入同输出。
 - **Identity coherence e2e**（no-key，fetch=0，streamFn 不注入）：f08 → c002：`echo.name === 阿枳`、
   `echo.city === 厦门`、returnLetter/greeting = c002 原文、hits 有 `anchor=c002` 证据行、
   shadow 首材料含 anchor 自己的行；f01 → s1 对拍 STORIES 路径同源。
 - **live 三态**（`gatherShadow` 第三参注入 liveSource）：local ≥5 时 live 仍被调用；slow live
-  （1.5s > 60ms 预算）不挡 match、slow 帖不进素材；failed live → 纯 local 正常；Post 结构上
+  （1.5s > 60ms 预算）不挡 match、slow 帖不进 materials；failed live → 纯 local 正常；Post 结构上
   无 name/city 字段、anchor 恒出自 archiveStories（source ∈ {handwritten, collected}）。
