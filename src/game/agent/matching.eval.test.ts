@@ -17,7 +17,7 @@ import { EMOTIONS, ownedOf } from "../emotions.ts";
 import { REGIONS, STORIES, storyToEcho } from "../stories.ts";
 import type { RegionId } from "../types.ts";
 import { echoChain } from "./chains.ts";
-import { decideMatch, pickLiveMaterials, SUPPORTING_TEXT_RANK_MAX } from "./matching.ts";
+import { decideMatch, SUPPORTING_TEXT_RANK_MAX } from "./matching.ts";
 import {
   baselineMatchFn,
   collectedAvailable,
@@ -31,6 +31,7 @@ import {
   MATCH_FIXTURES,
   type MatchFixture,
 } from "./matching.fixtures.ts";
+import { tokensOf } from "./memory.ts";
 import { archiveStories } from "./pipeline/sources/local.ts";
 import type { Post, PostSource } from "./pipeline/source.ts";
 import { gatherShadow, type ToolCtx } from "./tools.ts";
@@ -227,9 +228,16 @@ describe("decideMatch 单元：信号 / evidence / supporting / 确定性", () =
       assert.equal(d.evidence[0]!.fusedRank, 1, `${f.id} anchor 不是 fused#1`);
       assert.ok(d.ranked.every((s) => d.evidence.some((e) => e.id === s.id && e.fusedRank === d.ranked.indexOf(s) + 1)));
       assert.ok(d.supporting.length <= 2, `${f.id} supporting 超过 2 条`);
+      const query = [f.letter, f.mirror].filter((t) => t?.trim()).join(" ");
       for (const s of d.supporting) {
         const ev = d.evidence.find((e) => e.id === s.id)!;
         assert.ok(ev.textRank <= SUPPORTING_TEXT_RANK_MAX, `${f.id} supporting ${s.id} text#${ev.textRank} 不达标`);
+        // 正相关闸（review Finding 1B）：零文本相关的 Story 不得成为 supporting。
+        const storyText = `${s.opening}\n${s.lines.join("\n")}`;
+        assert.ok(
+          [...tokensOf(query)].some((t) => tokensOf(storyText).has(t)),
+          `${f.id} supporting ${s.id} 与 query 无任何共享 token`,
+        );
         assert.notEqual(s.id, d.anchor.id);
       }
     }
@@ -463,14 +471,98 @@ describe("gatherShadow live 三态（注入 fake/slow/failed liveSource）", () 
     }
   });
 
-  it("pickLiveMaterials：live 帖处境相关才入且 ≤2", () => {
-    const posts: Post[] = [
-      livePost("车间里十二个小时，我手抖得端不住杯子。"),
-      livePost("海边风大，我捡了一下午贝壳。"),
-      livePost("车间门口的灯坏了一盏，我摸黑打卡。"),
-    ];
-    const picked = pickLiveMaterials("白班在车间里站满十二个钟头，最后一套模具卸完手就稳不住了。", posts);
-    assert.equal(picked.length, 2);
-    assert.ok(picked.every((p) => p.content.includes("车间")), "处境无关的 live 帖不得入料");
+  it("Test B — zero-affinity supporting：全池 cov=0 的 dense 并列不得自动产生 supporting", () => {
+    // 空 query：所有候选 cov=0、dense textRank 并列 1。旧闸（只看 rank）会让
+    // anchor 之后的任意两条成为 supporting；cov>0 闸必须一票否决。
+    const d = decideMatch({ letter: "", feels: ["tired"], region: "east" });
+    assert.ok(d.evidence.every((e) => e.textRank === 1), "空 query 的 text 榜应全并列");
+    assert.equal(d.supporting.length, 0, "零文本相关时不得出现 supporting");
+  });
+
+  it("Test C — approved supporting 仍可用：真实相关的 supporting 进入 materials", async () => {
+    // f10（厨房/冰箱/洗碗）锚定 c008，c014 共享「冰箱/嗡嗡」处境词，是真正的 approved supporting。
+    const d = decideOf(fixtureById("f10"));
+    assert.equal(d.anchor.id, "c008");
+    assert.ok(d.supporting.length >= 1, "真实相关的 supporting 应获批准");
+    const { out: res } = await withoutNetwork(() => echoChain.match(matchInput(fixtureById("f10"))));
+    const blob = res.hits.find((h) => h.includes("\n---\n")) ?? "";
+    for (const s of d.supporting) {
+      assert.ok(blob.includes(s.lines[0]!), `approved supporting ${s.id} 应进入 respond materials`);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// review 第二轮（docs/contract-matching-review-fixes.md）：材料白名单 + raw live discovery-only。
+// ---------------------------------------------------------------------------
+
+/** hits 里那份 world-archive blob（= respond 实际收到的 materials 的原文块）。 */
+function materialsBlob(hits: string[]): string {
+  return hits.find((h) => h.includes("\n---\n")) ?? "";
+}
+
+describe("Finding 1 — speakable materials 白名单（一个人是一个人）", () => {
+  it("Test A — 未经 MatchDecision 批准的 Story 不得出现在 respond materials（含 userLine 高相关者）", async () => {
+    // f08 锚定 c002（车间/模具/十二小时白班）。旧实现的 base.materials 会把情绪同分的
+    // 其它 Story（c001 凉茶 / c014 手账 / s1 方案……）回填进 materials，respond 按
+    // userLine 重排后任何一条都可能被当前 Echo 说成自己的经历。白名单化后，
+    // blob（= respond 收到的素材原文）里只允许 anchor 与 approved supporting 出现。
+    const f = fixtureById("f08");
+    const d = decideOf(f);
+    const allowed = new Set([d.anchor.id, ...d.supporting.map((s) => s.id)]);
+    const { out: res } = await withoutNetwork(() => echoChain.match(matchInput(f)));
+    const blob = materialsBlob(res.hits);
+    assert.ok(blob.length > 0, "hits 应包含 world-archive materials blob");
+    for (const story of POOL) {
+      if (allowed.has(story.id)) continue;
+      for (const line of [story.opening, ...story.lines]) {
+        assert.equal(
+          blob.includes(line),
+          false,
+          `未批准的 ${story.id} 泄漏进 materials：「${line.slice(0, 24)}…」`,
+        );
+      }
+    }
+    assert.ok(blob.includes(d.anchor.lines[0]!), "anchor 自己的行必须在 materials 首位");
+  });
+});
+
+describe("Finding 2 — raw live = discovery only（cleanHit 不是匿名化）", () => {
+  const PII_TEXT =
+    "我叫张三，在深圳南山区腾讯工作，昨晚加班到凌晨三点才走出园区。我的博客是 https://weibo.com/u/12345，邮箱 zhangsan@qq.com，电话 13800138000，@zhangsan_vip 随时找我。";
+  const UNIQUE_SENTENCE = "只有原文里才有的连续八个子都不重复的独特句子标记";
+  const CONTACT_TEXT = "联系我 zhangsan@qq.com 或 13800138000，微博 @zhangsan_vip，主页 https://example.com/~zhangsan";
+
+  function piiSource(): PostSource {
+    return {
+      id: "fake:pii",
+      async search() {
+        return [livePost(PII_TEXT), livePost(`车间夜班记。${UNIQUE_SENTENCE}。下班路上想到的。`), livePost(CONTACT_TEXT)];
+      },
+    };
+  }
+
+  it("PII test — 真名/城市/公司名不进 materials", async () => {
+    const shadow = await gatherShadow(baseCtx(), true, piiSource());
+    const joined = shadow.materials.map((m) => `${m.situation} ${m.content}`).join("\n");
+    for (const banned of ["张三", "腾讯", "南山区", "weibo.com", "zhangsan@qq.com", "13800138000", "@zhangsan_vip", UNIQUE_SENTENCE]) {
+      assert.equal(joined.includes(banned), false, `raw live 内容「${banned}」泄漏进 materials`);
+    }
+    // discovery 仍然被记录（观测面），只是不进可说素材。
+    assert.equal(shadow.livePosts?.length, 3, "live discovery 结果应保留在 livePosts 供观测/ingest");
+  });
+
+  it("Source-overlap test — ≥8 连续字独特原句不进 materials", async () => {
+    const shadow = await gatherShadow(baseCtx(), true, piiSource());
+    const joined = shadow.materials.map((m) => m.content).join("\n");
+    assert.equal(joined.includes(UNIQUE_SENTENCE), false, "raw 原句不得进入 prompt 素材");
+  });
+
+  it("Contact test — email/phone/@handle/URL 不进 materials", async () => {
+    const shadow = await gatherShadow(baseCtx(), true, piiSource());
+    const joined = shadow.materials.map((m) => `${m.situation} ${m.content}`).join("\n");
+    for (const banned of ["zhangsan@qq.com", "13800138000", "@zhangsan_vip", "https://"]) {
+      assert.equal(joined.includes(banned), false, `联系方式「${banned}」泄漏进 materials`);
+    }
   });
 });

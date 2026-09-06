@@ -22,9 +22,10 @@ export interface EchoShadow {
   voice: string;
   materials: Post[];
   /**
-   * match 现场搜到的脱敏帖（未进 materials 的那部分，Task 2A）。
-   * 供匹配链做「处境相关才入」的 ≤2 条临时 supporting；Post 无 name/city 字段，
-   * live raw 永远成不了身份。synthesize（纯库路径）不产这个字段。
+   * match 现场搜到的 raw 帖（Task 2A 二轮起为 discovery-only）。
+   * cleanHit 不是匿名化，raw 帖**永不进 materials/prompt**，只在此供观测；
+   * 安全化唯一路径是后台 ingest（rewrite+QA → COLLECTED）。
+   * Post 无 name/city 字段，raw live 成不了身份。synthesize（纯库路径）不产这个字段。
    */
   livePosts?: Post[];
 }

@@ -25,7 +25,7 @@ import { storyToEcho } from "../stories.ts";
 import type { EchoPerson, EmotionId, TokenMeter } from "../types.ts";
 import { AGENT_MODEL, llmApiKey, llmProvider, LLM_CONFIG } from "./config.ts";
 import { emptyMeter, hasApiKey } from "./llm.ts";
-import { decideMatch, pickLiveMaterials, type MatchDecision } from "./matching.ts";
+import { decideMatch, type MatchDecision } from "./matching.ts";
 import { factsOf, isCompleteFact, isInstruction, ownLine, parroted, perceptionOf, renderBlocks, stolenVoice } from "./memory.ts";
 import type { EchoShadow } from "./pipeline/persona.ts";
 import type { Post } from "./pipeline/source.ts";
@@ -362,9 +362,11 @@ export function guardTurnReply(
 }
 
 /**
- * 「一个人是一个人」：把影子素材重排成 anchor 自己的行第一，supporting（处境相关的
- * 别人的夜）≤2 随后，live 脱敏帖处境相关才入且 ≤2，其余旧素材垫底。
- * 身份字段（name/city）绝不进这里——素材只有 Post（无 name/city）。
+ * 「一个人是一个人」：match 的 speakable materials 是**白名单**——只有 anchor 自己的行
+ * 和 MatchDecision 批准的 supporting（处境相关、cov>0、≤2 条）。base.materials 的其余项
+ * 一律不得回填：respond 会按 userLine 重排全部 materials，任何未批准的 Story 混进来
+ * 都可能被当前 Echo 当成自己的经历说出（review Finding 1）。raw live 帖是 discovery-only，
+ * 未经 rewrite+QA 永不进 prompt（review Finding 2）。素材只有 Post，无 name/city。
  */
 function alignShadowToAnchor(rt: ChainRuntime): EchoShadow {
   const d = rt.decision!;
@@ -379,20 +381,10 @@ function alignShadowToAnchor(rt: ChainRuntime): EchoShadow {
       materials.push(p);
     }
   }
-  const query = [rt.input.letter, rt.input.mirror, rt.input.playerLine]
-    .filter((t) => t?.trim())
-    .join(" ");
-  for (const p of pickLiveMaterials(query, base?.livePosts ?? [])) {
-    if (!seen.has(p.content)) {
-      seen.add(p.content);
-      materials.push(p);
-    }
-  }
   if (!base) {
     return { handle: "回声", voice: "", materials };
   }
-  const rest = base.materials.filter((p) => !seen.has(p.content));
-  return { ...base, materials: [...materials, ...rest].slice(0, 8) };
+  return { ...base, materials };
 }
 
 /** hits 证据行：anchor 是谁/来自哪个池/各路名次 → fused 名次；只进 JudgePanel，不进 prompt。 */
