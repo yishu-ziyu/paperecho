@@ -30,7 +30,6 @@
 import type { EmotionId, RegionId, Story } from "../types.ts";
 import { tokensOf } from "./memory.ts";
 import { archiveStories } from "./pipeline/sources/local.ts";
-import type { Post } from "./pipeline/source.ts";
 
 export interface MatchQuery {
   /** 玩家折进飞机的原话（letterFromChips 产物；可为空串） */
@@ -66,10 +65,14 @@ export interface MatchDecision {
 export const TEXT_WEIGHT = 3;
 /** region 是偏好不是过滤：同区 +0.3，远小于 baseline 的 1.4。 */
 export const REGION_WEIGHT = 0.3;
-/** supporting 的处境相关性闸：text rank 前 5 才配当「别人的夜」。 */
+/**
+ * supporting 的处境相关性闸，两条同时满足：
+ * 1. text rank ≤ SUPPORTING_TEXT_RANK_MAX（排进文本相关的前几名）；
+ * 2. raw coverage > 0（与 query 共享至少一个 idf>0 的非全池通用 token）。
+ * 只有 rank 条件不够：全部候选 cov=0 时 dense rank 会并列 rank 1，
+ * 毫不相干的 Story 也会自动成为 supporting——零文本相关必须一票否决。
+ */
 export const SUPPORTING_TEXT_RANK_MAX = 5;
-/** live 帖入 supporting 的处境相关性下限（原始 idf 加权和；≈ 一个稀有大词/双字）。 */
-export const LIVE_AFFINITY_MIN = 2;
 
 const CHAR_TOKEN_WEIGHT = 0.3;
 
@@ -248,7 +251,11 @@ function finishDecision(
   const anchor = ranked[0]!;
   const supporting = ranked
     .slice(1)
-    .filter((s) => (signals.textRanks.get(s.id) ?? Number.MAX_SAFE_INTEGER) <= SUPPORTING_TEXT_RANK_MAX)
+    .filter(
+      (s) =>
+        (signals.textRanks.get(s.id) ?? Number.MAX_SAFE_INTEGER) <= SUPPORTING_TEXT_RANK_MAX &&
+        (signals.cov.get(s.id) ?? 0) > 0,
+    )
     .slice(0, 2);
   return { anchor, supporting, ranked, evidence };
 }
@@ -282,27 +289,4 @@ export function decideMatch(query: MatchQuery): MatchDecision {
     emoRanks: denseRanks(emo),
     regRanks: denseRanks(reg),
   });
-}
-
-/**
- * live 帖的处境相关性闸：返回按相关度降序、≥ LIVE_AFFINITY_MIN 的前 cap 条。
- * idf 统计基于 archiveStories 池（与 decideMatch 同一套词权），确定性。
- */
-export function pickLiveMaterials(queryText: string, posts: Post[], cap = 2): Post[] {
-  const text = queryText.trim();
-  if (!text || !posts.length) return [];
-  const stats = buildStats(archiveStories());
-  const q = queryTokens(text);
-  const scored = posts.map((p) => {
-    let shared = 0;
-    for (const t of tokensOf(`${p.situation} ${p.content}`)) {
-      if (q.has(t)) shared += tokenWeight(t) * (stats.idf.get(t) ?? 0);
-    }
-    return { p, n: shared };
-  });
-  return scored
-    .filter((x) => x.n >= LIVE_AFFINITY_MIN)
-    .sort((a, b) => b.n - a.n || a.p.content.localeCompare(b.p.content))
-    .slice(0, cap)
-    .map((x) => x.p);
 }
