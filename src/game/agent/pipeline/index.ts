@@ -8,8 +8,9 @@
  *   synthesize（persona.ts）   —— 把一批 Post 整合成 EchoShadow（合成影子）
  *   respond（respond.ts）      —— 对话循环：从素材库取细节开口回应
  *
- * 游戏运行时：match 的 research 经 `formatCaseHitsLive`：库先占满 5 条素材，
- * 短超时 live 只填空位。爬到的原文后台改写入库。crawl 仍占位。
+ * 游戏运行时：match 的 research 经 `gatherShadow`（tools.ts）：materials 只含 local，
+ * raw live discovery 只挂 shadow.livePosts 供观测并后台 ingest（rewrite+QA 后进 COLLECTED）；
+ * `formatCaseHitsLive` 保留给测试。crawl 仍占位。
  */
 import { synthesize } from "./persona";
 import type { EchoShadow } from "./persona";

@@ -6,14 +6,16 @@
  *
  * 产品里的三个业务动作被拆成明确的小步骤，每步只做一件事：
  *
- *   match: decideMatch（anchor Story 定身份，evidence 进 hits/结构化字段）
- *          → research（世界档案影子；anchor 自己的素材排第一）→ respond（大模型用素材开口）
+ *   match: decideMatch（display identity 由 anchor Story 经 storyToEcho 决定，evidence 只进
+ *          hits/MatchTrace，不进 prompt）→ research（gatherShadow 检索；raw live
+ *          discovery-only，不进当前 generation materials）→ respond（基于 generation
+ *          material allowlist 上的 materials 生成措辞，anchor Story 恒为第一项）
  *   turn:  restoreEchoSession（每 turn 重建逻辑 session）→ research（结果进上下文）
  *          → 短命 Pi Agent（带 search_archive / search_cases / remember 工具）
  *          → 出口 guard → voice 一次 → daybook → 空
  *   seal:  research -> rememberFacts -> writeReturnLetter -> validate
  *
- * 开口走 pipeline/respond.ts（已训练的说话规范），不走故事卡金句。
+ * 回复文本生成走 pipeline/respond.ts 的固定 prompt 规范，不直接复制故事卡原句。
  * turn 的主路径是短命 Pi Agent；greet/away/day 兜底仍走 pipeline/respond。
  */
 import { Agent, type AgentMessage, type AgentTool, type StreamFn } from "@earendil-works/pi-agent-core";
@@ -81,7 +83,11 @@ function lastAssistantText(messages: AgentMessage[]): string {
  * chains 与 pipeline/respond 共用同一套，避免循环依赖。
  */
 
-/** 素材开口留下。不因「杭州」等外地词打回故事卡。 */
+/**
+ * 模型回复的清洗入口：cleanOneLine + ownLine（拒指令句、拒搬运 archival 里的 Story 原句、
+ * 拒复读 used 句）。出现「杭州」等与当前 Echo 无关的地名不构成「搬运他人 Story」的证据，
+ * 不据此整体替换为故事卡行。
+ */
 export function keepSpoken(
   raw: string,
   fallback: string,
@@ -166,7 +172,7 @@ async function step(
 interface ChainRuntime {
   input: NightInput;
   local: EchoPerson;
-  /** 新遇 match 的可解释匹配决定；locked/revisit（input.echo 已定）时为 null。 */
+  /** 新遇（input.echo 为空）时 decideMatch 的输出；revisit identity lock（input.echo 已存在）时为 null，不重新执行 identity selection。 */
   decision: MatchDecision | null;
   perception: string;
   live: { persona: string; facts: string[] };
@@ -177,7 +183,8 @@ interface ChainRuntime {
 }
 
 function makeRuntime(input: NightInput): ChainRuntime {
-  // 身份只来自同一条匹配链：新遇（无 locked echo）先 decideMatch，anchor 定身份。
+  // display identity 只来自这条链：新遇（无 locked echo）decideMatch → anchor Story → storyToEcho；
+  // revisit（input.echo 已存在，revisit identity lock）跳过 identity selection。
   const decision = input.echo
     ? null
     : decideMatch({
@@ -362,11 +369,16 @@ export function guardTurnReply(
 }
 
 /**
- * 「一个人是一个人」：match 的 speakable materials 是**白名单**——只有 anchor 自己的行
- * 和 MatchDecision 批准的 supporting（处境相关、cov>0、≤2 条）。base.materials 的其余项
- * 一律不得回填：respond 会按 userLine 重排全部 materials，任何未批准的 Story 混进来
- * 都可能被当前 Echo 当成自己的经历说出（review Finding 1）。raw live 帖是 discovery-only，
- * 未经 rewrite+QA 永不进 prompt（review Finding 2）。素材只有 Post，无 name/city。
+ * match 阶段的 generation material allowlist（review Finding 1）：respond() 收到的
+ * materials 只包含 anchor Story 与 approved supporting Stories
+ * （MatchDecision.supporting：textRank ≤ SUPPORTING_TEXT_RANK_MAX、coverage > 0、≤2 条）。
+ * base.materials 的其余项一律不回填：respond 的 rankedMaterials 会按 userLine 重排全部
+ * materials，任何未批准的 Story 混入都可能被说成当前 Echo 自己的经历。
+ * raw live discovery 不进当前 generation materials / prompt（review Finding 2）；
+ * 只记入 shadow.livePosts 供观测并后台 ingest（rewriteStory + qaStory → COLLECTED），
+ * 成为安全候选 Story 后才可能被后续 match 使用。
+ * material provenance：materials 元素只有 Post（platform/content/emotion/situation），
+ * 无 name/city，结构上不能反向成为 display identity。
  */
 function alignShadowToAnchor(rt: ChainRuntime): EchoShadow {
   const d = rt.decision!;
@@ -406,7 +418,7 @@ function matchTraceOf(d: MatchDecision): MatchTrace {
   };
 }
 
-/** 研究步骤：库优先；match 短超时并入 live。不调用对话 LLM。 */
+/** 检索步骤：本地库 + live search（match 独立短预算；raw live discovery-only）。不调用对话 LLM。 */
 async function researchStep(kind: "match" | "turn" | "seal", rt: ChainRuntime): Promise<string> {
   const notes: string[] = [];
   const earlier = recallWithoutCurrent(rt.input.recall, rt.input.playerLine)
@@ -456,7 +468,7 @@ function fallbackFor(kind: "match" | "turn" | "seal", rt: ChainRuntime): NightRe
   };
 }
 
-/** match 链：投掷纸飞机 → 找到/创建今晚的「对方」。 */
+/** match 链：新遇走 decideMatch → anchor Story → storyToEcho；revisit（input.echo 已存在，revisit identity lock）走 companion 状态重建，不重新执行 identity selection。 */
 async function runMatchChain(input: NightInput): Promise<NightResult> {
   const rt = makeRuntime(input);
   const opened: ExchangeState = initialExchange();
@@ -567,8 +579,9 @@ async function runMatchChain(input: NightInput): Promise<NightResult> {
     "full",
   );
   const via = spokenRes.via;
-  // respond 只做措辞：live 开口过 guard 就用，否则落回 anchor 自己的 opening/lines（storyToEcho 基底）。
-  // 旧「十七稿特判」已删——它只在身份固定为林予、材料却来自别的故事时才有意义。
+  // respond 只做措辞：live 生成结果经 keepSpoken guard 后使用；失败/被拒时回退 anchor
+  // narrative source（storyToEcho 的 greeting/replies 基底），display identity 字段不受影响。
+  // 旧实现按「十七稿」letter 内容特判替换 opening 的逻辑已删除——它只在身份固定为林予时才有意义。
   const spoken = via === "live" ? liveOrPrev(spokenRes.text, "") || rt.local.greeting : rt.local.greeting;
   const felt = rt.local.felt === rt.local.greeting ? "" : acceptFelt(rt.local.felt, "");
 

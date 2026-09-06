@@ -6,21 +6,22 @@
 
 PR #2 主体已通过 review（候选池 / decideMatch / anchor identity / golden eval / region / avoid / bounded live start / Task 1 regression 全部接受）。剩两个 blocking finding。
 
-## Finding 1 — 未批准的其它 Story 人生仍可能被当前 Echo 说出
+## Finding 1 — 未批准的其它 Story 的经历仍可能被当前 Echo 说出
 
 根因：`alignShadowToAnchor()` 在 `[anchor, ...supporting, ...live]` 之后无条件回填
 `base.materials` 的剩余项（`rest`），而 `respond.ts` 的 `rankedMaterials` 会按当前
 userLine 对全部 materials 重排——未经 MatchDecision 批准的 Story 可借此排到前面，
 被当成当前 Echo 的第一人称经历说出。
 
-### Fix 1A — speakable materials 改为白名单
-match 阶段最终进入 respond 的 materials 只允许：
+### Fix 1A — match 阶段 generation materials 改为 allowlist
+match 阶段最终进入 respond() 的 materials 只允许（generation material allowlist）：
 1. anchor Story 的 `storyToPost`；
-2. 通过 relevance gate 的 approved supporting（MatchDecision.supporting）。
-删除 `rest` 回填与 live 帖消费（见 Finding 2）。不靠 prompt 叮嘱，数据进模型前解决。
+2. approved supporting（MatchDecision.supporting：`textRank ≤ SUPPORTING_TEXT_RANK_MAX`
+   且 `coverage > 0`，≤2 条）。
+删除 `rest` 回填与 live 帖消费（见 Finding 2）。不依赖 prompt 约束，在数据进入模型前完成过滤。
 
 ### Fix 1B — supporting 必须有正相关
-仅 `textRank <= 5` 不够：全部 cov=0 时 dense rank 并列使无关 Story 共享 rank 1。
+仅 `textRank <= 5` 不够：全部 coverage=0 时 dense rank 并列使无关 Story 共享 rank 1。
 新增硬条件：**raw coverage > 0**（与 query 共享至少一个 idf>0 的非全池通用 token）。
 零文本相关 ⇒ 不得成为 supporting。阈值语义写进代码注释与文档，不为 18/18 调神秘数。
 
@@ -44,8 +45,8 @@ match 阶段最终进入 respond 的 materials 只允许：
 未经 `rewriteStory + qaStory` 的 live 内容：
 - 仍被搜索（live 每次 match 仍启动，与 local 并行、独立预算、超时/失败不挡飞机）；
 - 只进后台 ingest queue（`scheduleIngest` 不动）；
-- **不得进入当前 Echo 的 speakable materials / respond prompt（任何路径，含 revisit 的
-  `synthesizeLibraryFirst` live 填充）**；
+- **不得进入当前 Echo 的 generation materials / respond() prompt（任何路径，含 revisit 的
+  synthesizeLibraryFirst live 填充）**；
 - 只有完成 rewrite+QA 进入 COLLECTED 后，未来 match 才可安全使用。
 删除 `pickLiveMaterials` / `LIVE_AFFINITY_MIN`（随之成为死代码）。
 

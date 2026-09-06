@@ -127,7 +127,8 @@ export function libraryFirstMaterials(local: Post[], live: Post[], profile: Play
   return [...fromLib, ...extras];
 }
 
-/** match 用：库先开口，live 只往后补。voice 仍看整批（库在前）。live 帖原样带上供匹配链筛。 */
+/** match 用：当前唯一调用方 gatherShadow 恒传 live=[]，materials 实际只含 local；
+ *  live 参数只透传到 livePosts 供观测/后台 ingest（raw live discovery-only）。voice 仍看整批（库在前）。 */
 export function synthesizeLibraryFirst(local: Post[], live: Post[], profile: PlayerProfile): EchoShadow {
   const materials = libraryFirstMaterials(local, live, profile);
   const forVoice = local.length ? [...local, ...live] : live;
