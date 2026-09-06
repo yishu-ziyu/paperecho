@@ -240,3 +240,16 @@ export function cleanOneLine(text: string, maxLen = 56): string {
   const raw = out || lines.slice(0, 1).join(" ").slice(0, maxLen);
   return closeHangingQuotes(raw);
 }
+
+/**
+ * 模型输出出口的 meta 泄露词表：内部叙事词（世界档案）、工具名（search_cases /
+ * search_archive / remember）、tool call、检索措辞、prompt。大小写不敏感；英文词带边界。
+ * 玩家可见回复命中即整句拒绝、落既有 fallback，不做词替换（留半句残骸不算拒绝）。
+ * 词表红线：不加「资料」「数据库」这类会误杀正常夜谈的词。
+ */
+const META_LEAK =
+  /世界档案|工具调用|检索结果|检索到|tool\s*call|\b(?:search_cases|search_archive|remember|prompt)\b/i;
+
+export function hasMetaLeak(text: string): boolean {
+  return META_LEAK.test(text);
+}

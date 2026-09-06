@@ -29,7 +29,7 @@ function profileOf(ctx: ToolCtx): PlayerProfile {
 }
 
 export function blobOfShadow(shadow: EchoShadow): string {
-  if (!shadow.materials.length) return "世界档案空。没有相近的夜。";
+  if (!shadow.materials.length) return "素材库空。没有相近的夜。";
   const body = shadow.materials
     .map((p) => `${p.situation || "（无摘要）"}\n${p.content}`)
     .join("\n---\n");

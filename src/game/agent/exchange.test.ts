@@ -5,6 +5,7 @@ import {
   advanceExchange,
   exchangeCue,
   fallbackReturnLetter,
+  hasMetaLeak,
   initialExchange,
   isNewPersonalDetail,
   lineForLayer,
@@ -220,5 +221,36 @@ describe("acceptFelt / cue", () => {
       assert.equal(/L[123]|第[一二三]层/.test(exchangeCue(speak, "full")), false);
     }
     assert.equal(/L[123]/.test(exchangeCue(2, "half")), false);
+  });
+});
+
+describe("hasMetaLeak（出口 meta 词表）", () => {
+  it("词表逐词命中，大小写不敏感", () => {
+    for (const line of [
+      "我在世界档案里看到一个和你很像的人。",
+      "search_cases 里那条让我想到你。",
+      "SEARCH_ARCHIVE 翻到一条。",
+      "Remember 写下了你这句话。",
+      "这是一个 tool call 的结果。",
+      "TOOLCALL 的输出不算话。",
+      "我在检索结果里看到一条。",
+      "检索到一条相近的。",
+      "这是 prompt 的要求。",
+      "system prompt 里写了。",
+    ]) {
+      assert.equal(hasMetaLeak(line), true, line);
+    }
+  });
+
+  it("正常夜谈不误杀（资料、数据库等词放行）", () => {
+    for (const line of [
+      "我把资料删了。",
+      "改了一晚上数据库。",
+      "我把台灯换到窗边了，亮得能看见灰。",
+      "备忘录里还留着去年的票根。",
+      "我记性不好，全记在纸上。",
+    ]) {
+      assert.equal(hasMetaLeak(line), false, line);
+    }
   });
 });
