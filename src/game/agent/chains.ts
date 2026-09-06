@@ -336,7 +336,7 @@ function makeSearchTool(rt: ChainRuntime, name: "search_archive" | "search_cases
         }
       : {
           label: "查素材",
-          description: "查素材库里别人的具体夜。细节可以化用，禁止搬运整句。",
+          description: "查别人的具体夜（和你同频的人的相近经历）。细节可以化用，禁止搬运整句。",
         };
   return {
     name,

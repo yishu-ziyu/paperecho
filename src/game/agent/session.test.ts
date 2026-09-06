@@ -513,4 +513,50 @@ describe("meta leak guard（出口整句拒绝，contract Fix 4）", () => {
     assert.equal(hasMetaLeak(res.spoken), false, res.spoken);
     assert.equal(res.meter.via, "live");
   });
+
+  it("scriptedStream 返回「素材库」来源泄露句 → guard 拒后兜底接住：非空、无泄露、≠泄露句", async () => {
+    const captured: Context[] = [];
+    const LEAK = "我刚在素材库里看到一个和你情况很像的人。";
+    const streamFn = scriptedStream(() => assistantMessage([{ type: "text", text: LEAK }], "stop"), captured);
+    const res = await echoChain.turn(nightInput(), { streamFn });
+    assert.ok(res.spoken.trim().length > 0, JSON.stringify(res.spoken));
+    assert.equal(hasMetaLeak(res.spoken), false, res.spoken);
+    assert.notEqual(res.spoken, LEAK);
+    // guard 拒掉 live 回复后，诚实落 archive 兜底，不留 silent turn。
+    assert.equal(res.meter.via, "archive");
+  });
+
+  it("玩家聊自己的素材库：系统正常响应，不崩溃、不当工具执行、原话进上下文", async () => {
+    const captured: Context[] = [];
+    const streamFn = scriptedStream(
+      () =>
+        assistantMessage([{ type: "text", text: "整理公司素材库到凌晨，第二天肯定头昏。" }], "stop"),
+      captured,
+    );
+    const res = await echoChain.turn(
+      nightInput({ playerLine: "我今天整理公司的素材库整理到凌晨。" }),
+      { streamFn },
+    );
+    // 玩家原话照常进上下文（没有当指令吞掉，也没有触发工具）。
+    assert.ok(contextText(captured[0]!).includes("我今天整理公司的素材库整理到凌晨"), contextText(captured[0]!));
+    // 模型复述玩家话题（含「素材库」）正常通过，无 throw、无 silent turn。
+    assert.equal(res.spoken, "整理公司素材库到凌晨，第二天肯定头昏。");
+    assert.equal(hasMetaLeak(res.spoken), false, res.spoken);
+    assert.equal(res.meter.via, "live");
+  });
+
+  it("生成上下文不再出现内部命名「素材库」", async () => {
+    const captured: Context[] = [];
+    const streamFn = scriptedStream(
+      () => assistantMessage([{ type: "text", text: "我把台灯换到窗边了，亮得能看见灰。" }], "stop"),
+      captured,
+    );
+    await echoChain.turn(nightInput(), { streamFn });
+    assert.ok(captured.length > 0);
+    for (const [i, ctx] of captured.entries()) {
+      // system prompt + messages（含工具结果）+ tool 定义三处都不得出现「素材库」。
+      const full = `${contextText(ctx)}\n${JSON.stringify(ctx.tools ?? [])}`;
+      assert.equal(full.includes("素材库"), false, `context #${i}`);
+    }
+  });
 });
