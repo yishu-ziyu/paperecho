@@ -44,7 +44,7 @@ function encounterGuide(opts: {
   if (round === 0) {
     return `${name} 先说了自己这边发生的事。你也说一件具体的，他才会把当时的感觉交出来。`;
   }
-  if (closeness >= 3) return "两边都说到后来改了什么。再写一句，这张就要折回去了。";
+  if (closeness >= 3) return "故事已经说到后来。今晚聊够了，就把它折回去。";
   if (silentTurns === 0) return "你刚那件他接上了。再说一件自己的，还能换他下一句。";
   return "刚才那句他没接到新的事。落到一件具体的——物件、动作、时间都行。";
 }
@@ -67,6 +67,29 @@ export function EncounterPhase() {
   const lastPlaced = useRef(0);
   const firstEchoSeen = useRef(false);
   const [waitOut, setWaitOut] = useState(false);
+  const [confirmSeal, setConfirmSeal] = useState(false);
+  const sealTimer = useRef(0);
+
+  useEffect(() => {
+    if (waiting) setConfirmSeal(false);
+    return () => {
+      if (sealTimer.current) window.clearTimeout(sealTimer.current);
+    };
+  }, [waiting]);
+
+  /** 两步确认防误触：3 秒内没点第二下就复位。折回去是玩家显式动作，经 store 的 sealTonight。 */
+  function tapSeal() {
+    if (waiting) return;
+    if (!confirmSeal) {
+      setConfirmSeal(true);
+      if (sealTimer.current) window.clearTimeout(sealTimer.current);
+      sealTimer.current = window.setTimeout(() => setConfirmSeal(false), 3000);
+      return;
+    }
+    if (sealTimer.current) window.clearTimeout(sealTimer.current);
+    setConfirmSeal(false);
+    useGame.getState().sealTonight();
+  }
 
   function place(text: string) {
     const line = text.trim();
@@ -249,6 +272,19 @@ export function EncounterPhase() {
         </Craft>
 
         <div className="grid w-full gap-2 pb-[max(1rem,env(safe-area-inset-bottom))] pt-2">
+          {!waiting && !sealing ? (
+            <button
+              type="button"
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={tapSeal}
+              className={cn(
+                "justify-self-center min-h-9 rounded-full px-4 text-[0.72rem] tracking-[0.18em] transition-[background-color,color] duration-(--motion-fast) ease-(--ease-out)",
+                confirmSeal ? "bg-ink text-paper" : "bg-paper/10 text-paper/60",
+              )}
+            >
+              {confirmSeal ? "再点一次，把今晚折回去" : "把今晚折回去"}
+            </button>
+          ) : null}
           {canSpeak ? (
             <form
               className="clay-sm grid gap-2 px-3 py-3"

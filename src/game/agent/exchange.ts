@@ -150,16 +150,6 @@ export function advanceExchange(
   };
 }
 
-/** L3 已经完全交出：这一句玩家开口直接封信。 */
-export function shouldSealNow(prev: ExchangeState): boolean {
-  return prev.unlocked >= 3;
-}
-
-/** 连续 3 轮静默刚软解锁：先让影子把该层说完，再封信。 */
-export function isSilentUnlock(prev: ExchangeState, step: ExchangeAdvance): boolean {
-  return !step.judgment.new_detail && step.state.unlocked > prev.unlocked;
-}
-
 export function fallbackReturnLetter(playerLine = ""): string {
   const t = playerLine.trim();
   return t ? `你那句「${t.slice(0, 16)}」我还留着。灯还开着。` : "灯还开着。你那句话我没扔。";

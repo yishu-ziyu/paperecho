@@ -7,13 +7,15 @@
  * 产品里的三个业务动作被拆成明确的小步骤，每步只做一件事：
  *
  *   match: research（世界档案影子）→ respond（大模型用素材开口）
- *   turn:  research（库）→ respond（大模型用素材接一句）
+ *   turn:  restoreEchoSession（每 turn 重建逻辑 session）→ research（结果进上下文）
+ *          → 短命 Pi Agent（带 search_archive / search_cases / remember 工具）
+ *          → 出口 guard → voice 一次 → daybook → 空
  *   seal:  research -> rememberFacts -> writeReturnLetter -> validate
  *
  * 开口走 pipeline/respond.ts（已训练的说话规范），不走故事卡金句。
- * 短命 Pi Agent 仍用于 seal 的工具步。
+ * turn 的主路径是短命 Pi Agent；greet/away/day 兜底仍走 pipeline/respond。
  */
-import { Agent, type AgentMessage, type AgentTool } from "@earendil-works/pi-agent-core";
+import { Agent, type AgentMessage, type AgentTool, type StreamFn } from "@earendil-works/pi-agent-core";
 import { Type, createModels } from "@earendil-works/pi-ai";
 import { echoFromCompanion, makeCompanion } from "../companion.ts";
 import { isCannedDay, nightLine, openingLine, type Daybook } from "../heartbeat.ts";
@@ -21,9 +23,10 @@ import { fallbackEcho } from "../kernel.ts";
 import type { EchoPerson, TokenMeter } from "../types.ts";
 import { AGENT_MODEL, llmApiKey, llmProvider, LLM_CONFIG } from "./config.ts";
 import { emptyMeter, hasApiKey } from "./llm.ts";
-import { factsOf, isCompleteFact, ownLine, parroted, perceptionOf, renderBlocks, stolenVoice } from "./memory.ts";
+import { factsOf, isCompleteFact, isInstruction, ownLine, parroted, perceptionOf, renderBlocks, stolenVoice } from "./memory.ts";
 import type { EchoShadow } from "./pipeline/persona.ts";
 import type { Post } from "./pipeline/source.ts";
+import { buildTurnContext, personaOf, restoreEchoSession, RULES, TURN_AGENT_TIMEOUT_MS } from "./session.ts";
 import { blobOfShadow, gatherShadow, runAgentTool, type ToolCtx } from "./tools.ts";
 import {
   acceptFelt,
@@ -39,18 +42,6 @@ import {
   type StoryDepth,
 } from "./exchange.ts";
 import type { NightInput, NightResult, RecallItem, VoiceInput } from "./types.ts";
-
-/** 人设与回应规范：所有步骤共用的产品约束。 */
-const RULES = `你是深夜还没睡的一个普通人。像微信，一两句纯口语。
-声音：写「事」不写「状态」（给具体时间/地点/动作/物件，不堆情绪形容词）；不碎；零剧场腔（不写诗、不写金句）。
-回应：说一件你自己的具体事，别贴情绪标签；先接住，再用平行的事回，不替对方下结论；共情落在「我也有过」，不是「你好可怜」；像聊天，不总结、不替双方收尾，留个口子。
-禁止咨询腔和 AI 万能句：看见、接住、值得、不是一个人、加油。
-工具用协议调用，禁止把工具名写进句子。
-# Human 是玩家以前的事，不是你的人生。禁止把 Human 的句子改成「我……」。最多点一下「你上次…」。
-remember 只记玩家的原话或事，禁止记你自己的夜。
-arrive 放下名字、城市、felt（人话感受短句，禁止情绪标签串）、三句你这座城市的新细节（不能重复 Human，不能重复刚说的那句）。
-故事只说到提示里指定的那一层：切深度不切信息碎片；禁止把层号写给玩家。素材只能化用细节，禁止搬运原句。
-最多轻轻点一下刚说过的那件事，不要复述整段，不要把今晚对话做成总结。`;
 
 let models: ReturnType<typeof createModels> | null = null;
 
@@ -120,7 +111,7 @@ function meterOf(messages: AgentMessage[], node: string): TokenMeter {
   };
 }
 
-/** 短命 Pi Agent：执行一个步骤。 */
+/** 短命 Pi Agent：执行一个步骤。streamFn 可注入假流（测试用），默认走真实模型。 */
 async function step(
   name: string,
   system: string,
@@ -128,6 +119,7 @@ async function step(
   tools: AgentTool[],
   maxTurns: number,
   timeoutMs = LLM_CONFIG.timeoutMs,
+  streamFn?: StreamFn,
 ) {
   let turns = 0;
   const agent = new Agent({
@@ -137,7 +129,7 @@ async function step(
       thinkingLevel: "off",
       tools,
     },
-    streamFn: getModels().streamSimple.bind(getModels()),
+    streamFn: streamFn ?? getModels().streamSimple.bind(getModels()),
     getApiKey: async () => llmApiKey(),
     shouldStopAfterTurn: async (ctx) => {
       turns += 1;
@@ -145,15 +137,18 @@ async function step(
     },
   });
 
+  let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     await Promise.race([
       agent.prompt(user),
-      new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error(`${name} timeout`)), timeoutMs),
-      ),
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error(`${name} timeout`)), timeoutMs);
+      }),
     ]);
   } catch {
     // 超时/错误按空结果处理，由上层决定 fallback
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
   }
 
   return {
@@ -185,15 +180,7 @@ function makeRuntime(input: NightInput): ChainRuntime {
     input.playerPersona ?? "",
   );
   const live = {
-    persona: input.days?.length && input.echo
-      ? `你是${input.echo.name}，在${input.echo.city}。先读你的日子本，从这些日子开口，不要自我介绍，不要说想对方。\n${input.days
-          .slice(-5)
-          .map((d) => `${d.date} ${d.text}`)
-          .join("\n")}`
-      : input.echo?.awayThing
-      ? `你是${input.echo.name}，在${input.echo.city}。你还是上次那个人。离开后你自己过了：「${input.echo.awayThing}」。今晚接着做你自己，不安慰。`
-      : input.corePersona ||
-        (input.echo ? `你是${input.echo.name}，在${input.echo.city}。${input.echo.greeting}` : ""),
+    persona: personaOf(input),
     facts: factsOf(input.archival),
   };
   const ctx: ToolCtx = {
@@ -307,6 +294,53 @@ function recallWithoutCurrent(recall: RecallItem[] | undefined, playerLine?: str
   const last = items.at(-1);
   if (last?.who === "you" && playerLine && last.text === playerLine) return items.slice(0, -1);
   return items;
+}
+
+/** 检索工具包成 AgentTool：execute 直接返回 runAgentTool 的文本结果。 */
+function makeSearchTool(rt: ChainRuntime, name: "search_archive" | "search_cases"): AgentTool {
+  const meta =
+    name === "search_archive"
+      ? {
+          label: "查信柜",
+          description:
+            "查这位玩家信柜里的旧事（对方以前说过的原话）。查到的是对方的事，不是你的，禁止说成你的经历。",
+        }
+      : {
+          label: "查素材",
+          description: "查世界档案里别人的具体夜。细节可以化用，禁止搬运整句。",
+        };
+  return {
+    name,
+    label: meta.label,
+    description: meta.description,
+    parameters: Type.Object({ query: Type.String() }),
+    execute: async (_id, params) => ({
+      content: [
+        { type: "text", text: runAgentTool(name, params as Record<string, unknown>, rt.ctx) },
+      ],
+      details: { query: String((params as { query?: string }).query ?? "") },
+    }),
+  };
+}
+
+/**
+ * turn 回复的出口 guard：cleanOneLine → keepSpoken（ownLine 的
+ * stolenVoice/parroted 校验）。ownLine 在全部拒绝时会退回原句，
+ * 所以这里再显式复核一次，拒掉就返回空串交给 fallback。
+ */
+export function guardTurnReply(
+  raw: string,
+  archival: import("../types.ts").MemoryRecord[],
+  used: string[],
+): string {
+  const line = cleanOneLine(raw);
+  if (!line) return "";
+  if (/search_cases|search_archive|remember/i.test(line)) return "";
+  const guarded = keepSpoken(line, "", archival, used);
+  if (!guarded || isInstruction(guarded)) return "";
+  if (stolenVoice(guarded, archival)) return "";
+  if (used.some((u) => u.trim() && parroted(guarded, u))) return "";
+  return guarded;
 }
 
 /** 研究步骤：库优先；match 短超时并入 live。不调用对话 LLM。 */
@@ -524,6 +558,7 @@ async function askTurnLive(input: NightInput, echo: EchoPerson, lastEcho: string
     prev: lastEcho,
     days: input.days,
     letter: input.playerLine || input.letter,
+    history: input.recall,
     timeoutMs,
   });
   const line = out.via === "live" ? (out.reply ?? "").trim().slice(0, 56) : "";
@@ -531,8 +566,13 @@ async function askTurnLive(input: NightInput, echo: EchoPerson, lastEcho: string
   return "";
 }
 
-/** turn 链：玩家回复后，对方回一句话。 */
-async function runTurnChain(input: NightInput): Promise<NightResult> {
+/** turn 链的可注入项：streamFn 假流（测试用）；注入时跳过 askTurnLive 的真实网络路径。 */
+export interface TurnChainOptions {
+  streamFn?: StreamFn;
+}
+
+/** turn 链：玩家回复后，同一个逻辑 Echo 回一句话（每 turn 重建 session + 短命 Agent）。 */
+async function runTurnChain(input: NightInput, opts: TurnChainOptions = {}): Promise<NightResult> {
   const rt = makeRuntime(input);
   // store.reply 会先把当前句推进 recall。交换闸只看「此前」的玩家句，否则自己跟自己撞上，永远升不了层。
   const priorPlayer = recallWithoutCurrent(input.recall, input.playerLine)
@@ -546,14 +586,42 @@ async function runTurnChain(input: NightInput): Promise<NightResult> {
     lastEcho,
   );
   const echo = input.echo ?? rt.local;
-  await researchStep("turn", rt);
+  const session = restoreEchoSession(input);
+  // 检索结果进模型上下文（不再丢弃）；rt.hits 照旧供 JudgePanel。
+  const research = await researchStep("turn", rt);
 
-  let spoken = await askTurnLive(input, echo, lastEcho, 16000);
-  let via: TokenMeter["via"] = spoken ? "live" : "archive";
-  if (!spoken) {
-    spoken = await askTurnLive(input, echo, lastEcho, 16000);
+  const echoLines = (input.recall ?? []).filter((t) => t.who === "echo").map((t) => t.text);
+  const used = [input.playerLine ?? "", input.letter, input.mirror, ...echoLines, ...priorPlayer];
+
+  let spoken = "";
+  let via: TokenMeter["via"] = "archive";
+
+  // 主路径：带工具的短命 Pi Agent。注入了假流即视为有模型（测试密封，不发真实网络）。
+  if (opts.streamFn || hasApiKey()) {
+    const { system, user } = buildTurnContext(session, research, {
+      speak: stepEx.speak,
+      mode: stepEx.mode,
+    });
+    const tools = [
+      makeSearchTool(rt, "search_archive"),
+      makeSearchTool(rt, "search_cases"),
+      makeRememberTool(rt),
+    ];
+    const out = await step("turn", system, user, tools, 4, TURN_AGENT_TIMEOUT_MS, opts.streamFn);
+    spoken = guardTurnReply(lastAssistantText(out.messages as AgentMessage[]), input.archival, used);
     if (spoken) via = "live";
   }
+
+  // fallback 1：单次 voice 通道（注入假流的测试不走这条，避免真实网络）。
+  if (!spoken && !opts.streamFn && hasApiKey()) {
+    const live = await askTurnLive(input, echo, lastEcho, 14_000);
+    if (live) {
+      spoken = live;
+      via = "live";
+    }
+  }
+
+  // fallback 2：日子本兜底。
   if (!spoken) {
     const days = input.days ?? [];
     const book: Daybook = {
