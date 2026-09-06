@@ -6,7 +6,8 @@
  *
  * 产品里的三个业务动作被拆成明确的小步骤，每步只做一件事：
  *
- *   match: research（世界档案影子）→ respond（大模型用素材开口）
+ *   match: decideMatch（anchor Story 定身份，evidence 进 hits/结构化字段）
+ *          → research（世界档案影子；anchor 自己的素材排第一）→ respond（大模型用素材开口）
  *   turn:  restoreEchoSession（每 turn 重建逻辑 session）→ research（结果进上下文）
  *          → 短命 Pi Agent（带 search_archive / search_cases / remember 工具）
  *          → 出口 guard → voice 一次 → daybook → 空
@@ -17,17 +18,21 @@
  */
 import { Agent, type AgentMessage, type AgentTool, type StreamFn } from "@earendil-works/pi-agent-core";
 import { Type, createModels } from "@earendil-works/pi-ai";
+import { ownedOf } from "../emotions.ts";
 import { echoFromCompanion, makeCompanion } from "../companion.ts";
 import { isCannedDay, nightLine, openingLine, type Daybook } from "../heartbeat.ts";
-import { fallbackEcho } from "../kernel.ts";
-import type { EchoPerson, TokenMeter } from "../types.ts";
+import { storyToEcho } from "../stories.ts";
+import type { EchoPerson, EmotionId, TokenMeter } from "../types.ts";
 import { AGENT_MODEL, llmApiKey, llmProvider, LLM_CONFIG } from "./config.ts";
 import { emptyMeter, hasApiKey } from "./llm.ts";
+import { decideMatch, pickLiveMaterials, type MatchDecision } from "./matching.ts";
 import { factsOf, isCompleteFact, isInstruction, ownLine, parroted, perceptionOf, renderBlocks, stolenVoice } from "./memory.ts";
 import type { EchoShadow } from "./pipeline/persona.ts";
 import type { Post } from "./pipeline/source.ts";
+import { storyToPost } from "./pipeline/sources/local.ts";
 import { buildTurnContext, personaOf, restoreEchoSession, RULES, TURN_AGENT_TIMEOUT_MS } from "./session.ts";
 import { blobOfShadow, gatherShadow, runAgentTool, type ToolCtx } from "./tools.ts";
+import type { MatchTrace, NightInput, NightResult, RecallItem, VoiceInput } from "./types.ts";
 import {
   acceptFelt,
   advanceExchange,
@@ -41,7 +46,6 @@ import {
   type SpeakMode,
   type StoryDepth,
 } from "./exchange.ts";
-import type { NightInput, NightResult, RecallItem, VoiceInput } from "./types.ts";
 
 let models: ReturnType<typeof createModels> | null = null;
 
@@ -162,6 +166,8 @@ async function step(
 interface ChainRuntime {
   input: NightInput;
   local: EchoPerson;
+  /** 新遇 match 的可解释匹配决定；locked/revisit（input.echo 已定）时为 null。 */
+  decision: MatchDecision | null;
   perception: string;
   live: { persona: string; facts: string[] };
   ctx: ToolCtx;
@@ -171,7 +177,18 @@ interface ChainRuntime {
 }
 
 function makeRuntime(input: NightInput): ChainRuntime {
-  const local = input.echo ?? fallbackEcho(input.fingerprint, input.region, input.avoidNames);
+  // 身份只来自同一条匹配链：新遇（无 locked echo）先 decideMatch，anchor 定身份。
+  const decision = input.echo
+    ? null
+    : decideMatch({
+        letter: input.letter,
+        mirror: input.mirror,
+        playerLine: input.playerLine,
+        feels: ownedOf(input.fingerprint, 0.3).map((f) => f.id) as EmotionId[],
+        region: input.region,
+        avoid: input.avoidNames,
+      });
+  const local = input.echo ?? storyToEcho(decision!.anchor);
   const perception = perceptionOf(
     input.fingerprint,
     input.letter,
@@ -200,6 +217,7 @@ function makeRuntime(input: NightInput): ChainRuntime {
   return {
     input,
     local,
+    decision,
     perception,
     live,
     ctx,
@@ -343,6 +361,59 @@ export function guardTurnReply(
   return guarded;
 }
 
+/**
+ * 「一个人是一个人」：把影子素材重排成 anchor 自己的行第一，supporting（处境相关的
+ * 别人的夜）≤2 随后，live 脱敏帖处境相关才入且 ≤2，其余旧素材垫底。
+ * 身份字段（name/city）绝不进这里——素材只有 Post（无 name/city）。
+ */
+function alignShadowToAnchor(rt: ChainRuntime): EchoShadow {
+  const d = rt.decision!;
+  const base = rt.shadow;
+  const anchorPost = storyToPost(d.anchor);
+  const materials: Post[] = [anchorPost];
+  const seen = new Set([anchorPost.content]);
+  for (const s of d.supporting) {
+    const p = storyToPost(s);
+    if (!seen.has(p.content)) {
+      seen.add(p.content);
+      materials.push(p);
+    }
+  }
+  const query = [rt.input.letter, rt.input.mirror, rt.input.playerLine]
+    .filter((t) => t?.trim())
+    .join(" ");
+  for (const p of pickLiveMaterials(query, base?.livePosts ?? [])) {
+    if (!seen.has(p.content)) {
+      seen.add(p.content);
+      materials.push(p);
+    }
+  }
+  if (!base) {
+    return { handle: "回声", voice: "", materials };
+  }
+  const rest = base.materials.filter((p) => !seen.has(p.content));
+  return { ...base, materials: [...materials, ...rest].slice(0, 8) };
+}
+
+/** hits 证据行：anchor 是谁/来自哪个池/各路名次 → fused 名次；只进 JudgePanel，不进 prompt。 */
+function matchEvidenceLine(d: MatchDecision): string {
+  const ev = d.evidence.find((e) => e.id === d.anchor.id)!;
+  const top = d.ranked.slice(0, 6).map((s) => s.id).join(",");
+  return `【匹配】anchor=${d.anchor.id} ${d.anchor.name}·${d.anchor.city} source=${d.anchor.source ?? "handwritten"} | text#${ev.textRank} emo#${ev.emotionRank} region#${ev.regionRank} → fused#${ev.fusedRank}；候选: ${top}`;
+}
+
+function matchTraceOf(d: MatchDecision): MatchTrace {
+  return {
+    anchorId: d.anchor.id,
+    anchorSource: d.anchor.source ?? "handwritten",
+    top: d.ranked.slice(0, 5).map((s, i) => ({
+      id: s.id,
+      source: s.source ?? "handwritten",
+      fusedRank: i + 1,
+    })),
+  };
+}
+
 /** 研究步骤：库优先；match 短超时并入 live。不调用对话 LLM。 */
 async function researchStep(kind: "match" | "turn" | "seal", rt: ChainRuntime): Promise<string> {
   const notes: string[] = [];
@@ -355,6 +426,7 @@ async function researchStep(kind: "match" | "turn" | "seal", rt: ChainRuntime): 
 
   if (kind === "match" || kind === "turn") {
     rt.shadow = await gatherShadow(rt.ctx, kind === "match");
+    if (rt.decision) rt.shadow = alignShadowToAnchor(rt);
     const blob = blobOfShadow(rt.shadow);
     rt.hits.push(blob);
     notes.push(`【世界档案里的相似的人】\n${blob}`);
@@ -401,6 +473,7 @@ async function runMatchChain(input: NightInput): Promise<NightResult> {
   );
 
   await researchStep("match", rt);
+  if (rt.decision) rt.hits.push(matchEvidenceLine(rt.decision));
   if (returning && input.echo) {
     const companion = makeCompanion({
       echo: input.echo,
@@ -502,13 +575,9 @@ async function runMatchChain(input: NightInput): Promise<NightResult> {
     "full",
   );
   const via = spokenRes.via;
-  let spoken = via === "live" ? liveOrPrev(spokenRes.text, "") : "";
-  if (!spoken || (spoken === "十七稿我打成一包，塞进抽屉最下层。" && rt.draft.name !== "林予")) {
-    spoken = rt.local.greeting;
-  }
-  if (spoken === "十七稿我打成一包，塞进抽屉最下层。" && rt.draft.name !== "林予") {
-    spoken = "";
-  }
+  // respond 只做措辞：live 开口过 guard 就用，否则落回 anchor 自己的 opening/lines（storyToEcho 基底）。
+  // 旧「十七稿特判」已删——它只在身份固定为林予、材料却来自别的故事时才有意义。
+  const spoken = via === "live" ? liveOrPrev(spokenRes.text, "") || rt.local.greeting : rt.local.greeting;
   const felt = rt.local.felt === rt.local.greeting ? "" : acceptFelt(rt.local.felt, "");
 
   const builtEcho: EchoPerson = {
@@ -542,6 +611,7 @@ async function runMatchChain(input: NightInput): Promise<NightResult> {
     exchange: opened,
     speak: 1,
     speakMode: "full",
+    match: rt.decision ? matchTraceOf(rt.decision) : undefined,
   };
 }
 

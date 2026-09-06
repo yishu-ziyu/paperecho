@@ -11,7 +11,7 @@ import type {
 import type { ExchangeState } from "./exchange";
 import { initialExchange } from "./exchange";
 import { agentRateLimit } from "./guard";
-import type { NightInput, VoiceInput } from "./types";
+import type { MatchTrace, NightInput, VoiceInput } from "./types";
 
 export interface AgentPayload {
   fingerprint: Fingerprint[];
@@ -40,6 +40,7 @@ export interface MatchResult {
   session: string;
   meter: TokenMeter;
   exchange: ExchangeState;
+  match?: MatchTrace;
 }
 
 export interface TurnResult {
@@ -113,6 +114,7 @@ export const runMatch = createServerFn({ method: "POST" })
       session: packSession(res.session),
       meter: res.meter,
       exchange: res.exchange,
+      match: res.match,
     };
   });
 

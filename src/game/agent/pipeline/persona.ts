@@ -21,6 +21,12 @@ export interface EchoShadow {
   handle: string;
   voice: string;
   materials: Post[];
+  /**
+   * match 现场搜到的脱敏帖（未进 materials 的那部分，Task 2A）。
+   * 供匹配链做「处境相关才入」的 ≤2 条临时 supporting；Post 无 name/city 字段，
+   * live raw 永远成不了身份。synthesize（纯库路径）不产这个字段。
+   */
+  livePosts?: Post[];
 }
 
 /**
@@ -120,7 +126,7 @@ export function libraryFirstMaterials(local: Post[], live: Post[], profile: Play
   return [...fromLib, ...extras];
 }
 
-/** match 用：库先开口，live 只往后补。voice 仍看整批（库在前）。 */
+/** match 用：库先开口，live 只往后补。voice 仍看整批（库在前）。live 帖原样带上供匹配链筛。 */
 export function synthesizeLibraryFirst(local: Post[], live: Post[], profile: PlayerProfile): EchoShadow {
   const materials = libraryFirstMaterials(local, live, profile);
   const forVoice = local.length ? [...local, ...live] : live;
@@ -128,5 +134,6 @@ export function synthesizeLibraryFirst(local: Post[], live: Post[], profile: Pla
     handle: deriveHandle(profile.emotions),
     voice: deriveVoice(forVoice.length ? forVoice : materials),
     materials,
+    livePosts: live,
   };
 }
