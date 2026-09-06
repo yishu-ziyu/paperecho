@@ -468,11 +468,16 @@ function voicePrompt(input: VoiceInput): string {
       .slice(-5)
       .map((d) => `${d.date} ${d.text}`)
       .join("\n");
+    const historyLines = (input.history ?? [])
+      .slice(-8)
+      .map((t) => `${t.who === "you" ? "对方" : "你"}：${t.text}`)
+      .join("\n");
     return [
       you ? `对方刚说：${you}` : "",
       letter && letter !== you ? `今晚信上：${letter}` : "",
       feels ? `今晚情绪（不出口）：${feels}` : "",
       input.lastEcho ? `你上一句：「${input.lastEcho}」。禁止原样重复这一句。` : "",
+      historyLines ? `你们今晚聊过：\n${historyLines}` : "",
       dayLines ? `日子本：\n${dayLines}` : "",
       "接住对方刚说的这件事，说你一件平行的具体事。一两句，≤56 字。不要自我介绍，不要说想对方。",
     ]

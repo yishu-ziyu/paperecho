@@ -39,6 +39,7 @@ export interface NightInput {
   echo?: EchoPerson | null; // 已锁定的人；match 时身份锁定不改名换城
   playerLine?: string; // 玩家刚说的一句
   recall?: RecallItem[]; // 这一晚的完整对话（不含刚生成的那句）
+  round?: number; // 今晚第几轮（从 1 起）；session 里只作展示
 
   /** 持久记忆 */
   archival: MemoryRecord[]; // 旧夜事实
@@ -65,6 +66,8 @@ export interface VoiceInput {
   date?: string;
   days?: { date: string; text: string }[];
   letter?: string;
+  /** 今晚已聊过的条目；kind=turn 的兜底路径也能看到 transcript。 */
+  history?: RecallItem[];
   kind: "day" | "away" | "greet" | "turn";
   timeoutMs?: number;
 }

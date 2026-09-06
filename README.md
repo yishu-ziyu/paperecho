@@ -37,5 +37,5 @@ Agent 默认 MiniMax CN（`MiniMax-M3`）。备选：`.env` 填 `AI_PING_API_KEY
 
 - React 19 · TanStack Start · Vite · Tailwind v4
 - Motion 弹簧跟手 · Cobe 地球
-- Pi Agent 驱动三步 Prompt Chain（match / turn / seal），确定性检索 → 单工具 LLM 步 → 校验闸门
+- Pi Agent 驱动三步 Prompt Chain（match / turn / seal），确定性检索 → 短命多工具 Agent（turn 带 search_archive / search_cases / remember 三工具，每 turn 从 NightInput 重建 session）→ 校验闸门
 - AI 输出永远被规则夹住：禁止安慰词、禁偷玩家原话、禁串城；离线也能完整完成一局

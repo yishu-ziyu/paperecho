@@ -89,6 +89,7 @@ function asNight(data: AgentPayload): NightInput {
     corePersona: data.core?.persona,
     playerLine: data.playerLine,
     recall: data.recall,
+    round: data.round,
     echo: data.echo,
     avoidNames: data.avoidNames,
     session: unpackSession(data.session),

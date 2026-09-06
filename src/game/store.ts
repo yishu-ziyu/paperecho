@@ -3,9 +3,7 @@ import {
   advanceExchange,
   fallbackReturnLetter,
   initialExchange,
-  isSilentUnlock,
   SEAL_CLIENT_TIMEOUT_MS,
-  shouldSealNow,
   type ExchangeState,
 } from "./agent/exchange";
 import { applyFacts, factsOf, keepPlayerFacts, loadArchival, ownLine, persistArchival } from "./agent/memory";
@@ -110,6 +108,7 @@ interface GameState {
   pickRegion: (id: RegionId) => void;
   launch: (power: number) => void;
   reply: (text: string) => void;
+  sealTonight: () => void;
   saveReturn: () => void;
   abortFlight: () => void;
   goArchive: () => void;
@@ -180,8 +179,7 @@ const savedSnapshot = loadSnapshot();
 
 /**
  * 把落盘快照还原成可继续的初始状态。异步等待段回不来：
- * flight 匹配中 → 退回发射前（信与地区保留）；encounter 等回复 → 放平等待标志，
- * seal 已提交但结果丢了 → 直接进回信。
+ * flight 匹配中 → 退回发射前（信与地区保留）；encounter 等回复 → 放平等待标志，回到桌上重发。
  */
 function resumeOf(snap: JourneySnapshot | null): Partial<GameState> {
   if (!snap) return {};
@@ -209,10 +207,8 @@ function resumeOf(snap: JourneySnapshot | null): Partial<GameState> {
     return { ...base, phase: "throw", searching: false, echo: null, searchNote: "", waitingSince: 0 };
   }
   if (snap.phase === "encounter" && snap.waitingEcho) {
-    if (snap.exchange && shouldSealNow(snap.exchange)) {
-      return { ...base, phase: "return", waitingEcho: false, waitingSince: 0 };
-    }
-    return { ...base, waitingEcho: false, waitingSince: 0 };
+    // 等待中的那轮回复丢了：回到桌上放平等待标志，玩家可以重发；不因 exchange 进度自动封信。
+    return { ...base, phase: "encounter", waitingEcho: false, waitingSince: 0 };
   }
   return {
     ...base,
@@ -447,71 +443,6 @@ export const useGame = create<GameState>((set, get) => ({
     const round = s.round + 1;
     const chosen = [...s.chosenReplies, text];
     const recall = [...s.recall, { who: "you" as const, text }];
-    const silentUnlock = isSilentUnlock(prevEx, step);
-
-    const beginSeal = () => {
-      set({ waitingEcho: true, waitingSince: Date.now(), searchNote: "回信正在折回来" });
-      const cur = get();
-      void Promise.race([
-        runSeal({ data: agentPayload(cur, { playerLine: text }) }),
-        new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error("timeout")), SEAL_CLIENT_TIMEOUT_MS),
-        ),
-      ])
-        .then((res) => {
-          if (get().phase !== "encounter") return;
-          const echo = get().echo;
-          if (!echo) return;
-          const fallback = fallbackReturnLetter(text);
-          const base = get();
-          const grown = applyFacts(base.archival, res.facts, {
-            emotions: ownedOf(base.fingerprint, 0.3).map((f) => f.id),
-            region: base.region ?? "east",
-            echoName: echo.name,
-          });
-          persistArchival(grown);
-          set({
-            echo: {
-              ...echo,
-              returnLetter: ownLine(res.returnLetter || fallback, [fallback, echo.greeting], base.archival, [
-                echo.returnLetter,
-              ]),
-            },
-            archival: grown,
-            session: res.session,
-            meter: res.meter,
-            waitingEcho: false,
-            waitingSince: 0,
-            phase: "return",
-          });
-        })
-        .catch(() => {
-          if (get().phase !== "encounter") return;
-          const echo = get().echo;
-          if (!echo) {
-            set({ waitingEcho: false, waitingSince: 0 });
-            return;
-          }
-          set({
-            echo: { ...echo, returnLetter: fallbackReturnLetter(text) },
-            waitingEcho: false,
-            waitingSince: 0,
-            phase: "return",
-          });
-        });
-    };
-
-    if (shouldSealNow(prevEx)) {
-      set({
-        chosenReplies: chosen,
-        round,
-        recall,
-        waitingEcho: true,
-        searchNote: "回信正在折回来",
-      });
-      beginSeal();
-      return;
-    }
 
     set({
       chosenReplies: chosen,
@@ -564,11 +495,9 @@ export const useGame = create<GameState>((set, get) => ({
           session: res.session,
           exchange: res.exchange ?? step.state,
           recall: [...get().recall, { who: "echo", text: spoken }],
-          waitingEcho: silentUnlock,
-          waitingSince: silentUnlock ? Date.now() : 0,
-          searchNote: silentUnlock ? "回信正在折回来" : get().searchNote,
+          waitingEcho: false,
+          waitingSince: 0,
         });
-        if (silentUnlock) beginSeal();
       })
       .catch(() => {
         if (get().phase !== "encounter") return;
@@ -586,11 +515,65 @@ export const useGame = create<GameState>((set, get) => ({
           echo: { ...echo, replies: [...echo.replies, spoken] },
           exchange: step.state,
           recall: [...get().recall, { who: "echo", text: spoken }],
-          waitingEcho: silentUnlock,
-          waitingSince: silentUnlock ? Date.now() : 0,
-          searchNote: silentUnlock ? "回信正在折回来" : get().searchNote,
+          waitingEcho: false,
+          waitingSince: 0,
         });
-        if (silentUnlock) beginSeal();
+      });
+  },
+
+  /** 玩家显式折回去：唯一触发 runSeal 的路径。 */
+  sealTonight: () => {
+    const s = get();
+    if (s.phase !== "encounter" || s.waitingEcho || !s.echo) return;
+    const playerLine = s.recall.filter((t) => t.who === "you").at(-1)?.text ?? "";
+    set({ waitingEcho: true, waitingSince: Date.now(), searchNote: "回信正在折回来" });
+    const cur = get();
+    void Promise.race([
+      runSeal({ data: agentPayload(cur, { playerLine }) }),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("timeout")), SEAL_CLIENT_TIMEOUT_MS),
+      ),
+    ])
+      .then((res) => {
+        if (get().phase !== "encounter") return;
+        const echo = get().echo;
+        if (!echo) return;
+        const fallback = fallbackReturnLetter(playerLine);
+        const base = get();
+        const grown = applyFacts(base.archival, res.facts, {
+          emotions: ownedOf(base.fingerprint, 0.3).map((f) => f.id),
+          region: base.region ?? "east",
+          echoName: echo.name,
+        });
+        persistArchival(grown);
+        set({
+          echo: {
+            ...echo,
+            returnLetter: ownLine(res.returnLetter || fallback, [fallback, echo.greeting], base.archival, [
+              echo.returnLetter,
+            ]),
+          },
+          archival: grown,
+          session: res.session,
+          meter: res.meter,
+          waitingEcho: false,
+          waitingSince: 0,
+          phase: "return",
+        });
+      })
+      .catch(() => {
+        if (get().phase !== "encounter") return;
+        const echo = get().echo;
+        if (!echo) {
+          set({ waitingEcho: false, waitingSince: 0 });
+          return;
+        }
+        set({
+          echo: { ...echo, returnLetter: fallbackReturnLetter(playerLine) },
+          waitingEcho: false,
+          waitingSince: 0,
+          phase: "return",
+        });
       });
   },
 

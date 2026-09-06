@@ -7,12 +7,10 @@ import {
   fallbackReturnLetter,
   initialExchange,
   isNewPersonalDetail,
-  isSilentUnlock,
   lineForLayer,
   SEAL_CLIENT_TIMEOUT_MS,
   SEAL_REMEMBER_TIMEOUT_MS,
   SEAL_WRITE_TIMEOUT_MS,
-  shouldSealNow,
 } from "./exchange.ts";
 
 describe("isNewPersonalDetail", () => {
@@ -96,37 +94,86 @@ describe("advanceExchange", () => {
     assert.equal(third.judgment.new_detail, false);
   });
 
-  it("seals from the exchange, not from opening count", () => {
-    const s0 = initialExchange();
-    assert.equal(shouldSealNow(s0), false);
-    const a1 = advanceExchange(s0, "我也是", [], "灯还开着");
-    const a2 = advanceExchange(a1.state, "嗯嗯", ["我也是"], "灯还开着");
-    assert.equal(shouldSealNow(a2.state), false);
-    const a3 = advanceExchange(a2.state, "好吧", ["我也是", "嗯嗯"], "灯还开着");
-    assert.equal(isSilentUnlock(a2.state, a3), true);
-    assert.equal(shouldSealNow(a3.state), false);
-    const done = { unlocked: 3 as const, silentTurns: 0 };
-    assert.equal(shouldSealNow(done), true);
-    assert.equal(isSilentUnlock(s0, a1), false);
+  it("keeps advancing past depth 3 without any seal signal", () => {
+    let s = initialExchange();
+    const a1 = advanceExchange(s, "今天被老板当众点名了，我当场没接话。", [], "灯还开着");
+    assert.equal(a1.state.unlocked, 2);
+    s = a1.state;
+    const a2 = advanceExchange(
+      s,
+      "我把客厅的灯和电视都开着，就想让屋里听起来有第二个人。",
+      ["今天被老板当众点名了，我当场没接话。"],
+      "灯还开着",
+    );
+    assert.equal(a2.state.unlocked, 3);
+    s = a2.state;
+    // 已到 depth 3 之后：故事进度不再封顶对话寿命，每轮照常产出 state/speak。
+    const lines = [
+      "下班路上我把那条消息点开又关了，没回。",
+      "我在工位把明天的清单写完了，还是睡不着。",
+      "刚才老板又给我发消息了，我装作没看见。",
+      "我把手机扣在沙发上，去厨房烧了壶水。",
+      "群里只回了收到，我把电脑合上了。",
+      "电梯里我数着楼层，没有看任何人。",
+    ];
+    let prior = ["今天被老板当众点名了，我当场没接话。", "我把客厅的灯和电视都开着，就想让屋里听起来有第二个人。"];
+    let lastEcho = "我那晚也没睡";
+    for (let i = 0; i < lines.length; i++) {
+      const step = advanceExchange(s, lines[i]!, prior, lastEcho);
+      assert.equal(step.state.unlocked, 3, `turn ${i + 1}`);
+      assert.equal(step.speak >= 1 && step.speak <= 3, true, `turn ${i + 1}`);
+      assert.equal(typeof step.mode, "string");
+      assert.equal(typeof step.judgment.new_detail, "boolean");
+      // ExchangeAdvance 里不存在任何 seal 信号。
+      assert.deepEqual(Object.keys(step).sort(), ["judgment", "mode", "speak", "state"]);
+      s = step.state;
+      prior = [...prior, lines[i]!];
+      lastEcho = "";
+    }
+    assert.equal(s.unlocked, 3);
   });
 });
 
 describe("seal letter / layer fallback", () => {
-  it("store waits for both seal steps and no longer seals on round count", async () => {
+  it("store waits for both seal steps and never auto-seals", async () => {
     const { readFile } = await import("node:fs/promises");
     const store = await readFile(new URL("../store.ts", import.meta.url), "utf8");
     const chains = await readFile(new URL("./chains.ts", import.meta.url), "utf8");
+    const exchangeSrc = await readFile(new URL("./exchange.ts", import.meta.url), "utf8");
     const encounter = await readFile(new URL("../phases/EncounterPhase.tsx", import.meta.url), "utf8");
     assert.match(store, /SEAL_CLIENT_TIMEOUT_MS/);
     assert.equal(store.includes("round >= 3"), false);
     assert.equal(store.includes("14000"), false);
-    assert.match(store, /shouldSealNow/);
     assert.match(store, /fallbackReturnLetter/);
     assert.match(chains, /SEAL_REMEMBER_TIMEOUT_MS/);
     assert.match(chains, /SEAL_WRITE_TIMEOUT_MS/);
     assert.match(chains, /lineForLayer/);
     assert.equal(encounter.includes("round >= 3"), false);
     assert.match(encounter, /回信正在折/);
+
+    // 自动 seal 全部拆除：store 不再引用 shouldSealNow / silentUnlock。
+    assert.equal(store.includes("shouldSealNow"), false);
+    assert.equal(store.includes("silentUnlock"), false);
+    assert.equal(exchangeSrc.includes("shouldSealNow"), false);
+    assert.equal(exchangeSrc.includes("isSilentUnlock"), false);
+
+    // runSeal( 只出现在显式 sealTonight 动作里，且该动作是 store 上唯一的调用点。
+    const occurrences = [...store.matchAll(/runSeal\(/g)].map((m) => m.index ?? -1);
+    assert.equal(occurrences.length, 1);
+    const sealTonightStart = store.indexOf("sealTonight: () => {");
+    const saveReturnStart = store.indexOf("saveReturn: () => {");
+    assert.ok(sealTonightStart > 0);
+    assert.ok(occurrences[0]! > sealTonightStart && occurrences[0]! < saveReturnStart);
+    // 显式折回去仍把玩家送进回信（Encounter → Return 流程不破）。
+    assert.match(store.slice(sealTonightStart, saveReturnStart), /phase: "return"/);
+
+    // UI 入口：EncounterPhase 经 store action 显式折回去（两步确认）。
+    assert.match(encounter, /sealTonight/);
+    assert.match(encounter, /再点一次，把今晚折回去/);
+
+    // turn 主路径：research 结果进 turn 上下文，不再被丢弃。
+    assert.match(chains, /const research = await researchStep\("turn", rt\)/);
+    assert.match(chains, /buildTurnContext\(session, research/);
   });
 
   it("match/turn/seal bank remembered facts into archival", async () => {

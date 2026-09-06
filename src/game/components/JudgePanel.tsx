@@ -52,7 +52,7 @@ export function JudgePanel() {
       <p className="mb-3 text-xs leading-relaxed text-ink/55">
         Prompt Chain · match / turn / seal 三链
         <br />
-        每链：确定性检索 → 单工具 LLM 步 → 校验闸门
+        每链：确定性检索 → 短命多工具 Agent → 校验闸门
       </p>
       <dl className="grid grid-cols-2 gap-3 font-mono text-sm tabular-nums">
         <div>
