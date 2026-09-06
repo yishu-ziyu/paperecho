@@ -24,6 +24,12 @@ export type LiveProvider = "anysearch" | "firecrawl";
 const LIVE_MS = Number(process.env.PAPER_ECHO_LIVE_MS ?? 4000);
 const LIVE_LIMIT = 3;
 
+/** 调用时读预算：测试可临时覆盖 PAPER_ECHO_LIVE_MS（gatherShadow 的注入缝用）。 */
+export function liveBudgetMs(): number {
+  const env = Number(process.env.PAPER_ECHO_LIVE_MS);
+  return Number.isFinite(env) && env > 0 ? env : LIVE_MS;
+}
+
 export function liveEnabled(): boolean {
   if (process.env.PAPER_ECHO_LIVE === "0") return false;
   if (process.env.NODE_TEST_CONTEXT && process.env.PAPER_ECHO_LIVE !== "1") return false;

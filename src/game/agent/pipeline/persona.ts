@@ -21,6 +21,13 @@ export interface EchoShadow {
   handle: string;
   voice: string;
   materials: Post[];
+  /**
+   * match 现场搜到的 raw 帖（Task 2A 二轮起为 discovery-only）。
+   * cleanHit 不是匿名化，raw 帖**永不进 materials/prompt**，只在此供观测；
+   * 安全化唯一路径是后台 ingest（rewrite+QA → COLLECTED）。
+   * Post 无 name/city 字段，raw live 成不了身份。synthesize（纯库路径）不产这个字段。
+   */
+  livePosts?: Post[];
 }
 
 /**
@@ -120,7 +127,8 @@ export function libraryFirstMaterials(local: Post[], live: Post[], profile: Play
   return [...fromLib, ...extras];
 }
 
-/** match 用：库先开口，live 只往后补。voice 仍看整批（库在前）。 */
+/** match 用：当前唯一调用方 gatherShadow 恒传 live=[]，materials 实际只含 local；
+ *  live 参数只透传到 livePosts 供观测/后台 ingest（raw live discovery-only）。voice 仍看整批（库在前）。 */
 export function synthesizeLibraryFirst(local: Post[], live: Post[], profile: PlayerProfile): EchoShadow {
   const materials = libraryFirstMaterials(local, live, profile);
   const forVoice = local.length ? [...local, ...live] : live;
@@ -128,5 +136,6 @@ export function synthesizeLibraryFirst(local: Post[], live: Post[], profile: Pla
     handle: deriveHandle(profile.emotions),
     voice: deriveVoice(forVoice.length ? forVoice : materials),
     materials,
+    livePosts: live,
   };
 }
