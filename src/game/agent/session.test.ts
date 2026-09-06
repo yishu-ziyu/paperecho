@@ -12,6 +12,7 @@ import type { StreamFn } from "@earendil-works/pi-agent-core";
 import { nightLine } from "../heartbeat.ts";
 import type { MemoryRecord } from "../types.ts";
 import { echoChain, guardTurnReply } from "./chains.ts";
+import { hasMetaLeak } from "./exchange.ts";
 import { buildTurnContext, restoreEchoSession, TURN_AGENT_TIMEOUT_MS } from "./session.ts";
 import { runAgentTool } from "./tools.ts";
 import type { NightInput, RecallItem } from "./types.ts";
@@ -467,5 +468,49 @@ describe("no-key + empty daybook + lastEcho === greeting still speaks (round 2 c
       if (savedKey !== undefined) process.env.MINIMAX_CN_API_KEY = savedKey;
       if (savedAlt !== undefined) process.env.AI_PING_API_KEY = savedAlt;
     }
+  });
+});
+
+describe("meta leak guard（出口整句拒绝，contract Fix 4）", () => {
+  it("guardTurnReply：泄露句 → 空；正常句原样通过", () => {
+    assert.equal(guardTurnReply("我刚在世界档案里看到一个和你很像的人。", [], []), "");
+    assert.equal(guardTurnReply("search_cases 里那条让我想到你。", [], []), "");
+    assert.equal(guardTurnReply("我刚在检索结果里看到一条相近的。", [], []), "");
+    assert.equal(guardTurnReply("这是 system prompt 的要求。", [], []), "");
+    // 不会误杀的正常夜谈。
+    assert.equal(
+      guardTurnReply("我把台灯换到窗边了，亮得能看见灰。", [], []),
+      "我把台灯换到窗边了，亮得能看见灰。",
+    );
+  });
+
+  it("scriptedStream 返回泄露句 → guard 拒后兜底接住：spoken 非空、无泄露词、≠ 泄露句", async () => {
+    const captured: Context[] = [];
+    const LEAK = "我刚在世界档案里看到一个和你很像的人。";
+    const streamFn = scriptedStream(() => assistantMessage([{ type: "text", text: LEAK }], "stop"), captured);
+    const res = await echoChain.turn(nightInput(), { streamFn });
+    assert.ok(res.spoken.trim().length > 0, JSON.stringify(res.spoken));
+    assert.equal(hasMetaLeak(res.spoken), false, res.spoken);
+    assert.notEqual(res.spoken, LEAK);
+    // guard 拒掉 live 回复后，诚实落 archive 兜底，不留 silent turn。
+    assert.equal(res.meter.via, "archive");
+  });
+
+  it("玩家自己说「世界档案」：系统正常响应，不崩溃、不当工具执行", async () => {
+    const captured: Context[] = [];
+    const streamFn = scriptedStream(
+      () => assistantMessage([{ type: "text", text: "我把台灯换到窗边了，亮得能看见灰。" }], "stop"),
+      captured,
+    );
+    const res = await echoChain.turn(
+      nightInput({ playerLine: "我在世界档案里看到一个和你很像的人，就来了。" }),
+      { streamFn },
+    );
+    // 玩家原话照常进上下文（没有当指令吞掉）。
+    assert.ok(contextText(captured[0]!).includes("我在世界档案里看到一个和你很像的人"), contextText(captured[0]!));
+    // 回复非空且干净。
+    assert.equal(res.spoken, "我把台灯换到窗边了，亮得能看见灰。");
+    assert.equal(hasMetaLeak(res.spoken), false, res.spoken);
+    assert.equal(res.meter.via, "live");
   });
 });

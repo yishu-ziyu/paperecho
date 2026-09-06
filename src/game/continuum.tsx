@@ -193,7 +193,13 @@ export function PullCommit({
         if (locked.current) return;
         e.preventDefault();
         unlockAudio();
-        (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+        // capture 只是增强：IAB/合成 pointer 下可能抛 NotFoundError。
+        // 拖拽监听本就在 window 上，capture 失败不阻断手势初始化。
+        try {
+          (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+        } catch {
+          /* 无 capture 也照常拖拽 */
+        }
         x.stop();
         y.stop();
         start.current = { x: e.clientX, y: e.clientY };
@@ -316,7 +322,12 @@ export function useWellDrag<T>(onDrop: (value: T) => void, opts?: { floor?: bool
       dragged.current = false;
       setHolding(value);
       if (ghostRef.current) ghostRef.current.textContent = label;
-      (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+      // capture 失败（合成 pointer 等）不阻断拿取；监听在 window 上，拖拽照常。
+      try {
+        (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+      } catch {
+        /* 无 capture 也照常拖拽 */
+      }
     };
   }
 
