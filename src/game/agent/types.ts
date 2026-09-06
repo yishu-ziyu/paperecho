@@ -72,6 +72,22 @@ export interface VoiceInput {
   timeoutMs?: number;
 }
 
+/**
+ * match 链的结构化证据（JudgePanel/debug）：anchor 是谁、来自哪个池、Top 候选。
+ * 只进 NightResult.match 与 hits 证据行，绝不进 prompt / research 文本。
+ */
+export interface MatchCandidateTrace {
+  id: string;
+  source: "handwritten" | "collected";
+  fusedRank: number;
+}
+
+export interface MatchTrace {
+  anchorId: string;
+  anchorSource: "handwritten" | "collected";
+  top: MatchCandidateTrace[];
+}
+
 /** 链的最终产出。这是 game store 唯一需要关心的输出形状。 */
 export interface NightResult {
   echo: EchoPerson;
@@ -87,6 +103,8 @@ export interface NightResult {
   speak: StoryDepth;
   speakMode: SpeakMode;
   judgment?: ExchangeJudgment;
+  /** 新遇 match 才有：anchor 决定的可解释证据（revisit/locked 路径无）。 */
+  match?: MatchTrace;
 }
 
 /** 模型 / 服务配置（集中在 config 层，换模型只改这里）。 */

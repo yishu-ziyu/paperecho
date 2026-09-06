@@ -1,12 +1,13 @@
 import { ownedOf } from "../emotions.ts";
 import type { EmotionId, Fingerprint, MemoryRecord, RegionId } from "../types.ts";
 import { isCompleteFact, isInstruction, jaccard, searchArchival, tokensOf } from "./memory.ts";
-import { selectMaterials, synthesize, synthesizeLibraryFirst, type EchoShadow } from "./pipeline/persona.ts";
+import { synthesize, synthesizeLibraryFirst, type EchoShadow } from "./pipeline/persona.ts";
 import { makeProfile } from "./pipeline/profile.ts";
 import type { PlayerProfile } from "./pipeline/profile.ts";
-import type { Post } from "./pipeline/source.ts";
+import type { Post, PostSource } from "./pipeline/source.ts";
 import { archiveStories, localPosts, storyToPost } from "./pipeline/sources/local.ts";
-import { liveSearchSource } from "./pipeline/sources/live.ts";
+import { liveBudgetMs, liveSearchSource } from "./pipeline/sources/live.ts";
+import { withTimeout } from "./pipeline/web.ts";
 
 export interface ToolCtx {
   archival: MemoryRecord[];
@@ -45,27 +46,36 @@ export function formatCaseHits(ctx: ToolCtx): string {
 }
 
 /**
- * 世界档案合成影子。库满 5 条时不候现场爬（开口等不起）。
- * match 才传 live=true；turn 只用库。
+ * 世界档案合成影子。match 才候现场爬：live 与 local 并行起步，带独立预算
+ * （超时/失败 → []，不挡飞机），库满不满都发起（Task 2A：live 不再因库 ≥5 被跳过）。
+ * turn 只用库。liveSource 可注入（测试三态用），默认真实 liveSearchSource。
+ *
+ * Raw live = discovery only（review Finding 2）：cleanHit 不是匿名改写，未过
+ * rewrite+QA 的现场内容可能带真名/城市/联系方式，因此 live 结果**一律不进
+ * materials**（不进 prompt），只挂在 shadow.livePosts 供观测；安全化只有一条路
+ * ——scheduleIngest → rewriteStory + qaStory → COLLECTED → 未来 match 的安全池。
  */
-export async function gatherShadow(ctx: ToolCtx, live = false): Promise<EchoShadow> {
+export async function gatherShadow(
+  ctx: ToolCtx,
+  live = false,
+  liveSource: PostSource = liveSearchSource,
+): Promise<EchoShadow> {
   const profile = profileOf(ctx);
+  const pending = live
+    ? liveSource.search(profile).then(
+        (posts) => posts,
+        () => [] as Post[],
+      )
+    : null;
   const local = await localPosts.search(profile);
-  const lib = selectMaterials(local, profile);
-  if (!live || lib.length >= 5) {
-    return synthesizeLibraryFirst(local, [], profile);
-  }
-  let extra: Post[] = [];
-  try {
-    extra = await liveSearchSource.search(profile);
-  } catch {
-    extra = [];
-  }
-  return synthesizeLibraryFirst(local, extra, profile);
+  if (!pending) return synthesizeLibraryFirst(local, [], profile);
+  const extra = await withTimeout(pending, liveBudgetMs(), [] as Post[]).catch(() => [] as Post[]);
+  return { ...synthesizeLibraryFirst(local, [], profile), livePosts: extra };
 }
 
 /**
- * 库占满 5 条素材；live 短超时只填空位。live 失败仍返回库。原文不进 blob。
+ * world-archive 检索 blob（hits/JudgePanel 观测面用）。live 与 local 并行起步、独立预算；
+ * raw live discovery 不进 materials / blob，只挂 shadow.livePosts 供观测与后台 ingest。
  */
 export async function formatCaseHitsLive(ctx: ToolCtx): Promise<string> {
   return blobOfShadow(await gatherShadow(ctx, true));
