@@ -139,13 +139,20 @@ function transcriptBlock(session: EchoSession): string {
   const recent = items.slice(-RECENT_LINES);
   const earlier = items.slice(0, -RECENT_LINES);
   const lines = recent.map((t) => `${t.who === "you" ? "对方" : "你"}：${t.text.trim()}`);
-  // 早期轮次的玩家句全部保留（可截断，不许丢条）；早期 echo 句可省略。
+  // 早期轮次双方都保留（可截断，不许丢条），说话人归属分明：
+  // 玩家早期的话仍归对方；Echo 自己早期说过的关键事实（专属名词、承诺等）不许滑出窗口就忘掉。
   const earlierYou = earlier
     .filter((t) => t.who === "you")
     .map((t) => `- 对方（更早）：${clip(t.text, EARLIER_CLIP)}`);
+  const earlierEcho = earlier
+    .filter((t) => t.who === "echo")
+    .map((t) => `- 你（更早）：${clip(t.text, EARLIER_CLIP)}`);
   const parts = [
     `你们今晚聊过（最近的逐字）：\n${lines.join("\n")}`,
     earlierYou.length ? `更早对方说过的（都是对方的事，不是你的）：\n${earlierYou.join("\n")}` : "",
+    earlierEcho.length
+      ? `更早你自己说过的（这里「你」都是你亲口说过的话，不是对方的事，归属不许换）：\n${earlierEcho.join("\n")}`
+      : "",
   ];
   return parts.filter(Boolean).join("\n\n");
 }
@@ -163,7 +170,8 @@ export interface TurnContextOptions {
 }
 
 /**
- * 拼 turn 的 prompt。user 块保证：开场信+镜句、今晚 transcript（最近逐字+更早玩家句）、
+ * 拼 turn 的 prompt。user 块保证：开场信+镜句、今晚 transcript（最近逐字 + 更早双方发言，
+ * 说话人归属分明，Echo 早期说过的话不丢）、
  * 检索资料块、层指令、当前玩家句。
  */
 export function buildTurnContext(

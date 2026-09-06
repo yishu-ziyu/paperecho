@@ -595,6 +595,8 @@ async function runTurnChain(input: NightInput, opts: TurnChainOptions = {}): Pro
 
   let spoken = "";
   let via: TokenMeter["via"] = "archive";
+  // 主路径真实观测到的 usage；agent 没跑（无 key 且无假流）时保持 null，不伪造数字。
+  let agentMeter: TokenMeter | null = null;
 
   // 主路径：带工具的短命 Pi Agent。注入了假流即视为有模型（测试密封，不发真实网络）。
   if (opts.streamFn || hasApiKey()) {
@@ -608,6 +610,7 @@ async function runTurnChain(input: NightInput, opts: TurnChainOptions = {}): Pro
       makeRememberTool(rt),
     ];
     const out = await step("turn", system, user, tools, 4, TURN_AGENT_TIMEOUT_MS, opts.streamFn);
+    agentMeter = out.meter;
     spoken = guardTurnReply(lastAssistantText(out.messages as AgentMessage[]), input.archival, used);
     if (spoken) via = "live";
   }
@@ -637,6 +640,31 @@ async function runTurnChain(input: NightInput, opts: TurnChainOptions = {}): Pro
     spoken = nightLine("", lastEcho, book);
   }
 
+  // fallback 3：本地素材耗尽时的确定性最后一句。无 key / 超时 / 素材全复读也不断线。
+  // 复读上一句（lastEcho）、偷玩家记忆、指令残渣都过滤；own 全空就按当前层取固定层句，
+  // 该层也复读（上一轮已说过同层）就换层重试；链尾 spoken 保证非空且 ≠ lastEcho，
+  // store 的 nightLine 门禁才放行。
+  if (!spoken) {
+    const own = [echo.greeting, ...(echo.replies ?? [])]
+      .map((l) => (l ?? "").trim())
+      .filter((l) => l && !parroted(l, lastEcho) && !isInstruction(l) && !stolenVoice(l, input.archival));
+    const layerOrder: StoryDepth[] = [
+      stepEx.speak,
+      ...([1, 2, 3] as StoryDepth[]).filter((d) => d !== stepEx.speak),
+    ];
+    const layerLine = layerOrder
+      .map((d) => lineForLayer({}, d, stepEx.mode))
+      .find((l) => l && !parroted(l, lastEcho) && !isInstruction(l) && !stolenVoice(l, input.archival));
+    spoken = own[0] ?? layerLine ?? lineForLayer({}, stepEx.speak, stepEx.mode);
+  }
+
+  // meter：agent 真跑过且观测到 usage 就保留真实数字（即使回复被 guard 拒掉走 archive，
+  // 已消耗的 token 不归零）；没跑或零 usage 维持空表，via/model 按实际路径诚实标注。
+  const meter: TokenMeter =
+    agentMeter && agentMeter.total > 0
+      ? { ...agentMeter, via, node: "turn" }
+      : { ...emptyMeter("turn", via), model: via === "live" ? AGENT_MODEL.id : "archive" };
+
   const nextEcho: EchoPerson = {
     ...echo,
     felt: acceptFelt(rt.shadow?.materials[0]?.situation, echo.felt || rt.local.felt),
@@ -657,7 +685,7 @@ async function runTurnChain(input: NightInput, opts: TurnChainOptions = {}): Pro
     session: input.session ?? [],
     persona: rt.live.persona || `你是${nextEcho.name}，在${nextEcho.city}。`,
     human: rt.live.facts.join("\n"),
-    meter: { ...emptyMeter("turn", via), model: via === "live" ? AGENT_MODEL.id : "archive" },
+    meter,
     exchange: stepEx.state,
     speak: stepEx.speak,
     speakMode: stepEx.mode,

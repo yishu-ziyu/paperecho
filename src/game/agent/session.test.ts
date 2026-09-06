@@ -9,6 +9,7 @@ import { describe, it } from "node:test";
 import type { AssistantMessage, Context } from "@earendil-works/pi-ai";
 import { createAssistantMessageEventStream } from "@earendil-works/pi-ai";
 import type { StreamFn } from "@earendil-works/pi-agent-core";
+import { nightLine } from "../heartbeat.ts";
 import type { MemoryRecord } from "../types.ts";
 import { echoChain, guardTurnReply } from "./chains.ts";
 import { buildTurnContext, restoreEchoSession, TURN_AGENT_TIMEOUT_MS } from "./session.ts";
@@ -139,7 +140,7 @@ describe("buildTurnContext (contract 4)", () => {
     assert.equal([...user.matchAll(/对方刚说：他又给我发消息了/g)].length, 1);
   });
 
-  it("keeps every early player line past 10 items; early echo lines may drop", () => {
+  it("keeps every early line past 10 items, both speakers attributed", () => {
     const recall: RecallItem[] = [
       { who: "you", text: "第一条早期的玩家句子讲的是搬家纸箱一直堆在门口没拆完的事。" },
       { who: "echo", text: "早期回声的一句，超过了十条的窗口。" },
@@ -154,8 +155,36 @@ describe("buildTurnContext (contract 4)", () => {
     const { user } = buildTurnContext(session, "资料");
     assert.ok(user.includes("第一条早期的玩家句子"), user); // 早期玩家句保留（可截断，不丢条）
     assert.ok(user.includes("第二条早期的玩家句子"), user);
-    assert.equal(user.includes("早期回声的一句"), false); // 早期 echo 句可省略
+    assert.ok(user.includes("早期回声的一句"), user); // 早期 echo 句同样保留，归属 Echo 自己
+    assert.ok(user.includes("你（更早）：早期回声的一句"), user); // 说话人归属不可换
     assert.ok(user.includes("最近的回声一句。"), user); // 最近 10 条逐字
+  });
+
+  it("keeps Echo's own early facts attributed to Echo past the 10-line window", () => {
+    const earlyEchoFact = "我妹妹小夏昨天离职了。";
+    const earlyPlayerLine = "我上个月把跑了三年的跑鞋收进了柜子顶上。";
+    const recall: RecallItem[] = [
+      { who: "echo", text: earlyEchoFact },
+      { who: "you", text: earlyPlayerLine },
+      ...Array.from({ length: 24 }, (_, i) => ({
+        who: i % 2 === 0 ? ("you" as const) : ("echo" as const),
+        text: `中段第${i + 1}句：我把窗台的杯子又往里挪了一点。`,
+      })),
+      { who: "echo", text: "最近这回的回声一句。" },
+    ];
+    const session = restoreEchoSession(nightInput({ recall, playerLine: "小夏后来怎么样了？" }));
+    const { user } = buildTurnContext(session, "资料");
+    // Echo 早期唯一事实（专有名词「小夏」）在窗口外仍保留，且归属是 Echo 自己的那一块。
+    const factLine = user.split("\n").find((l) => l.includes("我妹妹小夏昨天离职了"));
+    assert.ok(factLine, user);
+    assert.ok(factLine!.startsWith("- 你（更早）："), factLine);
+    assert.ok(user.includes("你（更早）：我妹妹小夏昨天离职了"), user);
+    // 早期玩家句照旧以「对方（更早）」归属保留。
+    assert.ok(user.includes(`对方（更早）：${earlyPlayerLine}`), user);
+    // recent 10 条逐字块不受影响：双方都以 对方：/你： 前缀逐字在场。
+    assert.ok(user.includes("你：中段第16句"), user);
+    assert.ok(user.includes("对方：中段第17句"), user);
+    assert.ok(user.includes("你：最近这回的回声一句。"), user);
   });
 
   it("carries identity, facts, continuity and the shared persona rules", () => {
@@ -241,6 +270,29 @@ describe("turn chain with a scripted fake stream (contracts 4/5/6)", () => {
     assert.equal(res.exchange.unlocked, 3);
     assert.equal(res.speak, 3);
   });
+
+  it("keeps the agent's real token usage in the final meter", async () => {
+    const captured: Context[] = [];
+    const streamFn = scriptedStream((call) => {
+      if (call === 0) {
+        return assistantMessage(
+          [{ type: "toolCall", id: "call-1", name: "remember", arguments: { fact: "我把台灯搬到了窗边。" } }],
+          "toolUse",
+        );
+      }
+      return assistantMessage(
+        [{ type: "text", text: "我把手机扣在沙发扶手上，群里的红点还亮着。" }],
+        "stop",
+      );
+    }, captured);
+    const res = await echoChain.turn(nightInput(), { streamFn });
+    // 两条 assistant 消息各带 input=10 / output=4，turn 链不得把真实 usage 丢成 0。
+    assert.equal(res.meter.prompt, 20);
+    assert.equal(res.meter.completion, 8);
+    assert.equal(res.meter.total, 28);
+    assert.equal(res.meter.via, "live");
+    assert.equal(res.meter.node, "turn");
+  });
 });
 
 describe("stolen voice guard (contract 7)", () => {
@@ -311,6 +363,107 @@ describe("no key stays playable (contract 8)", () => {
       assert.equal(res.spoken, "抽屉那包还在。");
       assert.equal(res.meter.via, "archive");
     } finally {
+      if (savedKey !== undefined) process.env.MINIMAX_CN_API_KEY = savedKey;
+      if (savedAlt !== undefined) process.env.AI_PING_API_KEY = savedAlt;
+    }
+  });
+});
+
+describe("no-key + empty daybook + lastEcho === greeting still speaks (round 2 contract 2)", () => {
+  it("first-encounter turn never returns a silent empty spoken without network", async () => {
+    const savedKey = process.env.MINIMAX_CN_API_KEY;
+    const savedAlt = process.env.AI_PING_API_KEY;
+    const realFetch = globalThis.fetch;
+    let calls = 0;
+    globalThis.fetch = ((..._args: unknown[]) => {
+      calls += 1;
+      throw new Error("network must not be touched without a key");
+    }) as typeof fetch;
+    delete process.env.MINIMAX_CN_API_KEY;
+    delete process.env.AI_PING_API_KEY;
+    try {
+      // 真实初始条件：无 key、空日子本、recall 只有一条 echo 句且等于 greeting、replies 空。
+      const res = await echoChain.turn(
+        nightInput({
+          days: [],
+          recall: [{ who: "echo", text: ECHO.greeting }],
+          echo: { ...ECHO, replies: [] },
+          playerLine: "我把台灯搬到了窗边，纸箱还堆在门口。",
+        }),
+      );
+      assert.equal(calls, 0); // 不产生网络请求
+      assert.ok(res.spoken.trim().length > 0, JSON.stringify(res.spoken)); // 不静默
+      assert.notEqual(res.spoken, ECHO.greeting); // 不复读 greeting / lastEcho
+      assert.equal(res.meter.via, "archive"); // 本地兜底，诚实标注
+      // turn 正常 resolve：exchange 状态返回，不涉及 seal。
+      assert.ok(res.exchange && typeof res.exchange.unlocked === "number");
+      assert.ok(typeof res.speak === "number");
+      // store 门禁放行：nightLine 用空 book 也能把这句话 append 成气泡。
+      const book = {
+        name: ECHO.name,
+        city: ECHO.city,
+        lastEcho: ECHO.greeting,
+        lastYou: "",
+        lastEmotions: [],
+        page: ECHO.greeting,
+        days: [],
+        lastWritten: "",
+      };
+      assert.equal(nightLine(res.spoken, ECHO.greeting, book), res.spoken);
+    } finally {
+      globalThis.fetch = realFetch;
+      if (savedKey !== undefined) process.env.MINIMAX_CN_API_KEY = savedKey;
+      if (savedAlt !== undefined) process.env.AI_PING_API_KEY = savedAlt;
+    }
+  });
+
+  it("consecutive degraded turns rotate the layered line instead of repeating lastEcho", async () => {
+    const savedKey = process.env.MINIMAX_CN_API_KEY;
+    const savedAlt = process.env.AI_PING_API_KEY;
+    const realFetch = globalThis.fetch;
+    let calls = 0;
+    globalThis.fetch = ((..._args: unknown[]) => {
+      calls += 1;
+      throw new Error("network must not be touched without a key");
+    }) as typeof fetch;
+    delete process.env.MINIMAX_CN_API_KEY;
+    delete process.env.AI_PING_API_KEY;
+    try {
+      // 退化状态：greeting 与 lastEcho 同为 depth2 层句，own 全被复读过滤，
+      // 主层句也复读 lastEcho，必须换层给出新句，而不是让 store 门禁挡成第二次静默。
+      const REPEATED = "那件事落在身上，我没跟人说。";
+      const res = await echoChain.turn(
+        nightInput({
+          days: [],
+          exchange: { unlocked: 2, silentTurns: 0 },
+          recall: [
+            { who: "echo", text: ECHO.greeting },
+            { who: "echo", text: REPEATED },
+          ],
+          echo: { ...ECHO, greeting: REPEATED, replies: [] },
+          playerLine: "嗯，我还在。",
+        }),
+      );
+      assert.equal(calls, 0);
+      assert.ok(res.spoken.trim().length > 0, JSON.stringify(res.spoken));
+      assert.notEqual(res.spoken, REPEATED);
+      assert.notEqual(res.spoken, ECHO.greeting);
+      assert.equal(res.meter.via, "archive");
+      assert.equal(
+        nightLine(res.spoken, REPEATED, {
+          name: ECHO.name,
+          city: ECHO.city,
+          lastEcho: REPEATED,
+          lastYou: "",
+          lastEmotions: [],
+          page: REPEATED,
+          days: [],
+          lastWritten: "",
+        }),
+        res.spoken,
+      );
+    } finally {
+      globalThis.fetch = realFetch;
       if (savedKey !== undefined) process.env.MINIMAX_CN_API_KEY = savedKey;
       if (savedAlt !== undefined) process.env.AI_PING_API_KEY = savedAlt;
     }
