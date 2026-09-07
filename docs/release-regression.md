@@ -11,7 +11,7 @@
 
 - 日常开发：`npm test`（不够时加 `npm run qa:release:fast`）。
 - 改了交互（手势、动效 Motion、UI、Phase 流转）后：`npm run qa:release:browser`。
-- 发布前：`npm run qa:release`（fast + browser）+ 一节真实模型人工检查。
+- 发布前：`npm run qa:release`（fast + browser + signal 中断清理验证）+ 一节真实模型人工检查。
 
 ## 三层检查
 
@@ -19,6 +19,7 @@
 |---|---|---|---|---|
 | A. Fast gate（快速检查） | `npm run qa:release:fast` | 是 | 否 | 是（已在 `.github/workflows/ci.yml`） |
 | B. Deterministic browser gate（确定性浏览器检查） | `npm run qa:release:browser` | 是 | 否（no-key，无模型密钥） | 否（稳定性证明中，见第六节） |
+| B+. Signal cleanup probe（中断清理验证） | `npm run qa:release:signal` | 是 | 否 | 否（同 B，见下） |
 | C. Real-model manual gate（真实模型人工检查） | 本文档第七节清单，人工执行 | 否 | 是 | 永不进入 |
 
 ## A 层：fast gate
@@ -40,8 +41,11 @@ Chromium headless，无头 Chromium）。
 
 ### 它实际执行的 UI 操作（全部是真实玩家操作，没有捷径）
 
-Title 矩阵（次数可调，见下）：fresh 下拉进 Orbit、reload 后下拉进 Orbit、
-reload 后 Enter 进 Orbit、reload 后 Space 进 Orbit。
+Title 矩阵（次数可调，见下）分两类行为、两条路径，结果分别计为
+`freshNavigation` 与 `persistedStateReload`：
+fresh 为真实首次文档加载（当前 origin 清 localStorage → about:blank →
+再进应用，不 reload）；reload 为 seed 旧 journey 后 reload。
+另有 reload 后 Enter / Space 各进 Orbit。
 每次断言：最终 phase 为 orbit、30 秒内 hydration mismatch（服务端 HTML
 与客户端首次渲染不一致）为 0、pageerror 为 0、无 double commit（一次手势
 只提交一次：phase 稳定且 journeys 数量不变）。
@@ -85,7 +89,9 @@ reload 后状态断言不变，真坏照样失败）。
   （按 server-fn（服务端函数）URL 内 base64 的 export 名精确计数）。
 - `runVoice`（问候/兜底/告别语音线）只计数不 pin：它是辅助产品流量，
   走哪条 fallback（兜底）路径取决于本地内容，不适合定死数量。
-- 外部请求：除已知静态资源外必须为 0（见 no-key 一节）。
+- 外部请求：浏览器外部动态请求（`browserExternalRequests`）必须为 0；
+  服务端实时搜索靠 `PAPER_ECHO_LIVE=0` + 凭证移除在构造上关闭
+  （`serverLiveSearchForcedOff`，见 no-key 一节）。
 - 内部术语：所有玩家可见回复（开场白、3 轮回复、回信）用与产品
   `hasMetaLeak()` 逐字一致的镜像正则检查（`scripts/e2e/` 内
   `META_LEAK`，随产品规则联动，有单测 pin 住命中与放行）：
@@ -97,19 +103,36 @@ reload 后状态断言不变，真坏照样失败）。
 
 ### no-key（无密钥）是怎么保证的（四层）
 
-1. 运行前把仓库 `.env` 原子改名移开（同目录 rename），跑完在 `finally`
-   + SIGINT/SIGTERM 里无条件移回；恢复后校验 sha256，不一致则大声失败。
+1. 运行前把仓库 `.env` 原子改名移开（同目录 rename），统一幂等的
+   `cleanup()` 在正常完成、测试失败、SIGINT、SIGTERM 下无条件移回；
+   signal handler 只做 `shutdown(exitCode)`，从不直接 `process.exit`；
+   signal 接管后 main 让出退出权（已验证过的竞态：cleanup 关浏览器期间
+   主流程若先走完会抢先 `exit(1)` 覆盖信号退出码，必须 park 等待）。
+   恢复后校验 sha256，不一致则大声失败。
    上次崩溃的残留备份会在下次启动时自动恢复（仅当 `.env` 本身缺失；
    两者并存则拒绝运行，等人工看）。
    `results.json` 里记录 `.env` 前后 stat + hash，可审计。
-2. 子进程环境变量删掉所有 key 相关键（MINIMAX_*、ANTHROPIC_*、
-   AI_PING_*、PAPER_ECHO_LLM、代理变量），`hasApiKey()` 必为 false。
+   中断清理有独立的 subprocess 验证（`scripts/e2e/signal-cleanup.probe.mjs`，
+   复用生产 cleanup 实现）：发 SIGTERM 后断言进程退出、`.env` hash 不变、
+   无 bak 残留、端口关闭、scratch 删除、无 Chromium 残留。
+2. `buildGateServerEnv()` 构造子进程环境（纯函数，返回新对象，不改输入，
+   不输出任何凭证值）：删除模型凭证（MINIMAX_*、ANTHROPIC_*、AI_PING_*、
+   PAPER_ECHO_LLM）、实时搜索凭证（FIRECRAWL_API_KEY、ANYSEARCH_API_KEY）、
+   代理变量；并**强制** `PAPER_ECHO_LIVE=0`（不是只删除——显式 0 让
+   `liveEnabled()` 直接返回 false，即使未来遗漏某个搜索凭证也不会出网），
+   强制 `VITE_AUTH_ENABLED=false`（宿主 export 盖不掉仓库测试配置）。
+   `results.json` 记录 `scrubbedCredentialNames`（只记变量名，不记值）。
 3. 浏览器层：非 loopback（本地回环）请求凡不是已知静态资源一律
    route-abort（路由拦截）+ 记录；出现一条即失败。
 4. 已知静态资源（`fonts.googleapis.com`、`fonts.gstatic.com` 的确定性
    CDN 字体）正常加载、单独计数 `externalStatic`、不计入失败：
    字体不可能是模型/搜索流量；拦截它们反而会降低渲染保真度并制造
    harness 自身的 `ERR_BLOCKED_BY_CLIENT` 噪声。
+
+证据口径（不要混淆）：`browserExternalRequests` 为 0 只证明**浏览器**
+零外部动态请求；**服务端**零实时搜索靠构造证明
+（`serverLiveSearchForcedOff: true`，即 LIVE=0 + 凭证移除）——
+Playwright 的 route 层看不到 Node 服务端的 fetch，不宣称它看到了。
 
 ### 就绪条件（readiness gate）
 
@@ -136,7 +159,8 @@ node scripts/e2e/game-release-smoke.mjs --title-fresh 10 --title-reload 20 --ent
   console / network 摘要。完整 localStorage、API Key、用户隐私不写入。
 - JSON 字段：gitHead（代码版本）、startedAt / finishedAt、browser、
   viewport、phaseResults（含每步 ok/ms/detail）、requestCounts、
-  externalRequests、externalStatic、consoleErrors、pageErrors、
+  browserExternalRequests、externalStatic、serverLiveSearchForcedOff、
+  scrubbedCredentialNames（变量名，无值）、consoleErrors、pageErrors、
   failedRequests、persistenceChecks、pass、failureReason。
 
 ### 被允许的 warning（以及为什么）
@@ -164,6 +188,11 @@ node scripts/e2e/game-release-smoke.mjs --title-fresh 10 --title-reload 20 --ent
 - 修改交互（手势/Motion/UI/Phase）：`npm run qa:release:browser`，
   通过后再提 PR。
 - 发布前：`npm run qa:release` 全绿 + 上面 C 层人工清单打勾。
+
+`qa:release:signal`（`scripts/e2e/signal-cleanup.probe.mjs`）故意不叫
+`*.test.mjs`：它会启动完整门禁再发 SIGTERM，需要浏览器 + Vite，不能进
+`npm test` 的默认 glob，否则 CI 的 `npm test` 会被拖进浏览器依赖——
+这正是本 PR 承诺不做的事（见第六节）。它只在发布门禁 lane 里跑。
 
 ## 第六节：CI（持续集成的未来）
 
@@ -199,4 +228,4 @@ CI 仍是 typecheck / lint / test / check:deps / build。
 
 以后修改 PaperEcho 的界面或交互后，能否用一条命令判断核心游戏流程
 有没有被破坏？能：`npm run qa:release`（fast 全绿 + 确定性浏览器整局
-通过，退出码 0 即通过，非 0 即失败）。
++ 中断清理验证通过，退出码 0 即通过，非 0 即失败）。

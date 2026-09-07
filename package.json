@@ -18,7 +18,8 @@
     "test": "node --test 'scripts/**/*.test.mjs' && node --experimental-strip-types --test 'src/**/*.test.ts' 'scripts/**/*.test.ts'",
     "qa:release:fast": "npm run typecheck && npm run lint && npm test && npm run check:deps && npm run build",
     "qa:release:browser": "node scripts/e2e/game-release-smoke.mjs",
-    "qa:release": "npm run qa:release:fast && npm run qa:release:browser",
+    "qa:release:signal": "node scripts/e2e/signal-cleanup.probe.mjs",
+    "qa:release": "npm run qa:release:fast && npm run qa:release:browser && npm run qa:release:signal",
     "collect": "node scripts/with-app-env.mjs npx -y tsx scripts/collect/run.mts",
     "lint": "eslint .",
     "format": "prettier --write ."
