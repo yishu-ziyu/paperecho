@@ -15,7 +15,7 @@ import { ThrowPhase } from "./phases/ThrowPhase";
 import { TitlePhase } from "./phases/TitlePhase";
 import { phaseFrame } from "./phaseMotion";
 import { pulseHeartbeat } from "./heartbeat";
-import { useGame } from "./store";
+import { hydrateLocalState, useGame } from "./store";
 import { speakDay } from "./voice";
 
 /**
@@ -32,6 +32,12 @@ export function GameShell() {
   const [diveFrom, setDiveFrom] = useState<CardRect | null>(null);
   const [seedU, setSeedU] = useState(0);
   const diving = Boolean(diveFrom);
+
+  // 水合必须是第一个 effect：SSR 安全默认值先落，本地真值（journeys/快照/静音）在
+  // 任何后续 effect 读取 store 之前就位，heartbeat 才能看到恢复出的 journeys。
+  useEffect(() => {
+    hydrateLocalState();
+  }, []);
 
   // 静音真相在 store；落到音频图只是副作用。
   useEffect(() => {

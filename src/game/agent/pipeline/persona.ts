@@ -52,7 +52,7 @@ export function deriveHandle(emotions: EmotionId[]): string {
  */
 export function deriveVoice(posts: Post[]): string {
   if (posts.length === 0) {
-    return "尚未成形——素材库为空，等有帖子再提炼统一的说话方式。";
+    return "尚未成形——还没有可参照的表达，先按平实口语说。";
   }
   const traits: string[] = [];
   const half = posts.length / 2;
