@@ -120,3 +120,33 @@ describe("game-release-smoke: META_LEAK mirror", () => {
     assert.doesNotMatch("我今天整理公司的素材库整理到凌晨。", META_LEAK);
   });
 });
+
+describe("game-release-smoke: shared-promise cleanup/shutdown", () => {
+  const src = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "game-release-smoke.mjs"), "utf8");
+
+  it("cleanupDone boolean is gone; cleanup is a shared cleanupPromise", () => {
+    assert.doesNotMatch(src, /\bcleanupDone\b/, "boolean re-entry guard must not return");
+    assert.match(src, /\bcleanupPromise\b/, "shared cleanupPromise missing");
+    assert.match(src, /if\s*\(!cleanupPromise\)/, "cleanup body must be created only on first call");
+  });
+
+  it("shutdown starts once via a shared shutdownPromise", () => {
+    assert.match(src, /\bshutdownPromise\b/, "shared shutdownPromise missing");
+    assert.match(src, /if\s*\(!shutdownPromise\)/, "shutdown must start only on the first signal");
+  });
+
+  it("SIGINT/SIGTERM stay as two process.on listeners (never process.once)", () => {
+    assert.match(src, /process\.on\("SIGINT"/);
+    assert.match(src, /process\.on\("SIGTERM"/);
+    assert.doesNotMatch(src, /process\.once\("SIG/);
+  });
+
+  it("process.exit appears exactly twice: inside shutdown's promise body + top-level entry", () => {
+    const exits = [...src.matchAll(/\bprocess\.exit\s*\(/g)].map((m) => m.index);
+    assert.equal(exits.length, 2, `want exactly 2 process.exit sites, got ${exits.length}`);
+    // The signal exit lives in the shutdown body (after the shared cleanup);
+    // cleanup itself must contain no exit site.
+    const shutdownBody = src.slice(src.indexOf("function shutdown("), src.indexOf("const finish ="));
+    assert.match(shutdownBody, /process\.exit/, "signal exit must live in shutdown");
+  });
+});

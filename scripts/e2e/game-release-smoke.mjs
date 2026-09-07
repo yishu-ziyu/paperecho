@@ -276,35 +276,52 @@ async function main() {
   }
 
   /**
-   * Unified, idempotent cleanup. Normal completion, test failure, SIGINT and
-   * SIGTERM ALL pass through here exactly once: close the browser, SIGTERM
-   * the with-app-env wrapper (it forwards to Vite), SIGKILL past a bounded
-   * wait, restore .env, delete scratch/profile. Never exits by itself — the
-   * caller (main return or shutdown) decides the exit code.
+   * Shared-promise cleanup. Normal completion, test failure, SIGINT and
+   * SIGTERM ALL await the SAME promise: the body is created on the first
+   * call and runs exactly once — close the browser, SIGTERM the
+   * with-app-env wrapper (it forwards to Vite), SIGKILL past a bounded
+   * wait, restore .env, delete scratch/profile. A later caller (e.g. the
+   * second signal) cannot skip past or cut short a cleanup still in
+   * flight: it awaits the very promise that is running. Never exits by
+   * itself — the caller (main return or shutdown) decides the exit code.
    */
-  let cleanupDone = false;
-  async function cleanup() {
-    if (cleanupDone) return;
-    cleanupDone = true;
-    try { await browser?.close(); } catch { /* ignore */ }
-    try {
-      if (server && server.exitCode === null && server.signalCode === null) {
-        server.kill("SIGTERM");
-        const t0 = Date.now();
-        while (server.exitCode === null && server.signalCode === null && Date.now() - t0 < 8000) {
-          await delay(200);
-        }
-        if (server.exitCode === null && server.signalCode === null) server.kill("SIGKILL");
-      }
-    } catch { /* ignore */ }
-    try { restoreDotenv(envBefore.sha256); } catch { /* best-effort safety net */ }
-    try { rmSync(scratch, { recursive: true, force: true }); } catch { /* ignore */ }
+  let cleanupPromise = null;
+  function cleanup() {
+    if (!cleanupPromise) {
+      cleanupPromise = (async () => {
+        try { await browser?.close(); } catch { /* ignore */ }
+        try {
+          if (server && server.exitCode === null && server.signalCode === null) {
+            server.kill("SIGTERM");
+            const t0 = Date.now();
+            while (server.exitCode === null && server.signalCode === null && Date.now() - t0 < 8000) {
+              await delay(200);
+            }
+            if (server.exitCode === null && server.signalCode === null) server.kill("SIGKILL");
+          }
+        } catch { /* ignore */ }
+        try { restoreDotenv(envBefore.sha256); } catch { /* best-effort safety net */ }
+        try { rmSync(scratch, { recursive: true, force: true }); } catch { /* ignore */ }
+      })();
+    }
+    return cleanupPromise;
   }
 
-  /** Signal entry: full cleanup first, exit code last. Never exits directly. */
-  async function shutdown(code) {
-    signaled = code; // main() must yield the exit to this path (see bottom)
-    try { await cleanup(); } finally { process.exit(code); }
+  /**
+   * Shared-promise signal entry. The FIRST signal creates shutdownPromise —
+   * it owns the exit code (SIGINT=130 / SIGTERM=143) and exits only after
+   * the shared cleanup fully completes. A later SIGINT/SIGTERM re-awaits the
+   * SAME shutdownPromise: it starts no second process.exit path and cannot
+   * change the exit code. Never exits directly — only this single
+   * `process.exit` inside the promise body decides signal exit.
+   */
+  let shutdownPromise = null;
+  function shutdown(code) {
+    if (!shutdownPromise) {
+      signaled = code; // main() must yield the exit to this path (see bottom)
+      shutdownPromise = cleanup().finally(() => process.exit(code));
+    }
+    return shutdownPromise;
   }
 
   const finish = (pass) => {
