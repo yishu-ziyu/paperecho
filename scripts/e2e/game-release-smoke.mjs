@@ -20,15 +20,22 @@
  *
  * No-key guarantee (defense in depth, developer `.env` always restored):
  * 1. The repo `.env` is moved aside with an atomic same-directory rename
- *    before boot and moved back in `finally` plus SIGINT/SIGTERM handlers.
+ *    before boot and moved back by the unified idempotent cleanup() — which
+ *    normal completion, failure, SIGINT and SIGTERM all share.
  *    A sha256 taken before the move must match after the restore, or the run
  *    fails loudly. A leftover backup from a crashed run is recovered at
  *    startup (only when `.env` itself is missing; otherwise fail for a human).
- * 2. Key-bearing env vars are scrubbed from the server child environment, so
- *    `loadProjectLlmEnv()` finds nothing and `hasApiKey()` is false.
- * 3. Every non-loopback request that is NOT a known static asset is
+ * 2. buildGateServerEnv() scrubs model keys (MINIMAX/AI_PING/ANTHROPIC),
+ *    live-search keys (FIRECRAWL/ANYSEARCH) and proxy vars from the server
+ *    child environment, and FORCES PAPER_ECHO_LIVE=0 so liveEnabled() is
+ *    false even if a future search credential were ever missed.
+ *    `hasApiKey()` is therefore false and live search is off by construction.
+ * 3. Every non-loopback browser request that is NOT a known static asset is
  *    route-aborted in the browser AND recorded; any such request fails the
  *    run. meter.via must read "archive" after match and every turn.
+ *    NOTE the evidence split: browserExternalRequests proves BROWSER egress
+ *    is zero; the SERVER side is proven by construction (LIVE=0 + scrub),
+ *    because page.route cannot observe Node server-side fetch.
  * 4. `.env` stat + hash are recorded before/after and must be identical.
  */
 import { execSync } from "node:child_process";
@@ -92,11 +99,44 @@ const STATIC_HOSTS = new Set(["fonts.googleapis.com", "fonts.gstatic.com"]);
  */
 const ALLOWLISTED_WARNINGS = [];
 
-const SCRUB_KEYS = [
+/**
+ * Credential names that must never reach the gate's dev-server child process.
+ * Model keys (read by config.ts/llm.ts), live-search keys (read by
+ * pipeline/sources/live.ts liveEnabled() + pipeline/web.ts), and proxy vars.
+ * Only NAMES are ever recorded in results; values are never logged or stored.
+ */
+const MODEL_CREDENTIAL_KEYS = [
   "MINIMAX_CN_API_KEY", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_API_KEY", "ANTHROPIC_BASE_URL",
   "AI_PING_API_KEY", "PAPER_ECHO_LLM", "MINIMAX_BASE_URL", "MINIMAX_MODEL",
+];
+const SEARCH_CREDENTIAL_KEYS = ["FIRECRAWL_API_KEY", "ANYSEARCH_API_KEY"];
+const PROXY_KEYS = [
   "HTTPS_PROXY", "HTTP_PROXY", "ALL_PROXY", "https_proxy", "http_proxy", "all_proxy",
 ];
+const SCRUB_KEYS = [...MODEL_CREDENTIAL_KEYS, ...SEARCH_CREDENTIAL_KEYS, ...PROXY_KEYS];
+
+/**
+ * Build the gate server's environment from a base env. Pure: returns a new
+ * object, never mutates the input, never reads or returns credential VALUES.
+ *
+ * - Deletes every model / live-search / proxy credential name.
+ * - Forces PAPER_ECHO_LIVE=0 (not just deletion): liveEnabled() returns false
+ *   on the explicit "0" even if a future search credential is ever missed.
+ * - Forces VITE_AUTH_ENABLED=false so a host shell export cannot override the
+ *   repo's own test configuration (repo default in .grok/app-env.json).
+ */
+function buildGateServerEnv(baseEnv) {
+  const env = { ...baseEnv };
+  for (const k of SCRUB_KEYS) delete env[k];
+  env.PAPER_ECHO_LIVE = "0";
+  env.VITE_AUTH_ENABLED = "false";
+  return env;
+}
+
+/** Credential NAMES removed from a base env (for results evidence; no values). */
+function scrubbedCredentialNames(baseEnv) {
+  return SCRUB_KEYS.filter((k) => baseEnv[k] !== undefined);
+}
 
 function sh(cmd, cwd, opts = {}) {
   return execSync(cmd, { cwd, stdio: ["ignore", "pipe", "pipe"], encoding: "utf8", ...opts }).trim();
@@ -178,6 +218,12 @@ function isLoopback(url) {
   }
 }
 
+/**
+ * Set by shutdown() when a signal owns the process exit. Module scope so the
+ * top-level entry can yield to the signal path (see bottom of file).
+ */
+let signaled = null;
+
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   const startedAt = new Date().toISOString();
@@ -190,7 +236,13 @@ async function main() {
   const R = {
     gitHead, startedAt, finishedAt: null, browser: "chromium-headless", viewport: VIEWPORT,
     args: { titleFresh: args.titleFresh, titleReload: args.titleReload, enter: args.enter, space: args.space },
-    phaseResults: {}, requestCounts: {}, externalRequests: [], externalStatic: [],
+    phaseResults: {}, requestCounts: {},
+    // browserExternalRequests: what Playwright's route layer actually observed
+    // (browser egress ONLY — it cannot see Node server-side fetch).
+    browserExternalRequests: [], externalStatic: [],
+    // serverLiveSearchForcedOff: the server side is proven by CONSTRUCTION
+    // (PAPER_ECHO_LIVE=0 + credential scrub), not by browser observation.
+    serverLiveSearchForcedOff: false, scrubbedCredentialNames: [],
     consoleErrors: [], pageErrors: [], failedRequests: [], allowlistedWarnings: [],
     persistenceChecks: {}, dotenv: { before: envBefore, after: null, restoredHashOk: null },
     pass: false, failureReason: null,
@@ -208,7 +260,6 @@ async function main() {
   const outPath = args.out;
   const failShot = join(dirname(outPath), `fail-${Date.now()}.png`);
   let page = null;
-
   /** Restore .env (idempotent) and verify. Throws on hash mismatch. */
   function restoreEnvOrFail() {
     if (dotenvMoved) {
@@ -222,6 +273,38 @@ async function main() {
     R.dotenv.after = after;
     const norm = (s) => JSON.stringify({ ...s, mtimeMs: 0 });
     if (norm(after) !== norm(envBefore)) throw new Error(".env stat changed during run");
+  }
+
+  /**
+   * Unified, idempotent cleanup. Normal completion, test failure, SIGINT and
+   * SIGTERM ALL pass through here exactly once: close the browser, SIGTERM
+   * the with-app-env wrapper (it forwards to Vite), SIGKILL past a bounded
+   * wait, restore .env, delete scratch/profile. Never exits by itself — the
+   * caller (main return or shutdown) decides the exit code.
+   */
+  let cleanupDone = false;
+  async function cleanup() {
+    if (cleanupDone) return;
+    cleanupDone = true;
+    try { await browser?.close(); } catch { /* ignore */ }
+    try {
+      if (server && server.exitCode === null && server.signalCode === null) {
+        server.kill("SIGTERM");
+        const t0 = Date.now();
+        while (server.exitCode === null && server.signalCode === null && Date.now() - t0 < 8000) {
+          await delay(200);
+        }
+        if (server.exitCode === null && server.signalCode === null) server.kill("SIGKILL");
+      }
+    } catch { /* ignore */ }
+    try { restoreDotenv(envBefore.sha256); } catch { /* best-effort safety net */ }
+    try { rmSync(scratch, { recursive: true, force: true }); } catch { /* ignore */ }
+  }
+
+  /** Signal entry: full cleanup first, exit code last. Never exits directly. */
+  async function shutdown(code) {
+    signaled = code; // main() must yield the exit to this path (see bottom)
+    try { await cleanup(); } finally { process.exit(code); }
   }
 
   const finish = (pass) => {
@@ -293,17 +376,17 @@ async function main() {
     return Date.now() - t0;
   }
 
+  // Signal handlers are installed BEFORE any side effect (.env move, server
+  // boot) so an early interrupt still runs the full cleanup path.
+  process.on("SIGINT", () => void shutdown(130));
+  process.on("SIGTERM", () => void shutdown(143));
+
   try {
-    // ---- 1. Move .env aside (atomic rename; restored in finally + signals) --
+    // ---- 1. Move .env aside (atomic rename; restored by cleanup) ------------
     const staleNote = recoverStaleBackup();
     if (staleNote) console.error(`[release-smoke] ${staleNote}`);
     dotenvMoved = moveDotenvAside();
     step("dotenv-aside", true, 0, dotenvMoved ? "moved, hash recorded" : "no .env present");
-    const onSignal = (sig) => {
-      try { restoreDotenv(envBefore.sha256); } finally { process.exit(sig === "SIGINT" ? 130 : 143); }
-    };
-    process.on("SIGINT", () => onSignal("SIGINT"));
-    process.on("SIGTERM", () => onSignal("SIGTERM"));
 
     // ---- 2. Server (fixed port, bump if occupied) ---------------------------
     const { spawn } = await import("node:child_process");
@@ -317,8 +400,9 @@ async function main() {
           s.on("error", () => res());
         });
       } catch { port += 1; continue; }
-      const env = { ...process.env };
-      for (const k of SCRUB_KEYS) delete env[k];
+      const env = buildGateServerEnv(process.env);
+      R.scrubbedCredentialNames = scrubbedCredentialNames(process.env);
+      R.serverLiveSearchForcedOff = env.PAPER_ECHO_LIVE === "0";
       server = spawn("node",
         [join(REPO, "scripts/with-app-env.mjs"), join(REPO, "node_modules/.bin/vite"),
           "dev", "--host", "127.0.0.1", "--port", String(port)],
@@ -340,6 +424,7 @@ async function main() {
     if (!ready) throw new Error(`dev server failed to boot: ${lastErr}`);
     const base = `http://127.0.0.1:${port}/`;
     step("server-ready", true, 0, `port ${port}`);
+    console.error(`[release-smoke] server-ready port=${port}`);
 
     // ---- 3. Fresh-profile browser + network gates ---------------------------
     mkdirSync(profileDir, { recursive: true });
@@ -348,6 +433,8 @@ async function main() {
       args: ["--no-sandbox", "--disable-dev-shm-usage"],
     });
     page = browser.pages()[0] ?? await browser.newPage();
+    page.on("crash", () => console.error("[release-smoke] PAGE-CRASH"));
+    browser.on("disconnected", () => console.error("[release-smoke] BROWSER-DISCONNECTED"));
     page.on("console", (m) => {
       if (m.type() !== "error") return;
       const text = m.text().slice(0, 300);
@@ -374,7 +461,7 @@ async function main() {
           R.externalStatic.push(line); // deterministic CDN fonts: counted, not gated
           return route.continue();
         }
-        R.externalRequests.push(line);
+        R.browserExternalRequests.push(line);
         return route.abort("blockedbyclient");
       }
       const req = route.request();
@@ -409,6 +496,10 @@ async function main() {
     }
 
     // ---- 4. Title matrix -----------------------------------------------------
+    // Two distinct behaviors, two distinct paths:
+    // - freshNavigation: a true first document load (origin storage cleared,
+    //   via about:blank, then navigate — NO reload).
+    // - persistedStateReload: seeded journey + reload.
     const journeys0 = async () => (await snapshot()).journeys;
     let doubleCommit = 0;
     {
@@ -418,18 +509,19 @@ async function main() {
         try {
           await page.goto(base, { waitUntil: "domcontentloaded", timeout: 20000 });
           await clearStorage();
-          await hardReload("title-fresh");
+          await page.goto("about:blank");
+          await page.goto(base, { waitUntil: "domcontentloaded", timeout: 20000 });
           const readyMs = await waitReady("title");
           const before = await journeys0();
           const s = await pullTitle();
           const stable = (await snapshot()).phase;
           if (s.phase !== "orbit" || stable !== "orbit") ok = false;
           if ((await journeys0()) !== before) doubleCommit += 1;
-          step(`title-fresh-${i}`, s.phase === "orbit" && stable === "orbit", Date.now() - t0, `readyMs=${readyMs} phase=${s.phase}`);
-        } catch (e) { ok = false; step(`title-fresh-${i}`, false, Date.now() - t0, e.message); }
+          step(`fresh-nav-${i}`, s.phase === "orbit" && stable === "orbit", Date.now() - t0, `readyMs=${readyMs} phase=${s.phase}`);
+        } catch (e) { ok = false; step(`fresh-nav-${i}`, false, Date.now() - t0, e.message); }
       }
-      R.phaseResults.titleFresh = `${steps.filter((s) => s.name.startsWith("title-fresh-") && s.ok).length}/${args.titleFresh}`;
-      if (!ok) throw new Error("title fresh pulls failed");
+      R.phaseResults.freshNavigation = `${steps.filter((s) => s.name.startsWith("fresh-nav-") && s.ok).length}/${args.titleFresh}`;
+      if (!ok) throw new Error("fresh navigation pulls failed");
     }
     {
       let ok = true;
@@ -442,11 +534,11 @@ async function main() {
           const stable = (await snapshot()).phase;
           if (s.phase !== "orbit" || stable !== "orbit") ok = false;
           if ((await journeys0()) !== before) doubleCommit += 1;
-          step(`title-reload-${i}`, s.phase === "orbit" && stable === "orbit", Date.now() - t0, `readyMs=${readyMs} phase=${s.phase}`);
-        } catch (e) { ok = false; step(`title-reload-${i}`, false, Date.now() - t0, e.message); }
+          step(`persisted-reload-${i}`, s.phase === "orbit" && stable === "orbit", Date.now() - t0, `readyMs=${readyMs} phase=${s.phase}`);
+        } catch (e) { ok = false; step(`persisted-reload-${i}`, false, Date.now() - t0, e.message); }
       }
-      R.phaseResults.titleReload = `${steps.filter((s) => s.name.startsWith("title-reload-") && s.ok).length}/${args.titleReload}`;
-      if (!ok) throw new Error("title reload pulls failed");
+      R.phaseResults.persistedStateReload = `${steps.filter((s) => s.name.startsWith("persisted-reload-") && s.ok).length}/${args.titleReload}`;
+      if (!ok) throw new Error("persisted-state reload pulls failed");
     }
     for (const [bucket, key] of [["title-enter", "Enter"], ["title-space", " "]]) {
       const n = bucket === "title-enter" ? args.enter : args.space;
@@ -526,7 +618,11 @@ async function main() {
     step("j-fold-throw", true, Date.now() - tF, "fold×2+window");
 
     // Throw: globe click (region) + slingshot (≤3)
+    // The runMatch baseline is read BEFORE the first launch gesture: the POST
+    // can already be counted by the route handler while the gesture resolves,
+    // so a post-launch baseline would race and under-count (flaky 0-delta).
     const tT = Date.now();
+    const matchCallsBeforeLaunch = R.requestCounts.runMatch ?? 0;
     await page.locator("canvas.globe-canvas").click({ force: true });
     await page.getByText("拉满再放").waitFor({ timeout: 8000 }).catch(() => {});
     let launched = false;
@@ -547,15 +643,14 @@ async function main() {
       if (!launched) await delay(800);
     }
     if (!launched) throw new Error("throw never launched");
-    const matchCalls = R.requestCounts.runMatch ?? 0;
     await waitState("match done", async () => {
       const g = await snapshot();
       return (g.phase === "flight" || g.phase === "encounter") && !g.searching && Boolean(g.echo);
     }, 60000);
     const afterMatch = await snapshot();
     if (afterMatch.meterVia !== "archive") throw new Error(`match via=${afterMatch.meterVia}, want archive`);
-    if ((R.requestCounts.runMatch ?? 0) - matchCalls !== 1) {
-      throw new Error(`runMatch fired ${(R.requestCounts.runMatch ?? 0) - matchCalls}× in match window, want 1`);
+    if ((R.requestCounts.runMatch ?? 0) - matchCallsBeforeLaunch !== 1) {
+      throw new Error(`runMatch fired ${(R.requestCounts.runMatch ?? 0) - matchCallsBeforeLaunch}× in match window, want 1`);
     }
     step("j-throw-match", true, Date.now() - tT, `echo=${afterMatch.echo} via=${afterMatch.meterVia}`);
 
@@ -731,7 +826,8 @@ async function main() {
     if (R.pageErrors.length) throw new Error(`pageerrors ×${R.pageErrors.length}: ${R.pageErrors[0]}`);
     if (R.consoleErrors.length) throw new Error(`console.errors ×${R.consoleErrors.length}: ${R.consoleErrors[0]}`);
     if (R.failedRequests.length) throw new Error(`failed loopback requests ×${R.failedRequests.length}`);
-    if (R.externalRequests.length) throw new Error(`external requests ×${R.externalRequests.length}`);
+    if (R.browserExternalRequests.length) throw new Error(`browser external requests ×${R.browserExternalRequests.length}`);
+    if (!R.serverLiveSearchForcedOff) throw new Error("server live search was not forced off");
     // runVoice (greet / turn-fallback / away / day voice lines) is auxiliary
     // product traffic: loopback-only, keyless, and which fallback path fires
     // depends on local-fallback content — counted in requestCounts for audit,
@@ -761,22 +857,19 @@ async function main() {
     } catch { /* evidence best-effort */ }
     return finish(false);
   } finally {
-    try { await browser?.close(); } catch { /* ignore */ }
-    try {
-      if (server) {
-        server.kill("SIGTERM");
-        const t0 = Date.now();
-        while (server.exitCode === null && Date.now() - t0 < 5000) await delay(200);
-        if (server.exitCode === null) server.kill("SIGKILL");
-      }
-    } catch { /* ignore */ }
-    try { restoreDotenv(envBefore.sha256); } catch { /* best-effort safety net */ }
-    try { rmSync(scratch, { recursive: true, force: true }); } catch { /* ignore */ }
+    await cleanup(); // idempotent: safe even if a signal already ran it
   }
 }
 
 if (isMainModule(import.meta.url)) {
-  process.exit(await main());
+  const code = await main();
+  if (signaled !== null) {
+    // A signal arrived mid-run and owns the exit now: main's own failure path
+    // (browser already closed by cleanup) must not preempt it with exit(1).
+    // Park until shutdown()'s finally exits with the signal code.
+    await new Promise(() => {});
+  }
+  process.exit(code);
 }
 
-export { META_LEAK, STATIC_HOSTS, parseArgs, serverFnOf };
+export { META_LEAK, STATIC_HOSTS, buildGateServerEnv, parseArgs, scrubbedCredentialNames, serverFnOf };
