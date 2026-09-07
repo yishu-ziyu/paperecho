@@ -240,3 +240,26 @@ export function cleanOneLine(text: string, maxLen = 56): string {
   const raw = out || lines.slice(0, 1).join(" ").slice(0, maxLen);
   return closeHangingQuotes(raw);
 }
+
+/**
+ * 模型输出出口的 meta 泄露词表：内部叙事词（世界档案）、工具名（search_cases /
+ * search_archive / remember）、tool call、检索措辞、prompt。大小写不敏感；英文词带边界。
+ * 玩家可见回复命中即整句拒绝、落既有 fallback，不做词替换（留半句残骸不算拒绝）。
+ * 词表红线：不加「资料」「数据库」这类会误杀正常夜谈的词。
+ */
+const META_LEAK =
+  /世界档案|工具调用|检索结果|检索到|tool\s*call|\b(?:search_cases|search_archive|remember|prompt)\b/i;
+
+/**
+ * 来源泄露窄规则：拦截把「素材库」当成本系统信息来源来描述的组合——
+ * 「在/从素材库…看到|查到|搜到|翻到|找到」「素材库里…有一条/一个人」。
+ * 不裸拦「素材库」这个词本身：玩家会正常聊自己公司的素材库（整理、备份、翻找灵感），
+ * 模型复述玩家话题时带上该词不算泄露；只有描述「本系统的检索来源」才算。
+ * guard 只作用于模型输出，玩家原话永远原样进上下文。
+ */
+const SOURCE_LEAK =
+  /(?:在|从|去)(?:我|咱|我们|咱们)?的?素材库[^。？！]{0,12}(?:看到|查到|搜到|翻到|找(?:到|过))|素材库[^。？！，]{0,6}(?:里|内)[^。？！，]{0,8}有(?:一条|一个|几条|个|个人|个案)/;
+
+export function hasMetaLeak(text: string): boolean {
+  return META_LEAK.test(text) || SOURCE_LEAK.test(text);
+}

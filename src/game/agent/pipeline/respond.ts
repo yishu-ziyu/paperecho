@@ -36,7 +36,7 @@
 import { EMOTIONS } from "../../emotions.ts";
 import type { EmotionId } from "../../types.ts";
 import { llmApiKey, LLM_CONFIG } from "../config.ts";
-import { cleanOneLine, exchangeCue, type SpeakMode, type StoryDepth } from "../exchange.ts";
+import { cleanOneLine, exchangeCue, hasMetaLeak, type SpeakMode, type StoryDepth } from "../exchange.ts";
 import { parroted } from "../memory.ts";
 import type { EchoShadow } from "./persona.ts";
 import type { Post } from "./source.ts";
@@ -423,9 +423,10 @@ export function heuristicRespond(ctx: TurnContext): TurnOutput {
   return { reply: line || fallbackForSpeak(speak, mode), via: "archive" };
 }
 
-/** 丢掉只留给真的不像回声：金句、咨询腔、复读玩家。不因漏写玩家物件词而丢。 */
+/** 丢掉只留给真的不像回声：金句、咨询腔、复读玩家、泄露内部词。不因漏写玩家物件词而丢。 */
 export function acceptLive(reply: string, userLine: string): boolean {
   if (!reply) return false;
+  if (hasMetaLeak(reply)) return false;
   if (LITERARY.test(reply) || META.test(reply)) return false;
   if (parroted(reply, userLine)) return false;
   if (/^你(应该|要|太|一定)|别想太多|会好的/.test(reply)) return false;

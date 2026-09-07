@@ -175,8 +175,6 @@ function agentPayload(
   };
 }
 
-const savedSnapshot = loadSnapshot();
-
 /**
  * 把落盘快照还原成可继续的初始状态。异步等待段回不来：
  * flight 匹配中 → 退回发射前（信与地区保留）；encounter 等回复 → 放平等待标志，回到桌上重发。
@@ -220,6 +218,18 @@ function resumeOf(snap: JourneySnapshot | null): Partial<GameState> {
   };
 }
 
+/** 客户端挂载后一次性水合：SSR 安全默认值 → 本地真值。服务端 no-op，杜绝 hydration mismatch。 */
+export function hydrateLocalState() {
+  if (typeof window === "undefined") return;
+  useGame.setState({
+    journeys: loadJourneys(),
+    muted: loadMuted(),
+    archival: loadArchival(),
+    core: cabinetCore(),
+    ...resumeOf(loadSnapshot()),
+  });
+}
+
 export const useGame = create<GameState>((set, get) => ({
   phase: "title",
   leftFrom: null,
@@ -242,12 +252,12 @@ export const useGame = create<GameState>((set, get) => ({
   replies: [],
   chosenReplies: [],
   meter: null,
-  journeys: loadJourneys(),
-  muted: loadMuted(),
+  journeys: [],
+  muted: false,
   judgeOpen: false,
   reading: null,
-  core: cabinetCore(),
-  archival: loadArchival(),
+  core: { human: "", persona: "" },
+  archival: [],
   recall: [],
   suggestions: [],
   hits: [],
@@ -257,7 +267,6 @@ export const useGame = create<GameState>((set, get) => ({
   exchange: initialExchange(),
   waitingSince: 0,
   seekName: null,
-  ...resumeOf(savedSnapshot),
 
   setTokens: (tokens) => set({ tokens, fingerprint: fingerprintOf(tokens) }),
 

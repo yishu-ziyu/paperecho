@@ -40,6 +40,7 @@ import {
   advanceExchange,
   cleanOneLine,
   fallbackReturnLetter,
+  hasMetaLeak,
   initialExchange,
   lineForLayer,
   SEAL_REMEMBER_TIMEOUT_MS,
@@ -84,9 +85,10 @@ function lastAssistantText(messages: AgentMessage[]): string {
  */
 
 /**
- * 模型回复的清洗入口：cleanOneLine + ownLine（拒指令句、拒搬运 archival 里的 Story 原句、
- * 拒复读 used 句）。出现「杭州」等与当前 Echo 无关的地名不构成「搬运他人 Story」的证据，
- * 不据此整体替换为故事卡行。
+ * 模型回复的清洗入口：cleanOneLine + hasMetaLeak + ownLine（拒指令句、拒泄露内部词、
+ * 拒搬运 archival 里的 Story 原句、拒复读 used 句）。出现「杭州」等与当前 Echo 无关的
+ * 地名不构成「搬运他人 Story」的证据，不据此整体替换为故事卡行。
+ * 泄露词整句拒绝：直接落 fallback，不做词替换。
  */
 export function keepSpoken(
   raw: string,
@@ -94,7 +96,9 @@ export function keepSpoken(
   archival: import("../types.ts").MemoryRecord[],
   used?: string | string[],
 ): string {
-  const line = ownLine(cleanOneLine(raw), [fallback], archival, used);
+  const cleaned = cleanOneLine(raw);
+  if (hasMetaLeak(cleaned)) return fallback;
+  const line = ownLine(cleaned, [fallback], archival, used);
   return (line && line.trim()) || fallback;
 }
 
@@ -275,7 +279,7 @@ async function speakFromMaterials(
     return { text, via: "live" };
   }
   const live = (out.reply ?? "").trim();
-  if (live && !priorEcho.some((p) => parroted(live, p))) {
+  if (live && !hasMetaLeak(live) && !priorEcho.some((p) => parroted(live, p))) {
     return { text: live.slice(0, 56), via: "live" };
   }
   return { text: "", via: "live" };
@@ -332,7 +336,7 @@ function makeSearchTool(rt: ChainRuntime, name: "search_archive" | "search_cases
         }
       : {
           label: "查素材",
-          description: "查世界档案里别人的具体夜。细节可以化用，禁止搬运整句。",
+          description: "查别人的具体夜（和你同频的人的相近经历）。细节可以化用，禁止搬运整句。",
         };
   return {
     name,
@@ -360,7 +364,7 @@ export function guardTurnReply(
 ): string {
   const line = cleanOneLine(raw);
   if (!line) return "";
-  if (/search_cases|search_archive|remember/i.test(line)) return "";
+  if (hasMetaLeak(line)) return "";
   const guarded = keepSpoken(line, "", archival, used);
   if (!guarded || isInstruction(guarded)) return "";
   if (stolenVoice(guarded, archival)) return "";
@@ -433,16 +437,18 @@ async function researchStep(kind: "match" | "turn" | "seal", rt: ChainRuntime): 
     if (rt.decision) rt.shadow = alignShadowToAnchor(rt);
     const blob = blobOfShadow(rt.shadow);
     rt.hits.push(blob);
-    notes.push(`【世界档案里的相似的人】\n${blob}`);
+    notes.push(
+      `【给你参考的别人的事】（只用于形成你自己的话，不许向对方提到这些内容的来历）\n${blob}`,
+    );
   }
 
   if (rt.input.archival.length > 0) {
     const archive = runAgentTool("search_archive", { query }, rt.ctx);
     rt.hits.push(archive);
-    notes.push(`【玩家信柜里的旧事】\n${archive}`);
+    notes.push(`【对方以前来过的旧事】\n${archive}`);
   }
 
-  return notes.join("\n\n") || "（没有检索到更多资料）";
+  return notes.join("\n\n") || "（没有更多素材）";
 }
 
 function coreBlocks(rt: ChainRuntime): string {
@@ -539,7 +545,9 @@ async function runMatchChain(input: NightInput): Promise<NightResult> {
       days,
       lastWritten: days.at(-1)?.date || "",
     };
-    const spoken = openingLine(greet.via === "live" ? greet.reply : "", book, companion.lastEcho);
+    // greet 泄露内部词时按非 live 处理：openingLine 走 book/lastEcho 兜底。
+    const greetLive = greet.via === "live" && !hasMetaLeak(greet.reply ?? "");
+    const spoken = openingLine(greetLive ? greet.reply : "", book, companion.lastEcho);
     const builtEcho = echoFromCompanion(companion, spoken);
     const dayLines = days
       .slice(-5)
@@ -560,8 +568,8 @@ async function runMatchChain(input: NightInput): Promise<NightResult> {
         : `你是${builtEcho.name}，在${builtEcho.city}。上次说过「${companion.lastEcho}」。`,
       human: rt.live.facts.join("\n"),
       meter: {
-        ...emptyMeter("match", greet.via === "live" ? "live" : "archive"),
-        model: greet.via === "live" ? AGENT_MODEL.id : "archive",
+        ...emptyMeter("match", greetLive ? "live" : "archive"),
+        model: greetLive ? AGENT_MODEL.id : "archive",
       },
       exchange: opened,
       speak: 1,
@@ -636,7 +644,8 @@ async function askTurnLive(input: NightInput, echo: EchoPerson, lastEcho: string
     history: input.recall,
     timeoutMs,
   });
-  const line = out.via === "live" ? (out.reply ?? "").trim().slice(0, 56) : "";
+  // 泄露内部词的 live 行视为无回复，交给后续兜底。
+  const line = out.via === "live" && !hasMetaLeak(out.reply ?? "") ? (out.reply ?? "").trim().slice(0, 56) : "";
   if (line && line !== prev) return line;
   return "";
 }
@@ -816,7 +825,9 @@ ${quoteHint}
     SEAL_WRITE_TIMEOUT_MS,
   );
 
-  const liveLetter = step2.text ? cleanOneLine(step2.text, 48) : "";
+  // live 回信带泄露词就置空：ownLine 落 sealFallback，绝不让内部词出现在信里。
+  const liveDraft = step2.text ? cleanOneLine(step2.text, 48) : "";
+  const liveLetter = liveDraft && !hasMetaLeak(liveDraft) ? liveDraft : "";
   const tonight = (input.recall ?? [])
     .filter((t) => t.who === "you")
     .map((t) => t.text.trim())
@@ -856,7 +867,9 @@ async function runVoiceChain(input: VoiceInput): Promise<string> {
   const { voiceAsPerson } = await import("./pipeline/respond.ts");
   const out = await voiceAsPerson(input);
   if (out.via !== "live") return "";
-  return liveOrPrev(out.reply ?? "", "");
+  // 日子本玩家可见：带内部词的 live 行整句丢弃，回落空串（调用方保留原页）。
+  const line = liveOrPrev(out.reply ?? "", "");
+  return line && !hasMetaLeak(line) ? line : "";
 }
 
 export const echoChain = {

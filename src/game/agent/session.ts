@@ -159,8 +159,9 @@ function transcriptBlock(session: EchoSession): string {
 
 const TOOL_GUIDE = `工具（都可以不调用）：
 - search_archive：查这位玩家信柜里的旧事。查到的是对方的事，禁止说成你的经历，禁止照抄原句。
-- search_cases：查世界档案素材（别人的具体夜）。细节可化用，禁止搬运整句。
+- search_cases：查别人的具体夜（和你同频的人的相近经历）。细节可化用，禁止搬运整句。
 - remember：把对方这轮说的新事实写下来。只记对方的话或事，完整短句。
+工具与查到的内容都是私下的事，对方不知道它们存在：任何情况下不得向对方提起工具、资料、来源或系统结构。
 要查就先查；最后必须用一句话回答：一两句纯口语，≤56 字，禁止把工具名写进句子里。`;
 
 export interface TurnContextOptions {
@@ -192,7 +193,7 @@ export function buildTurnContext(
     `今晚你收到的开场信：\n${letter || "（信上是空白的，就接现在这句。）"}`,
     mirror ? `他写在镜子上的那句：${mirror}` : "",
     transcriptBlock(session),
-    `检索到的资料（信柜旧事是对方的事，不是你的；档案素材可以化用，禁止照抄）：\n${research.trim() || "（没有检索到更多资料）"}`,
+    `给你的参考素材（只给你用来形成回复，不许向对方提起这些内容的来历；信柜旧事是对方的事，不是你的；素材细节可以化用，禁止照抄）：\n${research.trim() || "（没有更多素材）"}`,
     exchangeCue(speak, mode),
     playerLine ? `对方刚说：${playerLine}` : "对方还没开口，你先接今晚的信。",
   ];
