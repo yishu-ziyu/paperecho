@@ -40,9 +40,9 @@
  */
 import { execSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdtempSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { basename, dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { setTimeout as delay } from "node:timers/promises";
 import { chromium } from "playwright";
@@ -154,6 +154,113 @@ function dotenvStat() {
 }
 
 const DOTENV_BAK = join(REPO, ".env.release-gate-bak");
+const DOTENV_LOCK = join(REPO, ".env.release-gate-lock");
+/** Probe-owned scratch root (created by the probe per run). When set, the gate
+ *  creates its pe-release-* scratch ONLY inside this directory so the probe
+ *  can reclaim exactly that root without scanning the global tmpdir. */
+const SCRATCH_ROOT_ENV = "PE_RELEASE_GATE_SCRATCH_ROOT";
+
+/** True when `pid` names a live process (EPERM counts as alive). */
+function isPidAlive(pid) {
+  if (!Number.isInteger(pid) || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (e) {
+    if (e?.code === "ESRCH") return false;
+    if (e?.code === "EPERM") return true;
+    return false;
+  }
+}
+
+/** Read the gate lock holder PID, or null when absent/unparsable. */
+function readGateLock(lockPath = DOTENV_LOCK) {
+  try {
+    const n = Number.parseInt(String(readFileSync(lockPath, "utf8")).trim(), 10);
+    return Number.isInteger(n) && n > 0 ? n : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Exclusive gate lock. Must run BEFORE any .env move or restore.
+ * - First run creates the lock (O_EXCL) and proceeds.
+ * - Second concurrent run sees a live holder and throws (refuses) before
+ *   touching .env / .env.release-gate-bak at all.
+ * - A dead holder is stale (previous SIGKILL): unlink once and retry.
+ * Never deletes or restores .env on its own authority.
+ */
+function acquireGateLock(lockPath = DOTENV_LOCK) {
+  const me = `${process.pid}\n`;
+  try {
+    writeFileSync(lockPath, me, { flag: "wx" });
+    return { acquired: true, pid: process.pid, staleRecovered: false };
+  } catch (e) {
+    if (e?.code !== "EEXIST") throw e;
+  }
+  const holder = readGateLock(lockPath);
+  if (holder !== null && holder !== process.pid && isPidAlive(holder)) {
+    throw new Error(
+      `another release gate run (pid ${holder}) holds ${basename(lockPath)} \u2014 refusing concurrent run`,
+    );
+  }
+  try { unlinkSync(lockPath); } catch { /* best-effort */ }
+  try {
+    writeFileSync(lockPath, me, { flag: "wx" });
+    return { acquired: true, pid: process.pid, staleRecovered: true };
+  } catch (e2) {
+    const holder2 = readGateLock(lockPath);
+    if (holder2 !== null && isPidAlive(holder2)) {
+      throw new Error(
+        `another release gate run (pid ${holder2}) holds ${basename(lockPath)} \u2014 refusing concurrent run`,
+      );
+    }
+    throw e2;
+  }
+}
+
+/** Release the lock ONLY when this process owns it. Best-effort, never throws. */
+function releaseGateLock(lockPath = DOTENV_LOCK) {
+  try {
+    if (readGateLock(lockPath) !== process.pid) return false;
+    unlinkSync(lockPath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Pure: true iff `candidate` resolves strictly inside `root` (no traversal escape). */
+function isPathInsideRoot(candidate, root) {
+  try {
+    const rel = relative(resolve(root), resolve(candidate));
+    if (rel === "" || rel === ".") return false;
+    return !rel.startsWith("..") && !rel.startsWith("/");
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Owned scratch creation. When the probe provides PE_RELEASE_GATE_SCRATCH_ROOT
+ * (a per-run unique directory it created), the gate's pe-release-* dir is
+ * created ONLY inside it. Otherwise (direct human run) fall back to tmpdir.
+ * Throws when the provided root is missing or not a directory — never falls
+ * back to a global location silently.
+ */
+function resolveScratchDir(rootEnv = process.env[SCRATCH_ROOT_ENV]) {
+  if (rootEnv !== undefined && rootEnv !== null && String(rootEnv) !== "") {
+    const root = resolve(String(rootEnv));
+    let st = null;
+    try { st = statSync(root); } catch { st = null; }
+    if (!st || !st.isDirectory()) {
+      throw new Error(`${SCRATCH_ROOT_ENV} is not a directory: ${root}`);
+    }
+    return mkdtempSync(join(root, "pe-release-"));
+  }
+  return mkdtempSync(join(tmpdir(), "pe-release-"));
+}
 
 /** Crash recovery: a previous run died between move-aside and restore. */
 function recoverStaleBackup() {
@@ -229,8 +336,8 @@ async function main() {
   const startedAt = new Date().toISOString();
   const gitHead = sh("git rev-parse HEAD", REPO);
   const envBefore = dotenvStat();
-  const scratch = mkdtempSync(join(tmpdir(), "pe-release-"));
-  const profileDir = join(scratch, "profile");
+  let scratch = null;
+  let profileDir = null;
   let dotenvMoved = false;
 
   const R = {
@@ -301,7 +408,8 @@ async function main() {
           }
         } catch { /* ignore */ }
         try { restoreDotenv(envBefore.sha256); } catch { /* best-effort safety net */ }
-        try { rmSync(scratch, { recursive: true, force: true }); } catch { /* ignore */ }
+        try { if (scratch) rmSync(scratch, { recursive: true, force: true }); } catch { /* ignore */ }
+        try { releaseGateLock(); } catch { /* ignore */ }
       })();
     }
     return cleanupPromise;
@@ -399,11 +507,21 @@ async function main() {
   process.on("SIGTERM", () => void shutdown(143));
 
   try {
+    // ---- 0. Exclusive lock BEFORE any .env move/restore (concurrency guard) --
+    // Second concurrent run throws here and never touches .env / bak.
+    acquireGateLock();
+    step("gate-lock", true, 0, `pid ${process.pid}`);
     // ---- 1. Move .env aside (atomic rename; restored by cleanup) ------------
     const staleNote = recoverStaleBackup();
     if (staleNote) console.error(`[release-smoke] ${staleNote}`);
     dotenvMoved = moveDotenvAside();
     step("dotenv-aside", true, 0, dotenvMoved ? "moved, hash recorded" : "no .env present");
+    // ---- 1b. Owned scratch: inside the probe-provided root when present -----
+    // The probe creates a unique root per run and passes it via
+    // PE_RELEASE_GATE_SCRATCH_ROOT; the gate never scans the global tmpdir.
+    scratch = resolveScratchDir();
+    profileDir = join(scratch, "profile");
+    console.error(`[release-smoke] scratch=${scratch}`);
 
     // ---- 2. Server (fixed port, bump if occupied) ---------------------------
     const { spawn } = await import("node:child_process");
@@ -889,4 +1007,4 @@ if (isMainModule(import.meta.url)) {
   process.exit(code);
 }
 
-export { META_LEAK, STATIC_HOSTS, buildGateServerEnv, parseArgs, scrubbedCredentialNames, serverFnOf };
+export { META_LEAK, STATIC_HOSTS, buildGateServerEnv, parseArgs, scrubbedCredentialNames, serverFnOf, acquireGateLock, releaseGateLock, readGateLock, isPidAlive, isPathInsideRoot, resolveScratchDir, DOTENV_BAK, DOTENV_LOCK, SCRATCH_ROOT_ENV };

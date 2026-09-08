@@ -103,18 +103,28 @@ reload 后状态断言不变，真坏照样失败）。
 
 ### no-key（无密钥）是怎么保证的（四层）
 
-1. 运行前把仓库 `.env` 原子改名移开（同目录 rename），统一幂等的
-   `cleanup()` 在正常完成、测试失败、SIGINT、SIGTERM 下无条件移回；
+1. 运行前先以 O_EXCL 独占创建 `.env.release-gate-lock`（内容为持有者 PID）：
+   已有存活持有者时直接拒绝并发运行，在任何 `.env` 移动/恢复之前退出，
+   绝不把其他运行的备份当成崩溃残留恢复，也绝不覆盖其他运行的 `.env`。
+   持有者已死才视为上次 SIGKILL 残留，删锁后继续。
+   再把仓库 `.env` 原子改名移开（同目录 rename），统一幂等的
+   `cleanup()` 在正常完成、测试失败、SIGINT、SIGTERM 下无条件移回并删锁
+   （只删自己持有的锁）；
    signal handler 只做 `shutdown(exitCode)`，从不直接 `process.exit`；
    signal 接管后 main 让出退出权（已验证过的竞态：cleanup 关浏览器期间
    主流程若先走完会抢先 `exit(1)` 覆盖信号退出码，必须 park 等待）。
    恢复后校验 sha256，不一致则大声失败。
    上次崩溃的残留备份会在下次启动时自动恢复（仅当 `.env` 本身缺失；
    两者并存则拒绝运行，等人工看）。
+   scratch/profile 只建在本次运行的归属目录内：probe 每轮新建唯一
+   `pe-probe-*` 根并经 `PE_RELEASE_GATE_SCRATCH_ROOT` 传给 gate，
+   gate 的 `pe-release-*` 只建在该根内，清理只删该根，不扫描全局 /tmp。
    `results.json` 里记录 `.env` 前后 stat + hash，可审计。
    中断清理有独立的 subprocess 验证（`scripts/e2e/signal-cleanup.probe.mjs`，
    复用生产 cleanup 实现）：发 SIGTERM 后断言进程退出、`.env` hash 不变、
-   无 bak 残留、端口关闭、scratch 删除、无 Chromium 残留。
+   无 bak 残留、端口关闭、OWNED scratch 删除、无 OWNED Chromium 残留；
+   同轮另起的无关 `pe-release-*` 目录/进程（校验文件 + hash + 存活）必须
+   全程不受影响；未登记的端口监听者绝不被信号，只报告归属不明。
 2. `buildGateServerEnv()` 构造子进程环境（纯函数，返回新对象，不改输入，
    不输出任何凭证值）：删除模型凭证（MINIMAX_*、ANTHROPIC_*、AI_PING_*、
    PAPER_ECHO_LLM）、实时搜索凭证（FIRECRAWL_API_KEY、ANYSEARCH_API_KEY）、
@@ -193,6 +203,10 @@ node scripts/e2e/game-release-smoke.mjs --title-fresh 10 --title-reload 20 --ent
 `*.test.mjs`：它会启动完整门禁再发 SIGTERM，需要浏览器 + Vite，不能进
 `npm test` 的默认 glob，否则 CI 的 `npm test` 会被拖进浏览器依赖——
 这正是本 PR 承诺不做的事（见第六节）。它只在发布门禁 lane 里跑。
+归属选择逻辑另有替身单测 + 隔离集成测试
+（`scripts/e2e/signal-cleanup.ownership.test.mjs`，只用测试自建的临时
+资源：无关进程/目录存活、未登记端口 PID 永不被信号、并发第二次启动被拒），
+随 `npm test` 常驻运行。
 
 ## 第六节：CI（持续集成的未来）
 
