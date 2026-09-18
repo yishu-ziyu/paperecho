@@ -333,13 +333,13 @@ export function FoldPhase() {
         body={
           folds >= 2
             ? "按住飞机，往上送到那道光。"
-            : "手指按住纸，往对角拉。拉够了松手才折住。点按不算。"
+            : "按住纸角拉到底，松手折成形。"
         }
       />
       {folds >= 2 ? (
         <div ref={windowRef} className="relative mx-auto mt-2 h-20 w-full max-w-md overflow-hidden">
           <div className="absolute left-1/2 top-[-2.2rem] h-[5.5rem] w-[5.5rem] -translate-x-1/2 rounded-[28%] bg-paper/16 shadow-[inset_0_0_0_3px_color-mix(in_oklab,var(--color-paper)_22%,transparent)]" />
-          <p className="relative z-[1] pt-8 text-center text-xs tracking-[0.2em] text-paper/70">窗</p>
+          <p className="relative z-[1] pt-8 text-center text-xs tracking-[0.2em] text-paper/45">窗外的光</p>
         </div>
       ) : null}
       <div className="relative mx-auto mt-4 flex w-full max-w-md flex-1 items-center justify-center overflow-visible" style={{ perspective: 720 }}>
@@ -385,7 +385,7 @@ export function FoldPhase() {
         </div>
       </div>
       <p className="pb-[max(1.25rem,env(safe-area-inset-bottom))] text-center text-xs text-paper/55">
-        {folds >= 2 ? (leaving ? "飞向窗边" : "往上送") : armed ? "继续拉" : "没有按钮。用手折。"}
+        {folds >= 2 ? (leaving ? "飞向窗边" : "往上送") : armed ? "继续拉" : "按住纸角，折下去"}
       </p>
     </div>
   );

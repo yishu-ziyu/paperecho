@@ -104,7 +104,7 @@ export function ReturnPhase() {
 
   if (!echo) return null;
 
-  const hint = depth >= 2 ? "松开，放进信柜" : depth >= 1 || open ? (open ? "再往下，进抽屉" : "松开，拆开") : "往下拉";
+  const hint = depth >= 2 ? "松开，放进信柜" : depth >= 1 || open ? (open ? "再往下，进信柜" : "松开，拆开") : "往下拉";
 
   return (
     <div className="flex flex-1 flex-col items-center px-4">
@@ -182,7 +182,7 @@ export function ReturnPhase() {
         }
         transition={swallow ? { duration: 0.36, ease: [0.2, 0, 0, 1] } : spring.settle}
       >
-        {filing ? "松开，放进信柜" : "抽屉"}
+        {filing ? "松开，放进信柜" : "收进暗格"}
       </motion.div>
     </div>
   );

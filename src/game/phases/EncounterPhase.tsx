@@ -42,10 +42,10 @@ function encounterGuide(opts: {
   }
   if (!bloom) return "他先说完这一句。你再回。";
   if (round === 0) {
-    return `${name} 先说了自己这边发生的事。你也说一件具体的，他才会把当时的感觉交出来。`;
+    return `${name} 说了他那一晚。说一件你当下的事，看看他怎么听。`;
   }
   if (closeness >= 3) return "故事已经说到后来。今晚聊够了，就把它折回去。";
-  if (silentTurns === 0) return "你刚那件他接上了。再说一件自己的，还能换他下一句。";
+  if (silentTurns === 0) return "夜色还长，把你那边的事再告诉他一句。";
   return "刚才那句他没接到新的事。落到一件具体的——物件、动作、时间都行。";
 }
 
@@ -317,7 +317,7 @@ export function EncounterPhase() {
               />
               {draftReady && !draftSpecific ? (
                 <p className="text-[0.7rem] leading-relaxed text-ink/45">
-                  再落到一件具体的事上，他才会把下一句交出来。
+                  落到一件真切的事上，他会听得更真一些。
                 </p>
               ) : null}
               <button

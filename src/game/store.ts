@@ -436,7 +436,7 @@ export const useGame = create<GameState>((set, get) => ({
           waitingSince: 0,
           searchNote: companion
             ? `到了 ${echo.city}，${echo.name} 读完了你的信`
-            : "线路不稳，改从本地故事里取一封相近的信",
+            : "夜里风大吹偏了，拾起了一封多年前压在箱底的信",
         });
       }
     })();
