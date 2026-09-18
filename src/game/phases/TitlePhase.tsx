@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { Link } from "@tanstack/react-router";
 import { motion, useReducedMotion } from "motion/react";
 import { startPad, unlockAudio } from "../audio";
 import { LetterPop } from "../components/LetterPop";
@@ -133,15 +134,21 @@ export function TitlePhase({
           threshold={36}
           hint="松开，开信柜"
           onCommit={goArchive}
-          className="relative mt-auto mb-10 w-40 pb-2"
+          className="relative mt-auto mb-4 w-40 pb-2"
         >
           <div className="clay-sm rounded-t-2xl px-4 py-3 text-xs tracking-[0.2em] text-ink/55">
             信柜 {journeys.length}
           </div>
         </PullCommit>
-      ) : (
-        <div className="mt-auto pb-16" />
-      )}
+      ) : null}
+      <div className="mt-auto pb-6 pt-2">
+        <Link
+          to="/landing"
+          className="inline-flex items-center gap-1 text-[0.72rem] tracking-wider text-paper/40 transition-colors hover:text-paper/85 hover:underline"
+        >
+          <span>产品故事与展示页 →</span>
+        </Link>
+      </div>
     </div>
   );
 }
