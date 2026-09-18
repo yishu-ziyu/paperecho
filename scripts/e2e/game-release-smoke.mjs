@@ -946,8 +946,17 @@ async function main() {
 
     // Reload landed on title by design: pull into a new journey from here (real
     // pull), previous journey kept, flags clean.
+    await waitReady("title");
     const tN = Date.now();
-    await pull(page, "title", 0, 90);
+    for (let attempt = 0; attempt < 3; attempt++) {
+      await pull(page, "title", 0, 100);
+      const inOrbit = await page
+        .waitForFunction(() => window.__echoGame?.getState?.().phase === "orbit", undefined, { timeout: 3500 })
+        .then(() => true)
+        .catch(() => false);
+      if (inOrbit) break;
+      await delay(500);
+    }
     await waitState("orbit again", async () => (await snapshot()).phase === "orbit", 12000);
     const again = await snapshot();
     if ((again.journeys ?? 0) < 1) throw new Error("previous journey lost after new journey");
