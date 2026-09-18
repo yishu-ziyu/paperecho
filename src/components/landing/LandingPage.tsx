@@ -1,424 +1,243 @@
 import { useState, useEffect } from "react";
-import { motion, AnimatePresence } from "motion/react";
 import { Link } from "@tanstack/react-router";
 import {
-  Feather,
-  Compass,
-  Moon,
   Volume2,
   VolumeX,
   Play,
   Pause,
   ArrowRight,
   Sparkles,
-  MapPin,
-  Clock,
-  RotateCcw,
-  CheckCircle2,
+  Compass,
+  Feather,
+  Archive,
   ChevronRight,
+  ChevronLeft,
+  Film,
+  Sliders,
+  ShieldCheck,
 } from "lucide-react";
 
-// --- Constellation & Starry Night Data ---
-const STARS = [
-  { left: "8%", top: "12%", size: 3, opacity: 0.8, delay: 0 },
-  { left: "18%", top: "25%", size: 2, opacity: 0.6, delay: 1.2 },
-  { left: "28%", top: "15%", size: 2.5, opacity: 0.9, delay: 0.4 },
-  { left: "42%", top: "8%", size: 3, opacity: 0.7, delay: 2.1 },
-  { left: "62%", top: "18%", size: 2, opacity: 0.5, delay: 1.5 },
-  { left: "75%", top: "11%", size: 3.5, opacity: 0.85, delay: 0.7 },
-  { left: "88%", top: "22%", size: 2, opacity: 0.6, delay: 1.8 },
-  { left: "93%", top: "14%", size: 2.5, opacity: 0.9, delay: 0.2 },
-  { left: "14%", top: "68%", size: 2, opacity: 0.5, delay: 2.4 },
-  { left: "32%", top: "82%", size: 3, opacity: 0.75, delay: 1.1 },
-  { left: "68%", top: "75%", size: 2, opacity: 0.6, delay: 0.9 },
-  { left: "84%", top: "65%", size: 3, opacity: 0.8, delay: 1.7 },
-];
-
-const PRESET_THOUGHTS = [
-  "投了三十多份简历，在客厅坐到现在。",
-  "群里只回了收到，夜里雨还没停。",
-  "原来三千公里外，也有人没睡。",
-  "三十岁的第一天，好像和昨天没什么两样。",
-];
-
-const ECHO_STORIES = [
+// --- 8 步完整实机游玩流程（怎么玩、怎么用） ---
+const WALKTHROUGH_STEPS = [
   {
-    id: 1,
-    originCity: "北京",
-    originTime: "02:14",
-    thought: "转正答辩没过，在天桥吹了半小时风。看着下面车流，不知道这几年在忙什么。",
-    echoCity: "成都",
-    echoTime: "02:38",
-    echo: "天桥风大，早点回屋煮碗热面吧。我也刚换了赛道，一切才刚开始。夜里有我陪着你呢。",
-    stampColor: "#d4785a",
+    step: "01",
+    title: "下拉门帘 · 潜入房间",
+    subtitle: "克服物理阻尼，进入深夜书房",
+    action: "手指在屏幕上方向下拉拽门帘卡片",
+    result: "带有弹簧阻尼拉伸反馈，拉至临界点松手，直接落入案头书房场景",
+    src: "/previews/01-title.png",
+    tag: "入场手势",
   },
   {
-    id: 2,
-    originCity: "芝加哥",
-    originTime: "03:45",
-    thought: "赶完最后一个 deadline，推开窗突然下大雪了。整栋楼只剩我一间亮着灯。",
-    echoCity: "深圳",
-    echoTime: "17:45",
-    echo: "你那里下雪了吗？我这边正赶上下班晚霞。隔着十二个时区，敬你这一杯热咖啡，快去睡个好觉。",
-    stampColor: "#6ba8a0",
+    step: "02",
+    title: "拾起情绪 · 写下今晚的事",
+    subtitle: "选一块微粒，在信纸上落笔",
+    action: "在环形轨道上拖拽一枚情绪微粒滑入中心，在信笺上写下一件今晚具体发生的事",
+    result: "写下一件真实发生的日常（如方案改版、末班车、一个人煮面），不说教、不堆砌形容词",
+    src: "/previews/02-orbit.png",
+    tag: "信笺撰写",
   },
   {
-    id: 3,
-    originCity: "杭州",
-    originTime: "01:20",
-    thought: "家里催婚电话挂断后，屋里好安静。按他们说的走，真的会更快乐吗？",
-    echoCity: "墨尔本",
-    echoTime: "04:20",
-    echo: "安静也是一种自由。今夜只属于你自己，不用向任何人的期待交代。祝你有好梦。",
-    stampColor: "#e8c56b",
+    step: "03",
+    title: "对角拉拽 · 折成纸飞机",
+    subtitle: "告别点击按钮，亲手对折压痕",
+    action: "手指沿信纸对角线拉拽两次纸角",
+    result: "信纸根据手指拉拽受力产生物理形变阻力，拉满后清脆对折，成型为纸飞机机翼",
+    src: "/previews/03-fold.png",
+    tag: "物理折纸",
   },
   {
-    id: 4,
-    originCity: "南京",
-    originTime: "00:48",
-    thought: "三十岁的第一天，好像和昨天没什么两样。没有大彻大悟，也没有奇迹。",
-    echoCity: "台北",
-    echoTime: "00:52",
-    echo: "没有惊涛骇浪，平安普通地又长了一岁，本身就是很了不起的幸运。生日快乐！",
-    stampColor: "#7a9a68",
-  },
-];
-
-const FILM_ACTS = [
-  {
-    act: "Act I",
-    title: "素纸落墨",
-    desc: "台灯昏黄，白纸微皱。输入一句白天没处说的心事，墨水顺着光纤悄悄渗透纸纤维。",
-    visualNote: "Macro · 纸面微距 · 钢笔墨色渐显",
-    palette: "bg-[#162035]",
+    step: "04",
+    title: "转动地球 · 弹射出窗",
+    subtitle: "对准经纬坐标，蓄力发射",
+    action: "拨动 3D 点阵地球仪选定飞行经纬方向，向后拉拽纸飞机蓄满橡皮筋弹力后释放",
+    result: "纸飞机冲出窗台，滑入浩瀚夜空",
+    src: "/previews/04-throw.png",
+    tag: "弹弓弹射",
   },
   {
-    act: "Act II",
-    title: "对角翻折",
-    desc: "指尖划过中轴，纸张清脆翻折。物理阻尼刚度，让虚无的字句拥有真实的重量。",
-    visualNote: "Applecut · 实体折痕 · 刚度形变",
-    palette: "bg-[#18243b]",
+    step: "05",
+    title: "夜空巡航 · 经纬夜航",
+    subtitle: "穿越云海，寻找深夜未眠人",
+    action: "纸飞机在低轨夜云中巡航，系统按真实大圆航程计算飞行时差",
+    result: "在平行世界中寻找一位也写下过类似生活经历的普通人",
+    src: "/previews/05-flight.png",
+    tag: "云海航程",
   },
   {
-    act: "Act III",
-    title: "夜航经纬",
-    desc: "纸飞机滑出窗棂，升入深蓝夜空。无数金黄微光，在各大洲未眠的坐标间悄声穿梭。",
-    visualNote: "Nightflight · 地球仪夜航 · 经纬轨迹",
-    palette: "bg-[#101726]",
+    step: "06",
+    title: "案头对谈 · 交换生活事实",
+    subtitle: "不说教、不安慰，只讲自己的日常",
+    action: "飞机降落在目标案头，双方手写便签平行展开，玩家拖动卡片或写下自己的回复",
+    result: "对方只聊他今晚的具体事，不安慰、不分析，用真实细节互相陪伴",
+    src: "/previews/06-encounter.png",
+    tag: "便签对谈",
   },
   {
-    act: "Act IV",
-    title: "暗格降落",
-    desc: "飞机轻轻降落在三千公里外另一张木桌上，被悄悄收进暗格。清晨推窗，回声已在手中。",
-    visualNote: "Dawn · 木质暗格 · 墨迹温存",
-    palette: "bg-[#1e2a45]",
+    step: "07",
+    title: "沿痕下拉 · 拆开回信",
+    subtitle: "收到飞回来的纸飞机",
+    action: "飞回来的纸飞机停在掌心，手指沿折痕向下拉开",
+    result: "展开发信人留在纸背的最终回信与生活留白",
+    src: "/previews/07-return.png",
+    tag: "拆开回信",
+  },
+  {
+    step: "08",
+    title: "滑入抽屉 · 暗格封存",
+    subtitle: "无红点骚扰，永久归档于信箱",
+    action: "向下拉拽信件，推入案头底层的红陶抽屉",
+    result: "信件收入个人信柜，没有公开榜单与点赞比拼，想重读时随时拉开抽屉即可",
+    src: "/previews/08-archive.png",
+    tag: "抽屉信柜",
   },
 ];
 
 export function LandingPage() {
-  const [soundActive, setSoundActive] = useState(false);
-  const [inputText, setInputText] = useState("投了三十多份简历，在客厅坐到现在。");
-  const [foldStage, setFoldStage] = useState(0); // 0: unfolded, 1: creased, 2: folded wings, 3: launched
-  const [activeStory, setActiveStory] = useState(0);
-  const [currentAct, setCurrentAct] = useState(0);
-  const [filmPlaying, setFilmPlaying] = useState(true);
+  const [activeWalkthrough, setActiveWalkthrough] = useState(0);
+  const [isPlayingWalkthrough, setIsPlayingWalkthrough] = useState(false);
+  const [activeVideo, setActiveVideo] = useState<"flight" | "room">("flight");
+  const [soundMuted, setSoundMuted] = useState(true);
 
-  // Auto-advance film showcase acts
+  // 自动播放演示 Walkthrough
   useEffect(() => {
-    if (!filmPlaying) return;
+    if (!isPlayingWalkthrough) return;
     const timer = setInterval(() => {
-      setCurrentAct((prev) => (prev + 1) % FILM_ACTS.length);
-    }, 4500);
+      setActiveWalkthrough((prev) => (prev + 1) % WALKTHROUGH_STEPS.length);
+    }, 3200);
     return () => clearInterval(timer);
-  }, [filmPlaying]);
+  }, [isPlayingWalkthrough]);
 
-  const handleLaunch = () => {
-    setFoldStage(1);
-    setTimeout(() => setFoldStage(2), 500);
-    setTimeout(() => setFoldStage(3), 1100);
-  };
-
-  const handleResetFold = () => {
-    setFoldStage(0);
-  };
+  const currentStep = WALKTHROUGH_STEPS[activeWalkthrough];
 
   return (
-    <div className="relative min-h-screen w-full overflow-x-hidden bg-[#101726] text-[#f0e6d2] selection:bg-[#d4785a] selection:text-white font-sans">
-      {/* Background Starry Sky & Moonlit Gradient */}
-      <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
-        <div
-          className="absolute inset-0 opacity-70"
-          style={{
-            background:
-              "radial-gradient(ellipse 80% 50% at 50% -10%, rgba(35, 55, 95, 0.6) 0%, rgba(16, 23, 38, 0.95) 75%, #101726 100%)",
-          }}
-        />
-        {/* Constellation Stars */}
-        {STARS.map((s, idx) => (
-          <span
-            key={idx}
-            className="absolute rounded-full bg-[#f4efe4]"
-            style={{
-              left: s.left,
-              top: s.top,
-              width: `${s.size}px`,
-              height: `${s.size}px`,
-              opacity: s.opacity,
-              boxShadow: `0 0 ${s.size * 3}px rgba(240, 230, 210, 0.8)`,
-              animation: `pulse 3.5s ease-in-out infinite`,
-              animationDelay: `${s.delay}s`,
-            }}
-          />
-        ))}
-        {/* Soft Ambient Horizon Glow */}
-        <div className="absolute -bottom-48 left-1/2 h-[450px] w-[800px] -translate-x-1/2 rounded-full bg-[#d4785a]/10 blur-[130px]" />
-      </div>
-
-      {/* --- Top Navigation --- */}
-      <header className="relative z-20 mx-auto flex max-w-6xl items-center justify-between px-6 py-6 sm:px-8">
-        <Link to="/" className="group flex items-center gap-3 transition-transform hover:scale-[1.02]">
-          <div className="relative flex h-10 w-10 items-center justify-center rounded-xl bg-[#f0e6d2] shadow-[0_4px_12px_rgba(0,0,0,0.3)] transition-transform group-hover:rotate-[-6deg]">
-            {/* Origami Paper Plane Icon */}
-            <svg viewBox="0 0 24 24" className="h-6 w-6 fill-[#1a2744]">
-              <path d="M2.5 12L21 3L14 21L11.5 14.5L2.5 12Z" />
-            </svg>
-          </div>
-          <div className="text-left">
-            <span className="font-display block text-lg font-bold tracking-tight text-[#f4efe4]">纸上的回声</span>
-            <span className="block text-[11px] tracking-widest text-[#f0e6d2]/50 uppercase">PaperEcho</span>
-          </div>
-        </Link>
-
-        {/* Anchor Links */}
-        <nav className="hidden items-center gap-7 text-sm text-[#f0e6d2]/70 md:flex">
-          <a href="#craft" className="transition-colors hover:text-[#f4efe4]">
-            纸墨材质
-          </a>
-          <a href="#echoes" className="transition-colors hover:text-[#f4efe4]">
-            回声标本
-          </a>
-          <a href="#film" className="transition-colors hover:text-[#f4efe4]">
-            概念短片
-          </a>
-          <a href="#philosophy" className="transition-colors hover:text-[#f4efe4]">
-            设计宣言
-          </a>
-        </nav>
-
-        {/* Action Buttons */}
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => setSoundActive(!soundActive)}
-            title={soundActive ? "静音环境音" : "开启夜风环境声"}
-            className="flex h-9 w-9 items-center justify-center rounded-full border border-[#f0e6d2]/20 bg-[#162238]/60 text-[#f0e6d2]/80 transition-colors hover:border-[#f0e6d2]/40 hover:text-white"
-          >
-            {soundActive ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
-          </button>
-
-          <Link
-            to="/"
-            className="group flex items-center gap-1.5 rounded-full bg-[#f0e6d2] px-5 py-2 text-sm font-semibold text-[#1a2744] shadow-[0_3px_10px_rgba(240,230,210,0.18)] transition-all hover:bg-[#fff9ee] hover:shadow-[0_4px_16px_rgba(240,230,210,0.3)] active:translate-y-0.5"
-          >
-            <span>推开窗 · 进房间</span>
-            <ChevronRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+    <div className="relative min-h-screen w-full overflow-x-hidden bg-[#141d30] text-[#f0e6d2] font-sans selection:bg-[#d4785a] selection:text-white">
+      {/* Top Header */}
+      <header className="sticky top-0 z-50 border-b border-[#f0e6d2]/15 bg-[#141d30]/90 px-6 py-3.5 backdrop-blur-md">
+        <div className="mx-auto flex max-w-6xl items-center justify-between">
+          <Link to="/" className="flex items-center gap-3">
+            <div className="clay-sm flex h-9 w-9 items-center justify-center rounded-xl bg-[#f0e6d2] text-[#1a2744]">
+              <svg viewBox="0 0 24 24" className="h-5 w-5 fill-current">
+                <path d="M2.5 12L21 3L14 21L11.5 14.5L2.5 12Z" />
+              </svg>
+            </div>
+            <div>
+              <span className="font-latin text-lg font-bold tracking-wide text-paper">PAPER ECHO</span>
+              <span className="ml-2 text-xs text-paper/60">纸上的回声</span>
+            </div>
           </Link>
+
+          <nav className="hidden items-center gap-6 text-xs font-semibold text-paper/75 lg:flex">
+            <a href="#origin" className="transition-colors hover:text-paper">起源与初衷</a>
+            <a href="#walkthrough" className="transition-colors hover:text-paper">怎么玩 · 流程演示</a>
+            <a href="#cinematic-reel" className="transition-colors hover:text-paper">实机画面</a>
+            <a href="#details" className="transition-colors hover:text-paper">设计细节</a>
+          </nav>
+
+          <div className="flex items-center gap-3">
+            <a
+              href="https://yishuziyu.cn"
+              target="_blank"
+              rel="noreferrer"
+              className="hidden rounded-full border border-paper/20 px-3.5 py-1.5 text-xs text-paper/80 transition-colors hover:border-paper/40 hover:text-white md:inline-block"
+            >
+              奕枢工坊 ↗
+            </a>
+            <Link
+              to="/"
+              className="clay-sm group flex items-center gap-1.5 rounded-full bg-[#f0e6d2] px-4 py-1.5 text-xs font-bold text-[#1a2744] transition-transform active:translate-y-0.5"
+            >
+              <span>推开窗 · 进房间</span>
+              <ChevronRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
+            </Link>
+          </div>
         </div>
       </header>
 
-      {/* --- HERO SECTION --- */}
-      <section className="relative z-10 mx-auto max-w-6xl px-6 pt-10 pb-20 sm:px-8 sm:pt-16 md:pt-20">
-        <div className="flex flex-col items-center text-center">
-          {/* Subtle badge */}
-          <div className="inline-flex items-center gap-2 rounded-full border border-[#d4785a]/40 bg-[#d4785a]/10 px-4 py-1.5 text-xs text-[#d4785a] backdrop-blur-md">
-            <Sparkles className="h-3.5 w-3.5" />
-            <span>深夜慢速投递 · 真实物理触感的情绪纸飞机</span>
-          </div>
+      {/* --- 1. HERO SECTION --- */}
+      <section className="relative overflow-hidden border-b border-[#f0e6d2]/10 pt-12 pb-18">
+        <div className="pointer-events-none absolute inset-0 z-0">
+          <img
+            src="/scenes/title.jpg"
+            alt="Title Backdrop"
+            className="h-full w-full object-cover opacity-20 filter blur-xl scale-110"
+          />
+          <div className="absolute inset-0 bg-gradient-to-b from-[#141d30]/60 via-[#141d30]/90 to-[#141d30]" />
+        </div>
 
-          {/* Main Title */}
-          <h1 className="font-display mt-6 max-w-4xl text-3xl font-extrabold tracking-tight text-[#f4efe4] sm:text-5xl md:text-6xl md:leading-[1.15]">
-            三千公里的夜色里，
-            <br />
-            <span className="bg-gradient-to-r from-[#f0e6d2] via-[#f7d6a5] to-[#d4785a] bg-clip-text text-transparent">
-              只落在懂你的一扇窗前。
-            </span>
-          </h1>
+        <div className="relative z-10 mx-auto max-w-6xl px-6">
+          <div className="grid grid-cols-1 items-center gap-12 lg:grid-cols-12">
+            {/* Left Column: Product Statement */}
+            <div className="lg:col-span-6">
+              <div className="inline-flex items-center gap-2 rounded-full border border-[#d4785a]/40 bg-[#d4785a]/15 px-3.5 py-1 text-xs text-[#d4785a]">
+                <Feather className="h-3.5 w-3.5" />
+                <span>奕枢工坊 · 独立手作项目</span>
+              </div>
 
-          {/* Subtitle */}
-          <p className="mt-5 max-w-2xl text-base leading-relaxed text-[#f0e6d2]/75 sm:text-lg">
-            没有算法推荐，没有公开点赞。把深夜说不出口的心情，亲手折成一架有重量的纸飞机，投进真实经纬线的夜风里，等一个同样未眠人的回音。
-          </p>
+              <h1 className="mt-5 text-4xl font-extrabold tracking-tight text-paper sm:text-5xl lg:text-6xl">
+                <span className="type-clay block font-latin text-[clamp(2.8rem,7vw,4.8rem)] leading-[0.9]">
+                  PAPER ECHO
+                </span>
+                <span className="font-display mt-2 block text-2xl font-bold tracking-widest text-[#f0e6d2] sm:text-3xl">
+                  纸上的回声
+                </span>
+              </h1>
 
-          {/* --- Interactive Origami Stage (Hero Prototype) --- */}
-          <div className="relative mt-12 w-full max-w-2xl">
-            <div className="relative overflow-hidden rounded-3xl border border-[#f0e6d2]/20 bg-[#162035]/90 p-6 shadow-[0_20px_60px_rgba(0,0,0,0.5)] backdrop-blur-xl sm:p-8">
-              {/* Top status & city indicator */}
-              <div className="flex items-center justify-between border-b border-[#f0e6d2]/10 pb-4 text-xs text-[#f0e6d2]/60">
+              <p className="mt-6 max-w-xl text-base leading-relaxed text-paper/85 sm:text-lg">
+                一款不提供廉价安慰的深夜案头信件应用。
+                <br className="hidden sm:inline" />
+                把一件具体发生的事写在纸上，折成飞机掷出。世界另一端的普通人只讲自己的平行经历，不说教，不安慰。
+              </p>
+
+              <div className="mt-8 flex flex-wrap items-center gap-4">
+                <Link
+                  to="/"
+                  className="clay flex items-center gap-2 rounded-2xl bg-[#f0e6d2] px-6 py-3 text-sm font-bold text-[#1a2744] transition-all hover:bg-white active:translate-y-0.5"
+                >
+                  <Feather className="h-4 w-4 text-[#d4785a]" />
+                  <span>推开窗 · 进入房间</span>
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
+                <a
+                  href="#walkthrough"
+                  className="flex items-center gap-2 rounded-2xl border border-paper/20 bg-white/5 px-5 py-3 text-sm font-semibold text-paper/90 transition-colors hover:bg-white/10"
+                >
+                  <Play className="h-4 w-4 text-[#e8c56b]" />
+                  <span>看完整玩法演示</span>
+                </a>
+              </div>
+
+              {/* Product Fact Footer */}
+              <div className="mt-10 flex flex-wrap items-center gap-6 border-t border-paper/10 pt-5 text-xs text-paper/60">
                 <div className="flex items-center gap-2">
-                  <span className="h-2 w-2 animate-ping rounded-full bg-[#7a9a68]" />
-                  <span>此时此刻 · 线上正有 1,420 架纸飞机在夜空巡航</span>
+                  <span className="h-2 w-2 rounded-full bg-[#7a9a68]" />
+                  <span>无点赞 · 无评论 · 无已读回执</span>
                 </div>
-                <div className="flex items-center gap-1.5">
-                  <Clock className="h-3.5 w-3.5" />
-                  <span>深夜 02:40</span>
+                <div className="flex items-center gap-2">
+                  <span className="h-2 w-2 rounded-full bg-[#d4785a]" />
+                  <span>真实经纬大圆航程</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="h-2 w-2 rounded-full bg-[#e8c56b]" />
+                  <span>连续弹簧阻尼手势</span>
                 </div>
               </div>
+            </div>
 
-              {/* Central Foldable Paper Sheet Canvas */}
-              <div className="relative my-6 flex min-h-[220px] flex-col justify-between rounded-2xl bg-[#f4efe4] p-6 text-[#1a2744] shadow-[inset_0_1px_3px_rgba(0,0,0,0.1),0_12px_28px_rgba(0,0,0,0.25)] transition-all duration-500">
-                {/* Visual Crease Line */}
-                <div className="pointer-events-none absolute inset-x-0 top-1/2 border-t border-dashed border-[#1a2744]/15" />
-                <div className="pointer-events-none absolute inset-y-0 left-1/2 border-l border-dashed border-[#1a2744]/15" />
-
-                <AnimatePresence mode="wait">
-                  {foldStage === 0 && (
-                    <motion.div
-                      key="unfolded"
-                      initial={{ opacity: 0, scale: 0.96 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      exit={{ opacity: 0, scale: 0.94 }}
-                      transition={{ duration: 0.25 }}
-                      className="flex flex-1 flex-col justify-between"
-                    >
-                      <div className="text-left">
-                        <div className="flex items-center justify-between text-xs tracking-wider text-[#1a2744]/50">
-                          <span className="font-mono">NO. 2026-PE · 纸上的信笺</span>
-                          <span className="italic">手不换这张纸</span>
-                        </div>
-                        <div className="mt-3 font-serif text-lg text-[#1a2744] sm:text-xl">
-                          <textarea
-                            value={inputText}
-                            onChange={(e) => setInputText(e.target.value)}
-                            placeholder="写下一句今晚没处说的心事..."
-                            rows={3}
-                            className="w-full resize-none border-none bg-transparent p-0 text-base leading-relaxed text-[#1a2744] placeholder-[#1a2744]/40 focus:outline-none focus:ring-0 sm:text-lg"
-                          />
-                        </div>
-                      </div>
-
-                      {/* Pill suggestions */}
-                      <div className="mt-4 flex flex-wrap items-center gap-2 pt-2 text-left">
-                        <span className="text-xs text-[#1a2744]/60">换一句试试：</span>
-                        {PRESET_THOUGHTS.map((t, idx) => (
-                          <button
-                            key={idx}
-                            onClick={() => setInputText(t)}
-                            className="rounded-full border border-[#1a2744]/15 bg-white/60 px-2.5 py-1 text-xs text-[#1a2744] transition-colors hover:bg-white hover:border-[#1a2744]/30"
-                          >
-                            {t.slice(0, 10)}...
-                          </button>
-                        ))}
-                      </div>
-                    </motion.div>
-                  )}
-
-                  {foldStage === 1 && (
-                    <motion.div
-                      key="creased"
-                      initial={{ rotateX: -20, opacity: 0 }}
-                      animate={{ rotateX: 0, opacity: 1 }}
-                      exit={{ rotateX: 30, opacity: 0 }}
-                      transition={{ duration: 0.35 }}
-                      className="flex flex-1 flex-col items-center justify-center text-center"
-                    >
-                      <div className="h-16 w-16 rotate-45 rounded-lg border-2 border-[#1a2744]/30 bg-[#ebdcc2] shadow-inner" />
-                      <p className="mt-4 font-serif text-sm font-semibold tracking-wider text-[#1a2744]/80">
-                        正在沿中轴对齐折叠…
-                      </p>
-                    </motion.div>
-                  )}
-
-                  {foldStage === 2 && (
-                    <motion.div
-                      key="folded"
-                      initial={{ scale: 0.8, opacity: 0 }}
-                      animate={{ scale: 1, opacity: 1 }}
-                      exit={{ scale: 1.1, opacity: 0 }}
-                      transition={{ duration: 0.35 }}
-                      className="flex flex-1 flex-col items-center justify-center text-center"
-                    >
-                      <div className="relative flex h-20 w-24 items-center justify-center">
-                        <svg viewBox="0 0 100 80" className="h-20 w-24 drop-shadow-[0_6px_12px_rgba(26,39,68,0.25)]">
-                          <polygon points="50,5 95,75 50,60" fill="#ebd8bc" />
-                          <polygon points="50,5 5,75 50,60" fill="#f4efe4" />
-                          <polygon points="50,60 50,75 42,70" fill="#c3b394" />
-                        </svg>
-                      </div>
-                      <p className="mt-3 font-serif text-sm font-semibold text-[#1a2744]">
-                        机翼成型 · 纸飞机准备滑入夜风
-                      </p>
-                    </motion.div>
-                  )}
-
-                  {foldStage === 3 && (
-                    <motion.div
-                      key="launched"
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      className="relative flex flex-1 flex-col items-center justify-center py-4 text-center"
-                    >
-                      {/* Airplane flying away animation */}
-                      <motion.div
-                        animate={{
-                          x: [0, 140, 280],
-                          y: [0, -40, -120],
-                          scale: [1, 0.85, 0.4],
-                          opacity: [1, 0.9, 0],
-                        }}
-                        transition={{ duration: 1.8, ease: "easeOut" }}
-                        className="absolute"
-                      >
-                        <svg viewBox="0 0 24 24" className="h-12 w-12 fill-[#d4785a]">
-                          <path d="M2.5 12L21 3L14 21L11.5 14.5L2.5 12Z" />
-                        </svg>
-                      </motion.div>
-
-                      <div className="z-10 rounded-xl bg-white/85 p-4 shadow-sm backdrop-blur-sm">
-                        <CheckCircle2 className="mx-auto h-7 w-7 text-[#7a9a68]" />
-                        <h4 className="mt-2 font-display text-base font-bold text-[#1a2744]">
-                          已乘着夜风投出！
-                        </h4>
-                        <p className="mt-1 text-xs text-[#1a2744]/75">
-                          预计飞行三千公里 · 正在寻觅同频未眠的窗口
-                        </p>
-                        <button
-                          onClick={handleResetFold}
-                          className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-[#d4785a] hover:underline"
-                        >
-                          <RotateCcw className="h-3 w-3" />
-                          <span>再折一架试试</span>
-                        </button>
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
-
-              {/* Bottom Interactive Controls */}
-              <div className="flex flex-col items-center justify-between gap-4 sm:flex-row">
-                <div className="flex items-center gap-2 text-xs text-[#f0e6d2]/70">
-                  <span className="inline-block h-2 w-2 rounded-full bg-[#d4785a]" />
-                  <span>支持手势对角折纸 · 真实阻尼物理反馈</span>
-                </div>
-
-                <div className="flex w-full items-center justify-end gap-3 sm:w-auto">
-                  {foldStage === 0 ? (
-                    <button
-                      onClick={handleLaunch}
-                      className="group flex w-full items-center justify-center gap-2 rounded-xl bg-[#d4785a] px-6 py-3 text-sm font-bold text-white shadow-[0_4px_16px_rgba(212,120,90,0.4)] transition-all hover:bg-[#e08466] hover:shadow-[0_6px_20px_rgba(212,120,90,0.55)] active:translate-y-0.5 sm:w-auto"
-                    >
-                      <Feather className="h-4 w-4" />
-                      <span>折成纸飞机并掷出</span>
-                      <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
-                    </button>
-                  ) : (
-                    <button
-                      onClick={handleResetFold}
-                      className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-[#f0e6d2]/25 bg-transparent px-4 py-2.5 text-xs text-[#f0e6d2] transition-colors hover:bg-white/5 sm:w-auto"
-                    >
-                      <RotateCcw className="h-3.5 w-3.5" />
-                      <span>展开信纸</span>
-                    </button>
-                  )}
+            {/* Right Column: Real 3D Title Screen */}
+            <div className="relative lg:col-span-6">
+              <div className="relative mx-auto max-w-md overflow-hidden rounded-3xl border border-paper/25 bg-[#1a2744] p-2 shadow-2xl">
+                <div className="relative aspect-[9/16] w-full overflow-hidden rounded-2xl bg-black">
+                  <img
+                    src="/previews/01-title.png"
+                    alt="PaperEcho In-game Title Screen"
+                    className="h-full w-full object-cover"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent pointer-events-none" />
+                  <div className="absolute bottom-4 inset-x-4 flex items-center justify-between text-xs text-white/90">
+                    <span className="rounded-full bg-black/60 px-3 py-1 backdrop-blur-sm">案头圆窗 · 陶土小人与地球仪</span>
+                    <span className="font-mono text-paper/80">3D WebGL</span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -426,314 +245,429 @@ export function LandingPage() {
         </div>
       </section>
 
-      {/* --- SECTION 2: MOTION & CRAFT ("手不换这张纸") --- */}
-      <section id="craft" className="relative z-10 border-t border-[#f0e6d2]/10 bg-[#141d30] py-24">
-        <div className="mx-auto max-w-6xl px-6 sm:px-8">
-          <div className="text-center">
-            <span className="font-mono text-xs tracking-widest text-[#d4785a] uppercase">Physical Handfeel & Motion</span>
-            <h2 className="font-display mt-2 text-3xl font-extrabold tracking-tight text-[#f4efe4] sm:text-4xl">
-              手不换这张纸 · 动效即材质
+      {/* --- 2. ORIGIN & WHY SECTION (起源与初衷 · 为什么做纸上的回声) --- */}
+      <section id="origin" className="relative border-b border-[#f0e6d2]/10 bg-[#0e1524] py-20">
+        <div className="mx-auto max-w-6xl px-6">
+          <div className="max-w-3xl">
+            <div className="inline-flex items-center gap-2 font-mono text-xs tracking-widest text-[#d4785a] uppercase">
+              <Compass className="h-3.5 w-3.5" />
+              <span>Origin & Design Rationale</span>
+            </div>
+            <h2 className="font-display mt-2 text-3xl font-bold tracking-tight text-paper sm:text-4xl">
+              它从哪里来，为什么要做？
             </h2>
-            <p className="mx-auto mt-4 max-w-2xl text-base text-[#f0e6d2]/70">
-              拒绝塑料质感的网页弹窗。每一次折痕、每一次阻尼、每一次起落，都是同一张有质感、有记忆的信纸在呼吸。
+            <p className="mt-3 text-sm leading-relaxed text-paper/75 sm:text-base">
+              市面上不缺另一个倾倒情绪的树洞，也不缺满嘴套话的 AI 陪伴机器人。
+              <br className="hidden sm:inline" />
+              我们想解决的，是深夜里那句真实发生、却不愿面对廉价安慰的话。
             </p>
           </div>
 
-          <div className="mt-16 grid grid-cols-1 gap-8 md:grid-cols-3">
-            {/* Card 1 */}
-            <div className="group relative rounded-3xl border border-[#f0e6d2]/15 bg-[#1a2744]/80 p-8 shadow-lg transition-all duration-300 hover:-translate-y-1.5 hover:border-[#f0e6d2]/35 hover:shadow-[0_16px_36px_rgba(0,0,0,0.4)]">
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#f0e6d2] text-[#1a2744] shadow-md">
-                <Feather className="h-6 w-6" />
+          <div className="mt-12 grid grid-cols-1 gap-6 md:grid-cols-2">
+            {/* Reason 1: Origin */}
+            <div className="rounded-3xl border border-paper/15 bg-[#141d30] p-8 shadow-xl">
+              <div className="flex items-center justify-between">
+                <span className="font-mono text-xs font-bold text-[#d4785a]">01 · 起源</span>
+                <span className="rounded-full bg-white/5 px-2.5 py-0.5 font-mono text-[10px] text-paper/60">
+                  黑客松命题探索
+                </span>
               </div>
-              <h3 className="font-display mt-6 text-xl font-bold text-[#f4efe4]">连续材质形变</h3>
-              <p className="mt-3 text-sm leading-relaxed text-[#f0e6d2]/70">
-                写字、压折痕、翼面隆起、掠过窗台——全链路在同一视口内单张纸连续插值。关掉动效，静帧也是一幅构图完美的实体标本。
+              <h3 className="font-display mt-4 text-xl font-bold text-paper">
+                捕捉那些没被接住的情绪
+              </h3>
+              <p className="mt-3 text-xs leading-relaxed text-paper/70">
+                项目最初源于一场关于“情绪搜救”的命题探讨。我们发现，真正深陷内耗与社恐的普通人，既不愿意去填冷冰冰的心理量表，也不愿意在公共社交广场上发帖示弱。那些深夜里说不出口的话，往往因为找不到合适的容器，最终只能默默烂在肚子里。
               </p>
-              <div className="mt-6 flex items-center gap-2 text-xs font-semibold text-[#d4785a]">
-                <span>基于物理弹簧阻尼解算</span>
-              </div>
             </div>
 
-            {/* Card 2 */}
-            <div className="group relative rounded-3xl border border-[#f0e6d2]/15 bg-[#1a2744]/80 p-8 shadow-lg transition-all duration-300 hover:-translate-y-1.5 hover:border-[#f0e6d2]/35 hover:shadow-[0_16px_36px_rgba(0,0,0,0.4)]">
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#d4785a] text-white shadow-md">
-                <Compass className="h-6 w-6" />
+            {/* Reason 2: No cheap comfort */}
+            <div className="rounded-3xl border border-[#d4785a]/40 bg-[#162035] p-8 shadow-xl">
+              <div className="flex items-center justify-between">
+                <span className="font-mono text-xs font-bold text-[#d4785a]">02 · 核心规则</span>
+                <span className="rounded-full bg-[#d4785a]/20 px-2.5 py-0.5 font-mono text-[10px] text-[#d4785a]">
+                  铁律：不安慰
+                </span>
               </div>
-              <h3 className="font-display mt-6 text-xl font-bold text-[#f4efe4]">真实经纬巡航</h3>
-              <p className="mt-3 text-sm leading-relaxed text-[#f0e6d2]/70">
-                信件不进公网社交信息流。在低轨经纬线地球仪上，纸飞机跟随风向穿梭于各大城市经纬坐标，只在真正懂得的窗口降落。
+              <h3 className="font-display mt-4 text-xl font-bold text-paper">
+                用平行事实，替代“我懂你”
+              </h3>
+              <p className="mt-3 text-xs leading-relaxed text-paper/70">
+                多数 AI 对话工具最容易滑向廉价的自我感动——张口闭口“抱抱你、一切都会过去的、加油”。对成年人来说，这些套话不仅苍白，更带有一种居高临下的尴尬。在 PaperEcho 里，人设规则被严格约束：对方绝不安慰、不分析、不说教，只讲他自己今晚平行的具体生活事实。“回应 = 被看见”，用一个真实的细节接住你，远比千句空洞的鸡汤更有力量。
               </p>
-              <div className="mt-6 flex items-center gap-2 text-xs font-semibold text-[#d4785a]">
-                <span>Cobe WebGL2 极轻微夜航</span>
-              </div>
             </div>
 
-            {/* Card 3 */}
-            <div className="group relative rounded-3xl border border-[#f0e6d2]/15 bg-[#1a2744]/80 p-8 shadow-lg transition-all duration-300 hover:-translate-y-1.5 hover:border-[#f0e6d2]/35 hover:shadow-[0_16px_36px_rgba(0,0,0,0.4)]">
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#7a9a68] text-white shadow-md">
-                <Moon className="h-6 w-6" />
+            {/* Reason 3: Tangible Gestures */}
+            <div className="rounded-3xl border border-paper/15 bg-[#141d30] p-8 shadow-xl">
+              <div className="flex items-center justify-between">
+                <span className="font-mono text-xs font-bold text-[#7a9a68]">03 · 物理手势</span>
+                <span className="rounded-full bg-white/5 px-2.5 py-0.5 font-mono text-[10px] text-paper/60">
+                  真实位移阻尼
+                </span>
               </div>
-              <h3 className="font-display mt-6 text-xl font-bold text-[#f4efe4]">安静暗格收信</h3>
-              <p className="mt-3 text-sm leading-relaxed text-[#f0e6d2]/70">
-                绝无弹窗与红点催促。收到的回信会静静躺在书桌底层的抽屉暗格里。深夜推开窗，拾起一封多年前或今晚刚好落下的回音。
+              <h3 className="font-display mt-4 text-xl font-bold text-paper">
+                找回写信与折纸的物理重量
+              </h3>
+              <p className="mt-3 text-xs leading-relaxed text-paper/70">
+                现代网页表单把所有的表达简化成了一个“点击发送”按钮，几毫秒的点击让表达变得极其轻飘。为了找回信件的实体感，我们用物理弹簧阻尼重构了交互：克服阻力下拉卡片进房间、手指沿对角线拉拽两次纸角折成机翼、拉紧橡皮筋弹射飞出、沿折痕拉开拆信。每一个推进，都来自手指的真实位移。
               </p>
-              <div className="mt-6 flex items-center gap-2 text-xs font-semibold text-[#7a9a68]">
-                <span>脱离即使反馈焦虑的慢交流</span>
+            </div>
+
+            {/* Reason 4: Zero Social Currency */}
+            <div className="rounded-3xl border border-paper/15 bg-[#141d30] p-8 shadow-xl">
+              <div className="flex items-center justify-between">
+                <span className="font-mono text-xs font-bold text-[#e8c56b]">04 · 慢速与抽屉</span>
+                <span className="rounded-full bg-white/5 px-2.5 py-0.5 font-mono text-[10px] text-paper/60">
+                  零社交货币
+                </span>
               </div>
+              <h3 className="font-display mt-4 text-xl font-bold text-paper">
+                没有红点催促与点赞焦虑
+              </h3>
+              <p className="mt-3 text-xs leading-relaxed text-paper/70">
+                即时通讯里的“已读未回”和社交软件上的点赞比拼，是现代焦虑的最大推手。PaperEcho 不设点赞、不设关注、不设即时弹窗。信件按地球真实大圆经纬度在夜空中慢速飞行，往来信件全部静静叠放在案头底层的红陶抽屉暗格里。你可以关掉屏幕去睡，过几天推开窗时再来看。
+              </p>
             </div>
           </div>
         </div>
       </section>
 
-      {/* --- SECTION 3: ECHO WALL (回声标本墙 · 真实故事对谈) --- */}
-      <section id="echoes" className="relative z-10 py-24">
-        <div className="mx-auto max-w-6xl px-6 sm:px-8">
+      {/* --- 3. WALKTHROUGH SECTION: 产品怎么用 · 完整游玩流程演示 --- */}
+      <section id="walkthrough" className="relative border-b border-[#f0e6d2]/10 bg-[#121a2b] py-20">
+        <div className="mx-auto max-w-6xl px-6">
           <div className="flex flex-col items-start justify-between gap-4 md:flex-row md:items-end">
             <div>
-              <span className="font-mono text-xs tracking-widest text-[#d4785a] uppercase">Specimen & Resonance</span>
-              <h2 className="font-display mt-2 text-3xl font-extrabold tracking-tight text-[#f4efe4] sm:text-4xl">
-                今夜被拾起的回声标本
+              <div className="inline-flex items-center gap-2 font-mono text-xs tracking-widest text-[#d4785a] uppercase">
+                <Sliders className="h-3.5 w-3.5" />
+                <span>Interactive Walkthrough</span>
+              </div>
+              <h2 className="font-display mt-2 text-3xl font-bold tracking-tight text-paper sm:text-4xl">
+                产品怎么用 · 完整游玩流程
               </h2>
-              <p className="mt-3 max-w-xl text-sm text-[#f0e6d2]/70">
-                每一封都是来自真实未眠人的笔触。点击任意一张便签，翻阅深夜跨越山海的信件。
+              <p className="mt-2 max-w-2xl text-sm text-paper/75">
+                从深夜下拉进房，到将回信滑入底层抽屉。点击各步骤查看对应的实机操作界面。
               </p>
             </div>
 
-            {/* Story Picker Tabs */}
-            <div className="flex gap-2">
-              {ECHO_STORIES.map((s, idx) => (
-                <button
-                  key={s.id}
-                  onClick={() => setActiveStory(idx)}
-                  className={`rounded-xl px-3 py-1.5 text-xs font-semibold transition-all ${
-                    activeStory === idx
-                      ? "bg-[#f0e6d2] text-[#1a2744] shadow-md"
-                      : "border border-[#f0e6d2]/20 bg-white/5 text-[#f0e6d2]/60 hover:text-white"
-                  }`}
-                >
-                  {s.originCity} ↔ {s.echoCity}
-                </button>
-              ))}
+            {/* Auto Play / Pause Control */}
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setIsPlayingWalkthrough(!isPlayingWalkthrough)}
+                className={`flex items-center gap-2 rounded-2xl px-5 py-2.5 text-xs font-bold transition-all ${
+                  isPlayingWalkthrough
+                    ? "clay bg-[#d4785a] text-white shadow-lg"
+                    : "border border-paper/20 bg-white/5 text-paper hover:bg-white/10"
+                }`}
+              >
+                {isPlayingWalkthrough ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5 text-[#e8c56b]" />}
+                <span>{isPlayingWalkthrough ? "暂停演示" : "▶ 自动播放完整流程"}</span>
+              </button>
             </div>
           </div>
 
-          {/* Large Interactive Story Display */}
-          <div className="mt-10 grid grid-cols-1 gap-6 md:grid-cols-2">
-            {/* Origin Note */}
-            <motion.div
-              key={`origin-${activeStory}`}
-              initial={{ opacity: 0, y: 15 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.35 }}
-              className="relative flex min-h-[260px] flex-col justify-between rounded-3xl bg-[#f4efe4] p-8 text-[#1a2744] shadow-[0_12px_36px_rgba(0,0,0,0.3)]"
-            >
-              <div className="flex items-center justify-between border-b border-[#1a2744]/10 pb-4 text-xs">
-                <div className="flex items-center gap-1.5 font-bold text-[#d4785a]">
-                  <MapPin className="h-3.5 w-3.5" />
-                  <span>{ECHO_STORIES[activeStory].originCity}</span>
+          {/* Main Walkthrough Showcase */}
+          <div className="mt-10 grid grid-cols-1 md:grid-cols-12 gap-8 items-start">
+            {/* Left: Device Frame with Real Screen */}
+            <div className="md:col-span-5 flex flex-col items-center">
+              <div className="relative w-full max-w-[280px]">
+                {/* Outer Phone Shell */}
+                <div className="relative overflow-hidden rounded-[2.5rem] border-4 border-paper/25 bg-black p-2.5 shadow-[0_25px_60px_rgba(0,0,0,0.8)]">
+                  <div className="relative aspect-[9/16] w-full overflow-hidden rounded-[2rem] bg-[#0c121e]">
+                    <img
+                      key={currentStep.src}
+                      src={currentStep.src}
+                      alt={currentStep.title}
+                      className="h-full w-full object-cover transition-opacity duration-300"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent pointer-events-none" />
+
+                    {/* Step Overlay Badge */}
+                    <div className="absolute top-4 inset-x-4 flex items-center justify-between text-xs">
+                      <span className="rounded-full bg-black/60 px-3 py-1 font-mono text-[11px] font-bold text-white backdrop-blur-md">
+                        STEP {currentStep.step} / 08
+                      </span>
+                      <span className="rounded-full bg-[#d4785a]/90 px-2.5 py-0.5 text-[10px] font-bold text-white backdrop-blur-md">
+                        {currentStep.tag}
+                      </span>
+                    </div>
+
+                    <div className="absolute bottom-4 inset-x-4">
+                      <div className="font-bold text-sm text-white drop-shadow-md">
+                        {currentStep.title}
+                      </div>
+                      <div className="text-[11px] text-white/80 line-clamp-1 mt-0.5">
+                        {currentStep.subtitle}
+                      </div>
+                    </div>
+                  </div>
                 </div>
-                <div className="flex items-center gap-1 text-[#1a2744]/50">
-                  <Clock className="h-3 w-3" />
-                  <span>{ECHO_STORIES[activeStory].originTime} 发出</span>
-                </div>
-              </div>
 
-              <div className="my-6">
-                <p className="font-serif text-lg leading-relaxed text-[#1c1914] sm:text-xl">
-                  “{ECHO_STORIES[activeStory].thought}”
-                </p>
-              </div>
+                {/* Left/Right Quick Switch Buttons */}
+                <div className="mt-4 flex items-center justify-between px-2">
+                  <button
+                    onClick={() =>
+                      setActiveWalkthrough((prev) =>
+                        prev === 0 ? WALKTHROUGH_STEPS.length - 1 : prev - 1
+                      )
+                    }
+                    className="flex items-center gap-1 rounded-xl border border-paper/15 bg-white/5 px-3 py-1.5 text-xs text-paper/70 hover:bg-white/10 hover:text-white"
+                  >
+                    <ChevronLeft className="h-3.5 w-3.5" />
+                    <span>上一步</span>
+                  </button>
 
-              <div className="flex items-center justify-between text-xs text-[#1a2744]/50">
-                <span>压在箱底的原始心声</span>
-                <span className="font-mono">已折入纸飞机</span>
-              </div>
-            </motion.div>
-
-            {/* Echo Received Note */}
-            <motion.div
-              key={`echo-${activeStory}`}
-              initial={{ opacity: 0, y: 15 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.35, delay: 0.1 }}
-              className="relative flex min-h-[260px] flex-col justify-between rounded-3xl border border-[#7a9a68]/40 bg-[#16292b] p-8 text-[#f0e6d2] shadow-[0_12px_36px_rgba(0,0,0,0.35)]"
-            >
-              <div className="flex items-center justify-between border-b border-[#f0e6d2]/15 pb-4 text-xs">
-                <div className="flex items-center gap-1.5 font-bold text-[#7a9a68]">
-                  <Sparkles className="h-3.5 w-3.5" />
-                  <span>来自 {ECHO_STORIES[activeStory].echoCity} 的回声</span>
-                </div>
-                <div className="flex items-center gap-1 text-[#f0e6d2]/60">
-                  <Clock className="h-3 w-3" />
-                  <span>{ECHO_STORIES[activeStory].echoTime} 回信</span>
-                </div>
-              </div>
-
-              <div className="my-6">
-                <p className="font-serif text-lg leading-relaxed text-[#f4efe4] sm:text-xl">
-                  “{ECHO_STORIES[activeStory].echo}”
-                </p>
-              </div>
-
-              <div className="flex items-center justify-between text-xs text-[#f0e6d2]/50">
-                <span>从暗格中展开的便签</span>
-                <span className="font-mono text-[#7a9a68]">✓ 两人房间已封存</span>
-              </div>
-            </motion.div>
-          </div>
-        </div>
-      </section>
-
-      {/* --- SECTION 4: CINEMATIC SHOWCASE (概念短片展台) --- */}
-      <section id="film" className="relative z-10 border-t border-[#f0e6d2]/10 bg-[#0d1320] py-24">
-        <div className="mx-auto max-w-6xl px-6 sm:px-8">
-          <div className="flex flex-col items-start justify-between gap-4 md:flex-row md:items-end">
-            <div>
-              <span className="font-mono text-xs tracking-widest text-[#d4785a] uppercase">Cinematic Experience</span>
-              <h2 className="font-display mt-2 text-3xl font-extrabold tracking-tight text-[#f4efe4] sm:text-4xl">
-                30 秒概念片 · 纸飞机的夜航
-              </h2>
-              <p className="mt-3 max-w-xl text-sm text-[#f0e6d2]/70">
-                遵循 Applecut 纯净镜头哲学。一镜一事，聚焦实体折纸与暗夜飞行。
-              </p>
-            </div>
-
-            {/* Play/Pause Toggle */}
-            <button
-              onClick={() => setFilmPlaying(!filmPlaying)}
-              className="flex items-center gap-2 rounded-full border border-[#f0e6d2]/25 bg-white/5 px-4 py-2 text-xs font-semibold text-[#f0e6d2] transition-colors hover:bg-white/10"
-            >
-              {filmPlaying ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
-              <span>{filmPlaying ? "暂停分镜轮播" : "继续自动播放"}</span>
-            </button>
-          </div>
-
-          {/* Film Showcase Window */}
-          <div className="mt-10 overflow-hidden rounded-3xl border border-[#f0e6d2]/20 bg-[#162035] shadow-[0_24px_70px_rgba(0,0,0,0.6)]">
-            {/* 16:9 Screen Frame */}
-            <div className="relative aspect-video w-full overflow-hidden sm:aspect-[21/9]">
-              <AnimatePresence mode="wait">
-                <motion.div
-                  key={currentAct}
-                  initial={{ opacity: 0, scale: 1.04 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.98 }}
-                  transition={{ duration: 0.7, ease: "easeInOut" }}
-                  className={`absolute inset-0 flex flex-col items-center justify-center p-8 text-center ${FILM_ACTS[currentAct].palette}`}
-                >
-                  {/* Subtle noise and light ring */}
-                  <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(240,230,210,0.08)_0%,transparent_70%)]" />
-
-                  <span className="rounded-full border border-[#f0e6d2]/20 bg-black/40 px-3 py-1 font-mono text-xs text-[#d4785a] uppercase">
-                    {FILM_ACTS[currentAct].act} · {FILM_ACTS[currentAct].visualNote}
+                  <span className="font-mono text-xs text-paper/50">
+                    {activeWalkthrough + 1} of {WALKTHROUGH_STEPS.length}
                   </span>
 
-                  <h3 className="font-display mt-4 text-2xl font-bold text-[#f4efe4] sm:text-4xl">
-                    {FILM_ACTS[currentAct].title}
-                  </h3>
-
-                  <p className="mt-3 max-w-lg text-sm leading-relaxed text-[#f0e6d2]/80 sm:text-base">
-                    {FILM_ACTS[currentAct].desc}
-                  </p>
-                </motion.div>
-              </AnimatePresence>
+                  <button
+                    onClick={() =>
+                      setActiveWalkthrough((prev) => (prev + 1) % WALKTHROUGH_STEPS.length)
+                    }
+                    className="flex items-center gap-1 rounded-xl border border-paper/15 bg-white/5 px-3 py-1.5 text-xs text-paper/70 hover:bg-white/10 hover:text-white"
+                  >
+                    <span>下一步</span>
+                    <ChevronRight className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              </div>
             </div>
 
-            {/* Act Step Tabs */}
-            <div className="grid grid-cols-2 divide-x divide-[#f0e6d2]/10 border-t border-[#f0e6d2]/10 bg-[#121a2c] sm:grid-cols-4">
-              {FILM_ACTS.map((act, idx) => (
+            {/* Right: Step Details and Interactive List */}
+            <div className="md:col-span-7 space-y-3">
+              {/* Highlight Box for Active Step */}
+              <div className="clay rounded-3xl bg-[#f0e6d2] p-6 text-[#1a2744] shadow-xl">
+                <div className="flex items-center justify-between border-b border-[#1a2744]/15 pb-3 text-xs font-bold">
+                  <div className="flex items-center gap-2">
+                    <span className="rounded-lg bg-[#1a2744] px-2 py-0.5 font-mono text-white">
+                      第 {currentStep.step} 步
+                    </span>
+                    <span className="text-base text-[#1a2744]">{currentStep.title}</span>
+                  </div>
+                  <span className="rounded-full bg-[#d4785a]/15 px-2.5 py-0.5 text-[11px] text-[#d4785a]">
+                    {currentStep.tag}
+                  </span>
+                </div>
+
+                <div className="mt-4 space-y-2.5 text-xs leading-relaxed">
+                  <div>
+                    <span className="font-bold text-[#d4785a]">你在界面做什么：</span>
+                    <span className="ml-1 text-[#1a2744]/80">{currentStep.action}</span>
+                  </div>
+                  <div>
+                    <span className="font-bold text-[#7a9a68]">游戏发生什么：</span>
+                    <span className="ml-1 text-[#1a2744]/80">{currentStep.result}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* 8-Step Clickable List */}
+              <div className="space-y-1.5 pt-2">
+                {WALKTHROUGH_STEPS.map((st, idx) => (
+                  <button
+                    key={st.step}
+                    onClick={() => {
+                      setActiveWalkthrough(idx);
+                      setIsPlayingWalkthrough(false);
+                    }}
+                    className={`w-full rounded-2xl px-4 py-2.5 text-left transition-all flex items-center justify-between ${
+                      activeWalkthrough === idx
+                        ? "border border-[#d4785a] bg-[#1a2744] shadow-md"
+                        : "border border-paper/10 bg-white/[0.02] hover:bg-white/[0.05]"
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <span
+                        className={`flex h-7 w-7 items-center justify-center rounded-lg font-mono text-xs font-bold ${
+                          activeWalkthrough === idx
+                            ? "bg-[#d4785a] text-white"
+                            : "bg-paper/10 text-paper/60"
+                        }`}
+                      >
+                        {st.step}
+                      </span>
+                      <div>
+                        <div className="font-bold text-xs text-paper">{st.title}</div>
+                        <div className="text-[11px] text-paper/60 line-clamp-1">{st.subtitle}</div>
+                      </div>
+                    </div>
+                    <span className="hidden text-[10px] font-mono text-paper/40 sm:inline">
+                      {st.tag}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* --- 4. CINEMATIC REEL (实机镜头放映) --- */}
+      <section id="cinematic-reel" className="relative border-b border-[#f0e6d2]/10 bg-[#0c121e] py-20">
+        <div className="mx-auto max-w-6xl px-6">
+          <div className="flex flex-col items-start justify-between gap-4 md:flex-row md:items-end">
+            <div>
+              <div className="inline-flex items-center gap-2 font-mono text-xs tracking-widest text-[#e8c56b] uppercase">
+                <Film className="h-3.5 w-3.5" />
+                <span>Cinematic Reel</span>
+              </div>
+              <h2 className="font-display mt-2 text-3xl font-bold tracking-tight text-paper sm:text-4xl">
+                实机镜头 · 3D WebGL 放映
+              </h2>
+              <p className="mt-2 max-w-2xl text-sm text-paper/75">
+                推开案头圆窗，观测纸飞机在低轨夜云中的巡航轨迹与案头陶土小人。
+              </p>
+            </div>
+
+            {/* Video Switcher Tabs */}
+            <div className="flex gap-2 rounded-2xl border border-paper/15 bg-black/40 p-1.5 backdrop-blur-sm">
+              <button
+                onClick={() => setActiveVideo("flight")}
+                className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold transition-all ${
+                  activeVideo === "flight"
+                    ? "clay bg-[#f0e6d2] text-[#1a2744] shadow-md"
+                    : "text-paper/70 hover:text-white"
+                }`}
+              >
+                <span>镜头 A · 云海巡航</span>
+              </button>
+              <button
+                onClick={() => setActiveVideo("room")}
+                className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold transition-all ${
+                  activeVideo === "room"
+                    ? "clay bg-[#f0e6d2] text-[#1a2744] shadow-md"
+                    : "text-paper/70 hover:text-white"
+                }`}
+              >
+                <span>镜头 B · 案头圆窗</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Full-width 16:9 Cinema Showcase Container */}
+          <div className="relative mt-8 overflow-hidden rounded-3xl border border-paper/20 bg-black shadow-2xl">
+            <div className="relative aspect-video w-full">
+              <video
+                key={activeVideo}
+                src={activeVideo === "flight" ? "/scenes/flight.mp4" : "/scenes/room.mp4"}
+                autoPlay
+                loop
+                muted={soundMuted}
+                playsInline
+                className="h-full w-full object-cover"
+              />
+
+              {/* Floating Top Badge */}
+              <div className="absolute top-4 left-4 flex items-center gap-2">
+                <span className="rounded-full bg-black/70 px-3.5 py-1.5 font-mono text-xs text-white/90 backdrop-blur-md">
+                  {activeVideo === "flight"
+                    ? "镜头 A · 纸飞机夜空巡航 (3D WebGL / Blender 渲染)"
+                    : "镜头 B · 陶土小人与案头圆窗 (3D WebGL / Blender 渲染)"}
+                </span>
+              </div>
+
+              {/* Sound Toggle Button */}
+              <div className="absolute bottom-4 right-4">
                 <button
-                  key={idx}
-                  onClick={() => {
-                    setCurrentAct(idx);
-                    setFilmPlaying(false);
-                  }}
-                  className={`relative p-4 text-left transition-all ${
-                    currentAct === idx ? "bg-white/5" : "hover:bg-white/[0.02]"
-                  }`}
+                  onClick={() => setSoundMuted(!soundMuted)}
+                  className="flex items-center gap-1.5 rounded-full bg-black/75 px-4 py-2 text-xs font-semibold text-white backdrop-blur-md transition-colors hover:bg-black"
                 >
-                  {currentAct === idx && (
-                    <div className="absolute inset-x-0 top-0 h-1 bg-[#d4785a]" />
-                  )}
-                  <span className="block font-mono text-[11px] text-[#f0e6d2]/50">{act.act}</span>
-                  <span className="font-display mt-0.5 block text-sm font-semibold text-[#f4efe4]">{act.title}</span>
+                  {soundMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+                  <span>{soundMuted ? "已静音 (点击开启原声)" : "声音已开启"}</span>
                 </button>
-              ))}
+              </div>
             </div>
           </div>
         </div>
       </section>
 
-      {/* --- SECTION 5: PHILOSOPHY & MANIFESTO --- */}
-      <section id="philosophy" className="relative z-10 py-24">
-        <div className="mx-auto max-w-4xl px-6 text-center sm:px-8">
-          <span className="font-mono text-xs tracking-widest text-[#d4785a] uppercase">Design Manifesto</span>
-          <h2 className="font-display mt-2 text-3xl font-extrabold tracking-tight text-[#f4efe4] sm:text-4xl">
-            为什么是「纸上的回声」？
-          </h2>
+      {/* --- 5. DESIGN DETAILS (设计细节 · 实体案头与克制陪伴) --- */}
+      <section id="details" className="relative border-b border-[#f0e6d2]/10 bg-[#141d30] py-20">
+        <div className="mx-auto max-w-6xl px-6">
+          <div>
+            <div className="inline-flex items-center gap-2 font-mono text-xs tracking-widest text-[#7a9a68] uppercase">
+              <Sparkles className="h-3.5 w-3.5" />
+              <span>Design Foundations</span>
+            </div>
+            <h2 className="font-display mt-2 text-3xl font-bold tracking-tight text-paper sm:text-4xl">
+              三个克制的设计细节
+            </h2>
+            <p className="mt-2 max-w-2xl text-sm text-paper/75">
+              消除数字工具的浮躁与廉价感，在案头保留一份真实的物理触感与私人空间。
+            </p>
+          </div>
 
-          <div className="mt-12 space-y-6 text-left">
-            <div className="rounded-2xl border border-[#f0e6d2]/10 bg-[#162035]/60 p-6 sm:p-8">
-              <h3 className="font-display text-lg font-bold text-[#f4efe4]">一、为什么不设点赞与公开评论？</h3>
-              <p className="mt-2 text-sm leading-relaxed text-[#f0e6d2]/70">
-                现代社交媒体把人的情绪量化为互动数据，催生了表演欲与被评价的焦虑。PaperEcho 不设点赞、不设排行榜。信件只由夜风吹向一扇随机而同频的窗，给倾诉最安全的保留地。
+          <div className="mt-10 grid grid-cols-1 gap-6 md:grid-cols-3">
+            {/* Detail 1: Gesture */}
+            <div className="rounded-3xl border border-paper/15 bg-[#1a2744] p-6 shadow-xl">
+              <div className="clay-sm flex h-12 w-12 items-center justify-center rounded-2xl bg-[#7a9a68] text-white">
+                <Feather className="h-6 w-6" />
+              </div>
+              <h3 className="font-display mt-5 text-lg font-bold text-paper">
+                实体手势阻尼
+              </h3>
+              <p className="mt-2 text-xs leading-relaxed text-paper/70">
+                下拉卡片、对角拉拽折纸、拉橡皮筋弹射、下拉拆信。每一个交互步骤都需要手指在屏幕上完成明确的物理位移，不提供一键生成的轻浮表单。
               </p>
             </div>
 
-            <div className="rounded-2xl border border-[#f0e6d2]/10 bg-[#162035]/60 p-6 sm:p-8">
-              <h3 className="font-display text-lg font-bold text-[#f4efe4]">二、为什么一定要用手折叠纸张？</h3>
-              <p className="mt-2 text-sm leading-relaxed text-[#f0e6d2]/70">
-                打字发送只需要 0.1 秒，而把一张信纸沿着对角线折平、抚平折痕、立起机翼，需要 5 秒钟的专注。这 5 秒的物理交互是情绪的沉淀——给冲动一次深呼吸的机会。
+            {/* Detail 2: No cheap comfort */}
+            <div className="rounded-3xl border border-paper/15 bg-[#1a2744] p-6 shadow-xl">
+              <div className="clay-sm flex h-12 w-12 items-center justify-center rounded-2xl bg-[#d4785a] text-white">
+                <ShieldCheck className="h-6 w-6" />
+              </div>
+              <h3 className="font-display mt-5 text-lg font-bold text-paper">
+                不安慰人的克制陪伴
+              </h3>
+              <p className="mt-2 text-xs leading-relaxed text-paper/70">
+                对方绝不安慰、不分析、不说教，只讲他自己今晚平行的具体生活事实。用一句真实的日常细节来互相接住，替代尴尬廉价的“我懂你”。
               </p>
             </div>
 
-            <div className="rounded-2xl border border-[#f0e6d2]/10 bg-[#162035]/60 p-6 sm:p-8">
-              <h3 className="font-display text-lg font-bold text-[#f4efe4]">三、为什么是漫长的夜航？</h3>
-              <p className="mt-2 text-sm leading-relaxed text-[#f0e6d2]/70">
-                即时通讯让人疲于奔命。PaperEcho 是一场慢速的守候。有时飞机飞过半个地球需要半小时，有时回声在天亮时才悄然抵达。慢下来，文字才有真正的温度。
+            {/* Detail 3: Terracotta Drawer */}
+            <div className="rounded-3xl border border-paper/15 bg-[#1a2744] p-6 shadow-xl">
+              <div className="clay-sm flex h-12 w-12 items-center justify-center rounded-2xl bg-[#e8c56b] text-[#1a2744]">
+                <Archive className="h-6 w-6" />
+              </div>
+              <h3 className="font-display mt-5 text-lg font-bold text-paper">
+                案头红陶抽屉
+              </h3>
+              <p className="mt-2 text-xs leading-relaxed text-paper/70">
+                往来信件全部归入案头底层的红陶暗格。没有点赞、没有公共信息流、没有已读未回的红点催促。随时可以关掉，想重读时随时拉开抽屉即可。
               </p>
             </div>
           </div>
         </div>
       </section>
 
-      {/* --- SECTION 6: BOTTOM CTA & FOOTER --- */}
-      <footer className="relative z-10 border-t border-[#f0e6d2]/10 bg-[#0d1320] pt-20 pb-12">
-        <div className="mx-auto max-w-4xl px-6 text-center sm:px-8">
-          <h2 className="font-display text-3xl font-extrabold text-[#f4efe4] sm:text-5xl">
-            今夜的风刚刚好，
-            <br />
-            信纸已经为你铺开。
+      {/* --- 6. FOOTER CTA --- */}
+      <footer className="relative border-t border-paper/15 bg-[#0a0f1a] pt-16 pb-12">
+        <div className="mx-auto max-w-4xl px-6 text-center">
+          <h2 className="type-clay font-latin text-3xl font-extrabold sm:text-4xl text-paper">
+            PAPER ECHO
           </h2>
-          <p className="mt-4 text-base text-[#f0e6d2]/70">
-            免去烦琐的注册。推开窗，在信纸上写下第一句，让纸飞机飞入今晚的夜空。
+          <p className="font-display mt-2 text-lg text-paper/90">
+            写下一件具体的事，不安慰，只回应。
           </p>
 
-          <div className="mt-8 flex flex-col items-center justify-center gap-4 sm:flex-row">
+          <div className="mt-8 flex justify-center">
             <Link
               to="/"
-              className="group flex items-center gap-2 rounded-2xl bg-[#f0e6d2] px-8 py-4 text-base font-bold text-[#1a2744] shadow-[0_6px_24px_rgba(240,230,210,0.25)] transition-all hover:bg-white hover:shadow-[0_8px_30px_rgba(240,230,210,0.4)] active:translate-y-0.5"
+              className="clay flex items-center gap-2 rounded-2xl bg-[#f0e6d2] px-8 py-3.5 text-base font-bold text-[#1a2744] transition-all hover:bg-white active:translate-y-0.5"
             >
-              <span>推开窗 · 立即写一封信</span>
-              <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1" />
+              <span>推开窗 · 进入房间</span>
+              <ArrowRight className="h-4 w-4 text-[#d4785a]" />
             </Link>
           </div>
 
-          <div className="mt-16 flex flex-col items-center justify-between gap-4 border-t border-[#f0e6d2]/10 pt-8 text-xs text-[#f0e6d2]/50 sm:flex-row">
-            <div className="flex items-center gap-2">
-              <span className="font-display font-semibold text-[#f0e6d2]/80">纸上的回声 PaperEcho</span>
-              <span>© 2026</span>
-            </div>
-            <div className="flex gap-6">
+          <div className="mt-12 flex items-center justify-between border-t border-paper/10 pt-6 text-xs text-paper/50">
+            <span>奕枢工坊 · 纸上的回声 PaperEcho © 2026</span>
+            <div className="flex gap-4">
+              <a href="https://yishuziyu.cn" target="_blank" rel="noreferrer" className="hover:text-white">
+                个人主站 yishuziyu.cn
+              </a>
               <Link to="/" className="hover:text-white">
                 进入产品
               </Link>
-              <a href="#craft" className="hover:text-white">
-                手感设计
-              </a>
-              <a href="#film" className="hover:text-white">
-                宣传片
-              </a>
             </div>
           </div>
         </div>
