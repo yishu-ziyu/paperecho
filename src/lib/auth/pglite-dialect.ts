@@ -41,7 +41,7 @@ class LazyPGliteDriver implements Driver {
   constructor(private readonly getClient: () => Promise<Client> | Client) {}
 
   async init(): Promise<void> {
-    this.client = await this.getClient();
+    // Truly lazy: connection is acquired on first query in acquireConnection()
   }
 
   async acquireConnection(): Promise<DatabaseConnection> {

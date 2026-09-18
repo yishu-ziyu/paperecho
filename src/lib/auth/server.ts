@@ -47,8 +47,33 @@ import {
   PREVIEW_CLIENT_SECRET,
 } from "./preview";
 
-// Kick (and share) PGLite bootstrap as soon as the auth server module loads.
-void ensureDbReady().catch(() => {});
+/** Read an env var, treating empty/whitespace as unset. */
+const env = (key: string): string | undefined => {
+  const value = process.env[key]?.trim();
+  return value ? value : undefined;
+};
+
+// Explicit off-switch. The deployer sets `VITE_AUTH_ENABLED=true` when it
+// provisions auth; set it to "false" to force auth off everywhere (dev user).
+const authDisabled =
+  env("VITE_AUTH_ENABLED") === "false" ||
+  import.meta.env?.VITE_AUTH_ENABLED === "false";
+
+// Broker federation creds: the deployer injects a per-app client when deployed;
+// otherwise fall back to the shared live-preview client, which the broker accepts
+// for any `*.grok-sandbox.com` callback (see `./preview`).
+const grokIssuer = env("GROK_AUTH_ISSUER") ?? GROK_ISSUER_DEFAULT;
+const grokClientId = env("GROK_AUTH_CLIENT_ID") ?? PREVIEW_CLIENT_ID;
+const grokClientSecret = env("GROK_AUTH_CLIENT_SECRET") ?? PREVIEW_CLIENT_SECRET;
+
+/** True when federated sign-in is active (real auth is enforced). */
+export const authConfigured =
+  !authDisabled && Boolean(grokClientId && grokClientSecret);
+
+// Kick (and share) PGLite bootstrap as soon as the auth server module loads only if auth is enabled.
+if (!authDisabled && typeof window === "undefined") {
+  void ensureDbReady().catch(() => {});
+}
 
 /**
  * Preview secret must outlive module reloads: PGLite (and its session rows) is
@@ -63,27 +88,6 @@ function previewAuthSecret(): string {
   globalAuthRef.__grokAuthPreviewSecret__ ??= randomBytes(32).toString("hex");
   return globalAuthRef.__grokAuthPreviewSecret__;
 }
-
-/** Read an env var, treating empty/whitespace as unset. */
-const env = (key: string): string | undefined => {
-  const value = process.env[key]?.trim();
-  return value ? value : undefined;
-};
-
-// Explicit off-switch. The deployer sets `VITE_AUTH_ENABLED=true` when it
-// provisions auth; set it to "false" to force auth off everywhere (dev user).
-const authDisabled = env("VITE_AUTH_ENABLED") === "false";
-
-// Broker federation creds: the deployer injects a per-app client when deployed;
-// otherwise fall back to the shared live-preview client, which the broker accepts
-// for any `*.grok-sandbox.com` callback (see `./preview`).
-const grokIssuer = env("GROK_AUTH_ISSUER") ?? GROK_ISSUER_DEFAULT;
-const grokClientId = env("GROK_AUTH_CLIENT_ID") ?? PREVIEW_CLIENT_ID;
-const grokClientSecret = env("GROK_AUTH_CLIENT_SECRET") ?? PREVIEW_CLIENT_SECRET;
-
-/** True when federated sign-in is active (real auth is enforced). */
-export const authConfigured =
-  !authDisabled && Boolean(grokClientId && grokClientSecret);
 
 // This app's own Better Auth origin. When deployed the deployer injects the
 // public URL. In the sandbox live preview there's no fixed URL (each preview gets

@@ -229,7 +229,11 @@ export function ensureDbReady(): Promise<void> {
 const globalBoot = globalThis as typeof globalThis & {
   __pgBootstrapPromise__?: Promise<void>;
 };
-if (typeof window === "undefined" && dbSource === "pglite") {
+const authDisabled =
+  (typeof process !== "undefined" && process.env.VITE_AUTH_ENABLED === "false") ||
+  import.meta.env?.VITE_AUTH_ENABLED === "false";
+
+if (typeof window === "undefined" && dbSource === "pglite" && !authDisabled) {
   globalBoot.__pgBootstrapPromise__ ??= ensureDbReady().catch((err) => {
     globalBoot.__pgBootstrapPromise__ = undefined;
     console.warn("[db] PGLite bootstrap non-fatal warning:", err?.message ?? err);
