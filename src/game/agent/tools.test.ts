@@ -10,8 +10,22 @@ import { archiveStories, storyToPost } from "./pipeline/sources/local.ts";
 import { queriesOf } from "./pipeline/sources/live.ts";
 import { cleanOneLine } from "./exchange.ts";
 import { keepSpoken } from "./chains.ts";
-import { acceptLive, heuristicRespond, spokenDetails, staysOnThread } from "./pipeline/respond.ts";
-import { blobOfShadow, formatCaseHits, formatCaseHitsLive, gatherShadow, runAgentTool, type ToolCtx } from "./tools.ts";
+import {
+  acceptLive,
+  heuristicRespond,
+  respond,
+  spokenDetails,
+  staysOnThread,
+  threadTokens,
+} from "./pipeline/respond.ts";
+import {
+  blobOfShadow,
+  formatCaseHits,
+  formatCaseHitsLive,
+  gatherShadow,
+  runAgentTool,
+  type ToolCtx,
+} from "./tools.ts";
 
 describe("match research via PostSource", () => {
   it("feeds synthesize materials, not locked story names", () => {
@@ -25,7 +39,12 @@ describe("match research via PostSource", () => {
       assert.equal(blob.includes(`${story.name} · ${story.city}`), false);
     }
     assert.equal(/search_cases|Firecrawl|AnySearch/.test(blob), false);
-    assert.equal(/\b(gloom|wronged|anxious|tired|lonely|anger|calm|unseen)(,(gloom|wronged|anxious|tired|lonely|anger|calm|unseen))+\b/.test(blob), false);
+    assert.equal(
+      /\b(gloom|wronged|anxious|tired|lonely|anger|calm|unseen)(,(gloom|wronged|anxious|tired|lonely|anger|calm|unseen))+\b/.test(
+        blob,
+      ),
+      false,
+    );
   });
 });
 
@@ -51,7 +70,11 @@ describe("remember completeness", () => {
       playerTexts: ["我还笑着说是我俩一起弄的，指甲把手心掐出了印。"],
     };
     assert.equal(
-      runAgentTool("remember", { fact: "玩家以前改方案到三点半，第二天开会没人提那几行数据是她扒的。" }, ctx),
+      runAgentTool(
+        "remember",
+        { fact: "玩家以前改方案到三点半，第二天开会没人提那几行数据是她扒的。" },
+        ctx,
+      ),
       "这不是对方的事，没写下。",
     );
     assert.equal(ctx.remembered.length, 0);
@@ -228,6 +251,67 @@ describe("heuristicRespond", () => {
     assert.equal(/港口|衣领/.test(out.reply), false, out.reply);
     assert.equal(out.reply.includes(used), false);
   });
+
+  it("collects every object and action, including a later drawer", () => {
+    assert.deepEqual(threadTokens("灯关了，抽屉没再打开。"), [
+      "灯",
+      "抽屉",
+      "关了",
+      "没再",
+      "打开",
+    ]);
+    assert.equal(staysOnThread("我把稿归档到文件夹了。", "抽屉我没再打开。"), true);
+    assert.equal(staysOnThread("我把灯关了。", "抽屉我没再打开。"), false);
+    assert.equal(staysOnThread("港口那盏灯我打开了。", "抽屉我没再打开。"), false);
+  });
+
+  it("continues the current archived scheme after an objectless follow-up", () => {
+    const shadow = synthesize(archiveStories().map(storyToPost), makeProfile(["unseen", "tired"]));
+    const first = heuristicRespond({ shadow, userLine: "抽屉我到现在都没再打开。" });
+    assert.equal(first.reply, STORIES.find((s) => s.id === "s1")?.lines[0]);
+    const history = [{ who: "echo" as const, text: first.reply }];
+    const next = heuristicRespond({ shadow, userLine: "后来呢。", history });
+    assert.equal(next.reply, STORIES.find((s) => s.id === "s1")?.lines[1]);
+    assertWeChat(next.reply);
+
+    const newTopic = heuristicRespond({
+      shadow: {
+        ...shadow,
+        materials: [
+          ...shadow.materials,
+          {
+            platform: "archive",
+            emotion: ["tired"],
+            situation: "晚上窗边",
+            content: "窗开着，我站了半小时。",
+          },
+        ],
+      },
+      userLine: "窗还开着。",
+      history,
+    });
+    assert.equal(newTopic.reply, "窗开着，我站了半小时。");
+  });
+
+  it("respond uses the concrete drawer parallel when no provider key exists", async () => {
+    const keys = ["MINIMAX_CN_API_KEY", "ANTHROPIC_AUTH_TOKEN", "AI_PING_API_KEY"];
+    const before = keys.map((key) => process.env[key]);
+    try {
+      for (const key of keys) delete process.env[key];
+      const shadow = synthesize(
+        archiveStories().map(storyToPost),
+        makeProfile(["unseen", "tired"]),
+      );
+      const out = await respond({ shadow, userLine: "抽屉我到现在都没再打开。" });
+      assert.equal(out.via, "archive");
+      assert.equal(out.reply, STORIES.find((s) => s.id === "s1")?.lines[0]);
+    } finally {
+      keys.forEach((key, i) => {
+        if (before[i] === undefined) delete process.env[key];
+        else process.env[key] = before[i];
+      });
+    }
+  });
 });
 
 describe("storyToEcho spoken greeting", () => {
@@ -317,11 +401,20 @@ describe("library occupies five materials", () => {
       },
     ];
     const mixed = synthesize([...local, ...live], profile);
-    assert.equal(mixed.materials.some((p) => p.content.includes("现场帖")), true);
+    assert.equal(
+      mixed.materials.some((p) => p.content.includes("现场帖")),
+      true,
+    );
     const kept = libraryFirstMaterials(local, live, profile);
     assert.equal(kept.length, 5);
-    assert.equal(kept.every((p) => p.platform === "archive"), true);
-    assert.equal(kept.some((p) => p.content.includes("现场帖")), false);
+    assert.equal(
+      kept.every((p) => p.platform === "archive"),
+      true,
+    );
+    assert.equal(
+      kept.some((p) => p.content.includes("现场帖")),
+      false,
+    );
   });
 
   it("lets live fill empty slots when the library is short", () => {
