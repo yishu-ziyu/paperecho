@@ -36,7 +36,13 @@
 import { EMOTIONS } from "../../emotions.ts";
 import type { EmotionId } from "../../types.ts";
 import { llmApiKey, LLM_CONFIG } from "../config.ts";
-import { cleanOneLine, exchangeCue, hasMetaLeak, type SpeakMode, type StoryDepth } from "../exchange.ts";
+import {
+  cleanOneLine,
+  exchangeCue,
+  hasMetaLeak,
+  type SpeakMode,
+  type StoryDepth,
+} from "../exchange.ts";
 import { parroted } from "../memory.ts";
 import type { EchoShadow } from "./persona.ts";
 import type { Post } from "./source.ts";
@@ -95,16 +101,25 @@ const LITERARY =
 const META = /素材齐了|记下你这句话|我也有过类似的|接住了|值得被|不是一个人|^我懂/;
 const CONCRETE =
   /灯|茶|手机|抽屉|窗|风扇|清单|电脑|群里|收到|沙发|杯子|截图|门|椅|稿|三点|凌晨|十七|罚单|机台|水龙头|相册|文件夹|面包|地铁|冰箱|电视|客厅|指甲|原稿|外卖|便利贴|语音|图层/;
-const ACTION = /删了|关了|塞进|划掉|打成|没回|打开|站了|扣过|凉了|没动|循环|托着|练|翻|压着|塞|没打开|没再/;
+const ACTION =
+  /删了|关了|塞进|划掉|打成|没回|打开|站了|扣过|凉了|没动|循环|托着|练|翻|压着|塞|没打开|没再/;
+
+function matchesOf(text: string, pattern: RegExp): string[] {
+  return [...new Set(text.match(new RegExp(pattern.source, "g")) ?? [])];
+}
+
+// 收起一件事可以是纸上的抽屉，也可以是屏幕里的文件夹。只连接收存物件，
+// 不把关灯、开门等普通动作当成同一段经历。
+const STORED_OBJECTS = ["抽屉", "文件夹", "稿"];
 
 /** 对方这句话里的物件/动作，用来钉住这一句的线。 */
 export function threadTokens(text: string): string[] {
-  const found = [...(text.match(CONCRETE) ?? []), ...(text.match(ACTION) ?? [])];
+  const found = [...objectsOf(text), ...matchesOf(text, ACTION)];
   return [...new Set(found)];
 }
 
 function objectsOf(text: string): string[] {
-  return [...new Set(text.match(CONCRETE) ?? [])];
+  return matchesOf(text, CONCRETE);
 }
 
 /** 对方说了具体物件时，回句必须还在这条线上。 */
@@ -112,8 +127,14 @@ export function staysOnThread(reply: string, userLine: string): boolean {
   const objects = objectsOf(userLine);
   if (!objects.length) return true;
   if (objects.some((o) => reply.includes(o))) return true;
-  const acts = [...new Set(userLine.match(ACTION) ?? [])];
-  return acts.some((a) => a.length >= 2 && reply.includes(a));
+  if (
+    objects.some((o) => STORED_OBJECTS.includes(o)) &&
+    STORED_OBJECTS.some((o) => reply.includes(o))
+  ) {
+    return true;
+  }
+  // 相同的「打开」不能把抽屉这件事带去开窗或开灯。
+  return false;
 }
 
 /** 对话历史铺成一段（只取最近 6 条，防过长）。 */
@@ -168,7 +189,11 @@ function anthropicText(content: unknown): string {
  * 真实 LLM 回应：默认 MiniMax Anthropic `/v1/messages`；备选 AI PING `/chat/completions`。
  * 返回清洗后的单行回应；任何一步不行（无 key/网络错/超时/空输出）都返回 null，交给上层兜底。
  */
-function llmEndpoint(): { url: string; headers: Record<string, string>; body: Record<string, unknown> } {
+function llmEndpoint(): {
+  url: string;
+  headers: Record<string, string>;
+  body: Record<string, unknown>;
+} {
   const apiKey = llmApiKey() ?? "";
   if (LLM_CONFIG.api === "openai-completions") {
     return {
@@ -299,7 +324,7 @@ function scoreMaterial(post: Post, userLine: string, hit: Set<string>): number {
   }
   const objects = objectsOf(userLine);
   const objectHit = objects.filter((o) => postText.includes(o)).length;
-  const acts = [...new Set(userLine.match(ACTION) ?? [])];
+  const acts = matchesOf(userLine, ACTION);
   const actHit = acts.filter((a) => postText.includes(a)).length;
   return objectHit * 12 + actHit * 3 + shared + overlap * 0.25;
 }
@@ -380,18 +405,21 @@ export function pickSpokenLine(
   used: Iterable<string> = [],
   speak: StoryDepth = 1,
   mode: SpeakMode = "full",
+  threadLine: string = userLine,
 ): string {
   const banned = [...used].filter(Boolean);
-  const needThread = objectsOf(userLine).length > 0;
+  const needThread = objectsOf(threadLine).length > 0;
   let best: { line: string; score: number } | undefined;
-  for (const post of rankedMaterials(materials, userLine)) {
-    const postHits = !needThread || staysOnThread(`${post.content} ${post.situation}`, userLine);
+  for (const post of rankedMaterials(materials, threadLine)) {
+    const postHits = !needThread || staysOnThread(`${post.content} ${post.situation}`, threadLine);
     for (const raw of [...sentencesOf(post.content), post.situation.trim()]) {
       const line = closeLine(raw);
       if (!line || banned.some((b) => parroted(line, b))) continue;
-      if (needThread && !staysOnThread(line, userLine) && !postHits) continue;
-      const score = spokenScore(line, userLine, speak);
-      if (score <= 0) continue;
+      if (needThread && !staysOnThread(line, threadLine) && !postHits) continue;
+      const spoken = spokenScore(line, userLine, speak);
+      if (spoken <= 0) continue;
+      // 先给出接上物件的具体经历；说过后才能续同一素材里的下一句。
+      const score = spoken + (needThread && staysOnThread(line, threadLine) ? 6 : 0);
       if (!best || score > best.score) best = { line, score };
     }
   }
@@ -400,7 +428,11 @@ export function pickSpokenLine(
 }
 
 /** 给模型看的口语细节：按对方这句排序，丢掉剧场腔整段。 */
-export function spokenDetails(materials: Post[], userLine: string, used: Iterable<string> = []): string[] {
+export function spokenDetails(
+  materials: Post[],
+  userLine: string,
+  used: Iterable<string> = [],
+): string[] {
   const out: string[] = [];
   const banned = [...used].filter(Boolean);
   for (const post of rankedMaterials(materials, userLine)) {
@@ -419,7 +451,9 @@ export function heuristicRespond(ctx: TurnContext): TurnOutput {
   const speak = ctx.speak ?? 1;
   const mode = ctx.mode ?? "full";
   const used = [userLine, ...(history ?? []).map((h) => h.text)];
-  const line = pickSpokenLine(shadow.materials, userLine, used, speak, mode);
+  const priorEcho = (history ?? []).filter((h) => h.who === "echo").at(-1)?.text;
+  const threadLine = objectsOf(userLine).length ? userLine : priorEcho || userLine;
+  const line = pickSpokenLine(shadow.materials, userLine, used, speak, mode, threadLine);
   return { reply: line || fallbackForSpeak(speak, mode), via: "archive" };
 }
 
