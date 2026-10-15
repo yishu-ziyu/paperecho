@@ -137,29 +137,5 @@ await apply({
 });
 await shot("08-archive");
 
-await apply({
-  phase: "encounter",
-  echo,
-  recall,
-  suggestions: ["灯还开着", "那几页我没提"],
-  judgeOpen: true,
-  meter: {
-    prompt: 842,
-    completion: 126,
-    total: 968,
-    model: "DeepSeek-V4-Flash-0731",
-    via: "archive",
-    node: "turn-reply",
-  },
-  hits: ["林予 · 杭州", "改了十七稿"],
-  core: { human: "玩家曾说「群里只回了收到」", persona: "你是林予，在杭州。" },
-  exchange: { unlocked: 2, silentTurns: 0 },
-  fingerprint: [
-    { id: "unseen", closeness: 0.86 },
-    { id: "tired", closeness: 0.71 },
-  ],
-});
-await shot("09-judge");
-
 await browser.close();
 console.log("done", out);

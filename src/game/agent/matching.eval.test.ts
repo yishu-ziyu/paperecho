@@ -494,7 +494,7 @@ describe("gatherShadow live 三态（注入 fake/slow/failed liveSource）", () 
 });
 
 // ---------------------------------------------------------------------------
-// review 第二轮（docs/contract-matching-review-fixes.md）：generation material allowlist + raw live discovery-only。
+// review 第二轮（原契约见 git df82f13）：generation material allowlist + raw live discovery-only。
 // ---------------------------------------------------------------------------
 
 /** hits 里那份 world-archive blob（= respond 实际收到的 materials 的原文块）。 */

@@ -1,5 +1,5 @@
 /**
- * EchoSession / turn 链验收测试（contract-encounter-agent-session 第 4–8 条）。
+ * EchoSession / turn 链验收测试（Task 1 验收第 4–8 条；原契约见 git 65bb70a）。
  *
  * 链路级测试用脚本化假流（StreamFn）注入：第 1 轮让模型调 remember 工具，
  * 第 2 轮回最终文本；同时捕获每次收到的 context，验证早期轮次与档案旧事真的进了 prompt。
