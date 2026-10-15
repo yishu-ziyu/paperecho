@@ -12,7 +12,7 @@
  * 降级链（任一命中即回退到 `heuristicRespond`，保证永远有话）：
  *   无 API key → 网络错误 → 超时（LLM_CONFIG.timeoutMs）→ 返回空/清洗后为空。
  *
- * ── 对话质量规范（即下方 SYSTEM_PROMPT 内联常量的来源，见 docs/ai-architecture.md）──
+ * ── 对话质量规范（即下方 SYSTEM_PROMPT 内联常量的来源；定调与取舍理由见 docs/echo-spec.md）──
  *
  * 声音：
  *   1. 写「事」，不写「状态」——有具体的时间/地点/动作/物件，不堆情绪形容词。

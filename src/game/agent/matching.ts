@@ -23,7 +23,7 @@
  *   为什么不是纯 RRF（k=10）：同一套 18 条 fixture、同一套 rank 函数下的实测对照
  *   （见 docs/matching-eval.md）：dense 变体在 textW=1..5 全部 17/18——f14 无解
  *   （它要 emotion 的 2v1 差让 s6 压过 text 近并列的替代者，rank 融合里「text#1 vs #2」
- *   只差一档，权重再大也只是同比例放大）；ordinal 变体 17/18（f14 落到 id 靠前的 s1）；
+ *   只差一档，权重再大也只是同比例放大）；ordinal 变体 17/18（f14 仍落榜，落到哪个替代者随故事库文案变）；
  *   k=60 时 f04 也丢。把 text 保留为连续分数、emotion/region 用原始计数/二元偏好，
  *   是 18 条全部通过的最小公式。
  * - avoid：与 matchStory 同语义——按 story.name 硬避让，池空才回退全池。
