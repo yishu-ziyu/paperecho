@@ -4,7 +4,7 @@
 >
 > 本文档基于对仓库 `paper-echo/` 全量源码的静态分析整理，覆盖：整体架构、模块职责、关键类与函数、数据模型、依赖关系与运行方式。
 >
-> ⚠️ **更正声明**：§7 曾将 `pi-echo.ts` 误写为生产运行时。当前唯一生产运行时为 **`chains.ts`（echoChain，Prompt Chaining）**，旧实验实现（pi-echo 单体、graph.ts LangGraph 版）已删除。本文档 §7 及涉及行已随代码更新；技术细节以 `src/game/agent/` 与 `agent.md` 为准。
+> ⚠️ **更正声明**：§7 曾将 `pi-echo.ts` 误写为生产运行时。当前唯一生产运行时为 **`chains.ts`（echoChain，Prompt Chaining）**，旧实验实现（pi-echo 单体、graph.ts LangGraph 版）已删除。本文档 §7 及涉及行已随代码更新；技术细节以 `src/game/agent/`（`types.ts` 契约与各文件头注释）为准。
 
 ---
 

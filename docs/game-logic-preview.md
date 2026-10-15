@@ -2,8 +2,7 @@
 
 > 对齐当前飞行口径（2026-08-23）：寻找中只巡航等待，无跟飞、无躲障；找到后用 `searchNote` 下拉落地。  
 > 拼碎片（`compose`）已删除：`43bcbd7`「拿掉拼碎片，倾听写完直接折」。  
-> 本文只描述现状，不改玩法口味。  
-> 聊天页手感与「AI 有没有进眼睛」见 [`docs/previews/encounter-agent.md`](./previews/encounter-agent.md)。
+> 本文只描述现状，不改玩法口味。
 
 ---
 
@@ -16,6 +15,8 @@
 | **识别** | 8 个情绪 token 离中心越近，越算「认领」。系统算出 `Fingerprint`，不把标签说给对方听。 |
 | **回应** | 回声只讲自己的平行经历。回应 = 被看见，不是被安慰。 |
 | **推动一次更好的沟通** | 玩家必须先交出自己的一句（轨道写句 → 对话里再交真细节），才能换到对方故事的下一层。 |
+
+**不是什么**：不是心理咨询、不是树洞机器人、不是交友匹配；无好友、无关注、无真实即时通信。
 
 关键动作仍是拖 / 折 / 拉 / 松开。轨道写完后也可以点「带着走」；相遇桌上可以点纸条。`prefers-reduced-motion` 回退为 tap / Enter。
 
@@ -150,7 +151,7 @@ flowchart TB
 
 ## 3. 功能板块预览
 
-静帧在 `docs/previews/`，由 `scripts/preview-modules.mjs` 注入 store 拍下（390×844）。throw / flight 跳过入场弹簧。重拍：`npm run dev` 之后 `node scripts/preview-modules.mjs`。聊天页另拍：`node scripts/preview-encounter.mjs`。
+静帧在 `docs/previews/`，由 `scripts/preview-modules.mjs` 注入 store 拍下（390×844）。throw / flight 跳过入场弹簧。重拍：`npm run dev` 之后 `node scripts/preview-modules.mjs`。
 
 ### 3.1 title · 进房间
 
@@ -221,7 +222,7 @@ flowchart TB
 | **门槛** | `waitingEcho` 时不能连发。满 3 轮封信。 |
 | **产出** | `round < 3`：`runTurn` 12s。`round ≥ 3`：`runSeal` 14s，进 `return`。具体细节才换下一张；层号不出现。 |
 | **可回退** | 不能。 |
-| **谁在说话** | 交互是真的。2026-08-23 真跑时模型钥匙失效，桌上字是本地故事卡；三张纸条始终是情绪池，不是模型句。详见 [encounter-agent.md](./previews/encounter-agent.md)。 |
+| **谁在说话** | 交互是真的。2026-08-23 真跑时模型钥匙失效，桌上字是本地故事卡；三张纸条始终是情绪池，不是模型句。 |
 
 ### 3.7 return · 拆回信
 
@@ -250,9 +251,7 @@ flowchart TB
 
 ### 4.1 回声系统面板（按 J）
 
-<img src="./previews/09-judge.png" alt="按 J 打开的回声系统面板" width="390" />
-
-给评委看的透明盒。展示：当前链节点、live / 本地信柜、token、认领情绪百分比、persona、检索 hits、当晚 recall、档案条数、交换层（内部）。模型步没吐字时路径应是「本地信柜」，不再空盖「实时链」。`09-judge.png` 仍是旧的注入假 meter；真话术静帧见 `14-encounter-judge.png`。
+给评委看的透明盒。展示：当前链节点、live / 本地信柜、token、认领情绪百分比、persona、检索 hits、当晚 recall、档案条数、交换层（内部）。模型步没吐字时路径应是「本地信柜」，不再空盖「实时链」。
 
 ### 4.2 世界档案与采集
 
@@ -302,7 +301,7 @@ archival[]        还记得的事
 | 相遇只能拖建议卡 | 点纸条、自己写、或拖到桌上 |
 | 「手是唯一提交，点一下不算」全场 | 轨道「带着走」和桌上纸条允许点 |
 
-以本文 + `src/game/store.ts` / `types.ts` / `echo-spec.md` 为准。`docs/PRD.md` 的 phase 表是更早的快照。
+以本文 + `src/game/store.ts` / `types.ts` / `echo-spec.md` 为准。
 
 ---
 
@@ -313,3 +312,12 @@ archival[]        还记得的事
 3. **match / turn 的部分 AI 产出**游戏层还没全吃进去（链上 suggestions / facts 仍被丢掉）。有效钥匙到位后，用 `scripts/probe-encounter.mts` 再对一次桌上句子。
 4. **store 里残留的 chips / addChip**：界面已不用，是否清掉另说。
 5. **命题张力**还没当作对外口径定稿。
+6. **世界档案北星**未获最终确认：「A 活档案为主 + C 玩家入池为增长 + B 精选源并入 A」。
+
+---
+
+## 8. 已拍板的口径（不要重复问）
+
+1. **流水线方向**：演示 = 离线预采集安全垫；产品北星 = 活信息流，不能被硬编码限定。匿名化改写必须用 prompt 做；爬虫是内容生产工具，不是运行时主角。
+2. **Agent 身份表述**：真实普通人感，不要场景剧场腔。「窗边」只是给玩家看的场景，不是让 Agent 念的台词。
+3. **协作**：任何涉及产品口味的改动，先确认再动手。
