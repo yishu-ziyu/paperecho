@@ -1,0 +1,18 @@
+{
+ "frames": 900,
+ "pageerrors": [],
+ "quit_note": "f628 lights-out ~12s — checking if windows dim; if not, quit urge",
+ "logs": [
+  "error:Failed to load resource: the server responded with a status of 404 (File not found)",
+  "f0 tod0 {\"night\": 0, \"dn\": 0, \"carry\": 0, \"tod\": 0, \"nights\": 0, \"hint\": null, \"ph\": 0.015625}",
+  "f51 tod1 {\"night\": 0, \"dn\": 0, \"carry\": 2, \"tod\": 1, \"nights\": 0, \"hint\": null, \"ph\": 0.8125000000000002}",
+  "f75 deliver1 {\"night\": 0, \"dn\": 1, \"carry\": 1, \"tod\": 1, \"nights\": 0, \"hint\": null, \"ph\": 0.9374999999999998}",
+  "f98 deliver2 {\"night\": 0, \"dn\": 2, \"carry\": 0, \"tod\": 1, \"nights\": 0, \"hint\": null, \"ph\": 1.057291666666666}",
+  "f183 tod2 {\"night\": 0, \"dn\": 2, \"carry\": 0, \"tod\": 2, \"nights\": 0, \"hint\": null, \"ph\": 1.5000000000000027}",
+  "f412 deliver3 {\"night\": 0, \"dn\": 3, \"carry\": 0, \"tod\": 2, \"nights\": 0, \"hint\": null, \"ph\": 2.2}",
+  "f484 lightsout-start {\"night\": 0, \"dn\": 3, \"carry\": 0, \"tod\": 2, \"nights\": 0, \"hint\": null, \"ph\": 2.2}",
+  "f727 tod0 {\"night\": 0, \"dn\": 3, \"carry\": 0, \"tod\": 0, \"nights\": 0, \"hint\": null, \"ph\": 2.999}",
+  "f779 tod1 {\"night\": 1, \"dn\": 0, \"carry\": 1, \"tod\": 1, \"nights\": 1, \"hint\": null, \"ph\": 0.8010833333333354}",
+  "f888 deliver1 {\"night\": 1, \"dn\": 1, \"carry\": 2, \"tod\": 1, \"nights\": 1, \"hint\": null, \"ph\": 1.3687916666666364}"
+ ]
+}

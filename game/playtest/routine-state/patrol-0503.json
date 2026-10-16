@@ -1,0 +1,14 @@
+{
+  "run_at": "2026-10-16T05:03:00+08:00",
+  "fired_utc": "2026-10-15T20:43:26.672Z",
+  "posted_group": "pending_WakeParent",
+  "posted_user": "pending_WakeParent",
+  "game_js_md5_captured": "7c0cb69cdfca39d7e2543df968a6bfb1",
+  "video": "playtest/planet-play-v5.mp4",
+  "report": "playtest/v5-report.md",
+  "quiet_30m": [
+    "àṣẹ / island ~97m since FIX-CAMERA@03:17",
+    "playable-ase ~56m since silhouette shots@03:59"
+  ],
+  "note": "v5 playtest complete; WakeParent must SendToAgent group + SendToUser with video one-by-one"
+}

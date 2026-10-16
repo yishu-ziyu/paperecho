@@ -1,0 +1,49 @@
+{
+  "run_at": "2026-10-16T04:19:25+08:00",
+  "fired_utc": "2026-10-15T20:14:55.551Z",
+  "deltas_since": "2026-10-16T04:08:00+08:00",
+  "posted_group": true,
+  "planet_worker": "997a67ec-c419-59c8-0e60-8dc45e34e093",
+  "planet_worker_status": "agent dead; planet_v4.py finished OK @04:18 → playtest/planet-play-v4.mp4 (75s, 900 frames). Not stalled; no redispatch. playcap still writing /tmp/pc_v4_final.mp4 (~920/1800?) for repro/play/v4_final.mp4",
+  "devins_running": 0,
+  "devin_note": "occlusion Devin done (OCCLUSION.md@04:15); no Devin PIDs alive",
+  "deltas": {
+    "playtest": [
+      "planet-play-v4.mp4@04:18",
+      "planet-v4-log.json final: delivered=9 nights=2 keepsakes=3 lampLevel=1 found=5",
+      "v4-f0/120/360/540/720.png",
+      "BOOT_OK 1.9s (one 404)"
+    ],
+    "repro_play": [
+      "OCCLUSION.md + occlusion.js v2@04:14–04:15",
+      "occlusion-shots before/after/tree-*",
+      "PROGRESS.md@04:15 (3-night PASS + v4 recording note)",
+      "playcap→v4_final.mp4 still running"
+    ],
+    "i18n": [
+      "playthrough_zh_v5.mp4@04:11",
+      "rec6 chrome active"
+    ],
+    "art": [
+      "m3chk strip@04:02"
+    ],
+    "copy": [
+      "no new since CODEX-HUD-REVIEW@03:50 (27m at check)"
+    ],
+    "island": [
+      "still quiet since FIX-CAMERA@03:17 (~60m)"
+    ]
+  },
+  "acceptance_review": {
+    "1_boot": "PASS v4 BOOT_OK 1.9s",
+    "2_camera": "PARTIAL — courier clear on day f720; occ fired f240 Group v=0.7; occlusion v2 docs claim chest-ray fix; tree-after still reads as heavy dither sphere — tune KEEP/RADIUS",
+    "3_deliver": "PASS — delivered 3/6/9 across nights; 豆豆/老周 lines; +1+confetti on f120",
+    "4_dusk_lights": "PARTIAL — night windows+HUD 夜里 on f540; m3chk strip; 逐盏 still needs eyes on video",
+    "5_keepsakes": "PARTIAL — log keepsakes 1→2→3 + HUD 留下的 2; outdoor props still weak (carry v3#3)",
+    "6_zh": "PASS-looking — HUD 送完了/(N)睡觉/留下的; L toggled f300/336; zh_v5 playthrough"
+  },
+  "quiet_30m": [
+    "island track 60m (FIX-CAMERA@03:17)"
+  ],
+  "group_message_zh": "see WakeParent"
+}

@@ -1,0 +1,27 @@
+{
+ "run_at": "2026-10-16T11:36:00+08:00",
+ "fired_utc": "2026-10-16T03:23:42.712Z",
+ "version": "2ede657b (v6.6 KI38)",
+ "game_js_md5_playtested": "2ede657b558c2f50ee93d1735a7efa8b",
+ "md5_before_after_match": true,
+ "status": "done",
+ "video": "playtest/patrol-v66/firstplay-2ede.mp4",
+ "duration_s": 65.0,
+ "report": "playtest/patrol-v66/report.md",
+ "stills": [
+  "playtest/patrol-v66/stills5/arrow-over-hud-f701-zoom.jpg",
+  "playtest/patrol-v66/stills5/night2-deliveries-f626-f701.jpg",
+  "playtest/patrol-v66/stills5/night2-subtitle-wall-f620-f758.jpg"
+ ],
+ "night2_gap_s": 6.25,
+ "night1_last_to_dawn_s": 16.3,
+ "top3": [
+  "arrow overlaps HUD f701-f710 (sun)",
+  "nudge 'still waiting' completes on delivery frame f701 (sun)",
+  "night2 subtitles nonstop f608-f770 ~13.5s (copy+sun)"
+ ],
+ "quit_moment": "none strong; weakest f716-f770 empty bag no arrow + subtitle wall",
+ "supersedes": "patrol-v65",
+ "posted": "pending_WakeParent",
+ "note": "do not re-playtest 2ede; only rerun on new game.js md5; routine ends 12:00 -> pause"
+}

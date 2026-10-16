@@ -1,0 +1,29 @@
+[
+ {
+  "day": 1,
+  "day_len_s": 79.9,
+  "bag_full_after_s": 4.8,
+  "dead_full_bag_s": 75.1,
+  "idle_no_keys_s": 0.0,
+  "wait_hint_visible_s": 77.6,
+  "cranes": "0->1 cap 3"
+ },
+ {
+  "day": 2,
+  "day_len_s": 80.0,
+  "bag_full_after_s": 5.0,
+  "dead_full_bag_s": 74.9,
+  "idle_no_keys_s": 47.0,
+  "wait_hint_visible_s": 78.8,
+  "cranes": "2->6 cap 6"
+ },
+ {
+  "day": 3,
+  "day_len_s": 80.0,
+  "bag_full_after_s": 5.8,
+  "dead_full_bag_s": 74.2,
+  "idle_no_keys_s": 42.4,
+  "wait_hint_visible_s": 79.0,
+  "cranes": "6->10 cap 10"
+ }
+]

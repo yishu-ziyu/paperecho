@@ -1,0 +1,19 @@
+{
+ "run_at": "2026-10-16T05:56:00+08:00",
+ "fired_utc": "2026-10-15T21:39:32.209Z",
+ "version": "v6.1 game.js md5 1afba1e8 (live mid-capture edit 05:42)",
+ "video": "playtest/planet-play-v6.1-highlight.mp4",
+ "video_full": "playtest/planet-play-v6.1.mp4",
+ "report": "playtest/v61-report.md",
+ "top3": [
+  "dusk tip says press N for dusk while already dusk; letters gated to 夜里->sun",
+  "day/dusk empty walk with full bag before nightOpen->sun",
+  "cranes 7/10 at finale + weak tree occlusion->sun+àṣẹ"
+ ],
+ "quit_at": "night2 dusk, 信2 送了0/4, tip/TOD mismatch",
+ "quiet_30m_ping": [
+  "àṣẹ (playable-ase ~32m)",
+  "Ìtùtù (art ~33m)"
+ ],
+ "posted": "pending_WakeParent"
+}

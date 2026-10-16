@@ -1,0 +1,24 @@
+<!doctype html><html lang="zh"><head><meta charset="utf-8"><title>daynight.js test harness (does not modify game.js)</title>
+<script>/* copy index.html styles at runtime */</script>
+<script type="importmap">{"imports":{"three":"../node_modules/three/build/three.module.js"}}</script></head>
+<body><div id="hud"></div><div id="tod"></div><div id="toast"></div><div id="hint"></div>
+<script type="module">
+// Loads index.html's CSS + game.js unmodified on disk; appends a tiny in-memory shim that names windows/lamps and calls applyTimeOfDay.
+const idx=await (await fetch('index.html',{cache:'no-store'})).text();const st=document.createElement('style');st.textContent=idx.match(/<style>([\s\S]*?)<\/style>/)[1];document.head.append(st);
+const dn=new URL('daynight.js',location.href).href;
+let src=await (await fetch(new URLSearchParams(location.search).get('src')||'game.js',{cache:'no-store'})).text();
+src=src.replace(/from '\.\/([^']+)'/g,(m,f)=>`from '${new URL(f,location.href).href}'`);
+src+=`
+;import { applyTimeOfDay as __apply } from '${dn}';
+herHouse.name='herHouse';
+for(const h of houses)if(h!==herHouse)h.traverse(o=>{if(o.isMesh&&o.material===h.userData.win)o.name='window';});
+scene.traverse(o=>{if(o.isMesh&&SWITCH.includes(o.material)&&!o.name)o.name='lamp_glow';});
+Object.assign(scene.userData,{post,palReg:reg,uNight:G.uNight,glowMax:GLOW});
+const __q=new URLSearchParams(location.search).get('tod');
+window.__tod=()=>__q===null||__q==='auto'?todT(PH):parseFloat(__q);
+window.tick=(dt)=>{step(dt);window.__dn=__apply(scene,window.__tod());render();};
+window.__scene=scene;window.tick(0);window.harnessReady=true;
+if(!CAPTURE){let last=performance.now();(function loop(){const n=performance.now();window.tick(Math.min(0.05,(n-last)/1000));last=n;requestAnimationFrame(loop)})();}
+`;
+await import(URL.createObjectURL(new Blob([src],{type:'text/javascript'})));
+</script></body></html>

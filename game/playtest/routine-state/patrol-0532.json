@@ -1,0 +1,68 @@
+{
+  "run_at": "2026-10-16T05:32:40+08:00",
+  "fired_utc": "2026-10-15T21:30:52.088Z",
+  "deltas_since": "2026-10-16T05:22:00+08:00",
+  "posted_group": "pending_WakeParent",
+  "posted_user": false,
+  "planet_worker": "997a67ec-c419-59c8-0e60-8dc45e34e093",
+  "planet_worker_status": "was dead again @05:31; resume Task sent 05:32 — monitor live rec_v6.py (cycle=36 MAXF=2500), write v6-report, prove lightsOut, KNOWN#3",
+  "capture_alive": {
+    "planet_v51.py": "FINISHED mp4 ok; night3 incomplete 4/5 (阿汀 missing); keepsakes=2; planet-play-v51.mp4 ~52s + surviving ~39s",
+    "rec_v6.py": "1484588 python3 rec_v6.py 36 2500\n1492867 /bin/sh -c pgrep -af 'rec_v6.py' || true",
+    "v51_frames": 463,
+    "v6_frames": 123,
+    "v51_keyframes_new_since_0522": [
+      "f00719-n2-deliver4.jpg",
+      "f00725-n2-tod3.jpg",
+      "f00756-n2-tod0.jpg",
+      "f00853-n3-tod1.jpg",
+      "f00937-n3-tod2.jpg",
+      "f00954-n3-deliver1.jpg",
+      "f01001-n3-deliver2.jpg",
+      "f01043-n3-deliver3.jpg",
+      "f01088-occlusion-tree0.jpg"
+    ]
+  },
+  "devins_running": 0,
+  "devin_note": "no Devin PIDs",
+  "game_js_md5": "7055d58baf2f2f136f2f84c1dee100a9",
+  "game_js_mtime": "2026-10-16T05:32:40+0800",
+  "deltas": {
+    "playtest": [
+      "planet_v51 FINISHED: night1+2 PASS (7 deliv, keepsakes 2); night3 FAIL incomplete 4/5 阿汀 leftover — MAXF=1080 too short under time-hold",
+      "rec_v6.py LIVE cycle=36 MAXF=2500 vs :8834; frames climbing from wipe @05:30",
+      "planet-play-v51.mp4 + surviving; v51-keyframes through n3-deliver3 + occ tree0 (occ Group v:1 once)"
+    ],
+    "repro_play": [
+      "game.js v6 @05:30 md5 1b9b814 (nightDone/lightsOut interface; Grok Bot sole owner)",
+      "daynight.js @05:28 lightsOut epilogue (Ìtùtù)",
+      "PROGRESS.md §05:35 v6 notes"
+    ],
+    "copy": [
+      "CODEX-LIGHTSOUT-LINES.md @05:29 (Codex back; main line already wired in game.js)"
+    ],
+    "playable_ase": [
+      "debugwin-night.png @05:25 (àṣẹ)"
+    ],
+    "art": [
+      "v4chk/v51-sheet.png @05:24 (Ìtùtù)"
+    ],
+    "i18n": [
+      "still idle since playthrough_zh_v7.mp4@04:39 (~53m) — Codex active on copy instead"
+    ],
+    "island": [
+      "idle since FIX-CAMERA@03:17; àṣẹ on playable-ase"
+    ]
+  },
+  "acceptance_review": {
+    "1_boot": "PASS — v51 no PAGEERROR beyond known 404; v6 capture live on :8834",
+    "2_camera": "PARTIAL — courier readable; day/dawn curved horizon still (KNOWN#2); n2-deliver4 shows 清晨+第2晚 after quota (label hold OK)",
+    "3_deliver": "PARTIAL — v51 night1+2 full; night3 only 4/5 (capture MAXF), 阿汀 undelivered → not a proven 12/12 on this build yet; v6 must prove",
+    "4_dusk_lights": "PASS — night windows+string lights warm; daynight lightsOut code landed, visual proof pending v6",
+    "5_keepsakes": "PARTIAL — HUD 留下的2 on v51 end (need 3); outdoor sill stills exist from àṣẹ; default-cam readability watch",
+    "6_zh": "PASS — Chinese HUD/dialogue consistent; lights-out lines from Codex; L hint prior"
+  },
+  "quiet_30m": [],
+  "quiet_note": "Codex copy@05:29; Ìtùtù daynight+sheet; àṣẹ debugwin; Grok game.js — nobody 30m quiet. i18n folder idle but Codex switched to lights-out copy.",
+  "group_message_zh": "see WakeParent"
+}

@@ -1,0 +1,50 @@
+{
+  "run_at": "2026-10-16T04:43:45+08:00",
+  "fired_utc": "2026-10-15T20:41:37.322Z",
+  "deltas_since": "2026-10-16T04:31:30+08:00",
+  "posted_group": true,
+  "posted_user": false,
+  "planet_worker": "997a67ec-c419-59c8-0e60-8dc45e34e093",
+  "planet_worker_status": "was dead; planet_v5.py stalled at 47 frames (no mp4). Resumed worker → continue ACCEPTANCE: clean v5 capture → planet-play-v5.mp4 + v5-report.md",
+  "devins_running": 0,
+  "devin_note": "no Devin PIDs",
+  "game_js_md5": "ba8b501156323f13c0f2e7f25b8d9974",
+  "game_js_mtime": "2026-10-16T04:43:20+08:00",
+  "deltas": {
+    "repro_play": [
+      "v4_final.mp4 DONE @04:35 (60MB) + stills _15/_50/_85",
+      "game.js stable @04:41 md5 1e8a043f — merged Codex V5 lines (knock/seed/bagEnd/lastEnd)",
+      "occlusion delivery-before/after @04:38–04:39",
+      "KNOWN-ISSUES.md refreshed for v5 ~04:40",
+      "game.js still editing during patrol — md5 now ba8b5011 (was 1e8a043f @04:41); tell planet worker wait for stable before capture"
+    ],
+    "playtest": [
+      "planet_v5 stalled @47 frames ~04:42 (prev pid 1314675 gone); worker resumed to restart clean capture",
+      "v4 planet-play-v4.mp4 still the last finished playtest video"
+    ],
+    "copy": [
+      "CODEX-V5-LINES.md@04:28 — suggestions already in game.js"
+    ],
+    "i18n": [
+      "playthrough_zh_v7.mp4@04:39 + flower-lady_bubble / musician_check shots"
+    ],
+    "art": [
+      "no new since v4chk/sheet@04:21 (~22m)"
+    ],
+    "island": [
+      "still quiet since FIX-CAMERA@03:17 (~86m; pinged 04:19+04:26; third ping)"
+    ]
+  },
+  "acceptance_review": {
+    "1_boot": "PASS on v4; v5 capture incomplete (stalled)",
+    "2_camera": "PARTIAL — occ v3 KEEP=0.58; tree-after-v3 courier still partly behind canopy (needs eyes on v5 occ keyframes); delivery-after readable",
+    "3_deliver": "PASS v4 (toast 小满 lines); v5 老周+knock lines now in game.js but unverified on video",
+    "4_dusk_lights": "PARTIAL — v4_final_50 dusk windows+streetlamp glow; HUD 第1晚 vs 黄昏 tag ok on that still; day-edge horizon still open (KNOWN#2)",
+    "5_keepsakes": "PARTIAL — KNOWN#6 silhouettes grey-tan; outdoor fence keepsakes still weak vs ACCEPTANCE bar",
+    "6_zh": "PASS-looking — Codex V5 rewrites merged; L toggle present; messenger zh_v7 separate track"
+  },
+  "quiet_30m": [
+    "àṣẹ / island track (~86m since FIX-CAMERA@03:17)"
+  ],
+  "group_message_zh": "see WakeParent"
+}

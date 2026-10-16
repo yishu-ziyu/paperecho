@@ -1,0 +1,146 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>occlusion.js test harness (does not modify game.js)</title>
+<style>html,body{margin:0;overflow:hidden;background:#000}#dbg{position:fixed;left:10px;top:10px;color:#fff;font:14px/1.4 monospace;white-space:pre;pointer-events:none;text-shadow:0 1px 2px #000}</style>
+<script type="importmap">{"imports":{"three":"../node_modules/three/build/three.module.js"}}</script></head>
+<body><div id="dbg"></div><script type="module">
+// Standalone proof for occlusion.js: a tiny planet (same structure as game.js:
+// a `world` group holding the ground + placed objects, hero under `scene`).
+//   ?occ=0   don't call updateOcclusion (control / "before" shot)
+//   ?occ=1   call it every tick (default)
+//   ?warm=N  run N ticks at 1/30 before marking ready (fade-in: ~12 ticks)
+//   ?shift=1 after warm ticks, teleport the player sideways so occluders leave
+//            the ray — verifies the <0.2s restore path
+//   ?orb=1   player orbits the planet each tick, camera follows (live demo)
+//   window.tick(dt) / window.ready / window.__occ.faded() — capture hooks
+import * as THREE from 'three';
+import { updateOcclusion } from './occlusion.js';
+const Q = new URLSearchParams(location.search);
+const OCC = Q.get('occ') !== '0', WARM = +(Q.get('warm') || 40);
+const SHIFT = Q.has('shift'), ORB = Q.has('orb');
+const W = innerWidth || 960, H = innerHeight || 600;
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+renderer.setSize(W, H); renderer.setPixelRatio(1);
+document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene(); scene.background = new THREE.Color(0x8fc7e8);
+const camera = new THREE.PerspectiveCamera(50, W / H, 0.1, 120);
+const sun = new THREE.DirectionalLight(0xffffff, 2.2); sun.position.set(5, 12, 6);
+scene.add(sun, new THREE.HemisphereLight(0xbfd9ff, 0x54604a, 0.85));
+
+const R = 8, UP = new THREE.Vector3(0, 1, 0);
+let rnd = 7; const rand = () => ((rnd = (rnd * 16807) % 2147483647) / 2147483647);
+const hgt = v => Math.sin(v.x * .7) * Math.cos(v.z * .6) * 0.12 + Math.sin(v.y * 1.3 + v.x) * 0.08;
+const surf = d => R + hgt(d.clone().multiplyScalar(R));
+const world = new THREE.Group(); scene.add(world);
+{ // planet ground — the mesh that must never fade
+  const pg = new THREE.IcosahedronGeometry(R, 12), p = pg.attributes.position, v = new THREE.Vector3();
+  for (let i = 0; i < p.count; i++) { v.fromBufferAttribute(p, i); v.setLength(R + hgt(v)); p.setXYZ(i, v.x, v.y, v.z); }
+  pg.computeVertexNormals();
+  const g = new THREE.Mesh(pg, new THREE.MeshLambertMaterial({ color: 0x77b25a }));
+  g.name = 'planet_ground'; world.add(g);
+}
+const place = (obj, dir, sink = 0.05) => {
+  obj.position.copy(dir).multiplyScalar(surf(dir) - sink);
+  obj.quaternion.setFromUnitVectors(UP, dir); obj.rotateY(0.4); world.add(obj); return obj;
+};
+const lam = c => new THREE.MeshLambertMaterial({ color: c });
+function canopy(size, color, name) {
+  const g = new THREE.Group(); g.name = name;
+  for (let i = 0; i < 5; i++) {
+    const s = new THREE.Mesh(new THREE.IcosahedronGeometry(size * 0.62, 2), lam(color));
+    const a = i / 5 * 6.28;
+    s.position.set(Math.cos(a) * size * 0.45, (i % 2) * size * 0.35 - 0.1, Math.sin(a) * size * 0.45);
+    if (i == 4) s.position.set(0, size * 0.55, 0); s.scale.y = 1.1; g.add(s);
+  } return g;
+}
+function tree(name) {
+  const g = new THREE.Group(); g.name = name; const s = 0.7;
+  const t = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.11, 0.9, 6), lam(0x8a6a4a));
+  t.position.y = 0.45; g.add(t);
+  const c = canopy(s, 0x4f9a4f, name + '_canopy'); c.position.y = 0.85 + s * 0.8; g.add(c); return g;
+}
+function house(name) {
+  const g = new THREE.Group(); g.name = name;
+  const w = 1.4, d = 1.1, h = 1.0;
+  const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), lam(0xe8d9b0)); b.position.y = h / 2; g.add(b);
+  const r = new THREE.Mesh(new THREE.ConeGeometry(Math.max(w, d) * 0.75, 0.7, 4), lam(0xb0503f));
+  r.position.y = h + 0.35; r.rotation.y = Math.PI / 4; g.add(r);
+  // window material already carries its own onBeforeCompile — proves the patch chains
+  const winMat = new THREE.MeshBasicMaterial({ color: 0xffcf6a });
+  winMat.onBeforeCompile = s => {
+    s.uniforms.uTint = { value: 0.9 };
+    s.fragmentShader = s.fragmentShader
+      .replace('#include <common>', '#include <common>\nuniform float uTint;')
+      .replace('#include <color_fragment>', '#include <color_fragment>\n diffuseColor.rgb*=uTint;');
+  };
+  winMat.customProgramCacheKey = () => 'winTint';
+  const win = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.3, 0.03), winMat);
+  win.position.set(0.2, 0.6, d / 2 + 0.02); g.add(win);
+  const dr = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.5, 0.03), lam(0x6a4a3a));
+  dr.position.set(-0.25, 0.25, d / 2 + 0.02); g.add(dr);
+  return g;
+}
+const D = a => new THREE.Vector3(0, Math.cos(a), -Math.sin(a));  // dir rotated toward camera (-Z)
+place(tree('treeA'), D(0.14));                                    // canopy on the ray
+place(house('houseA'), D(0.30));                                  // roof on the ray
+{ const pole = new THREE.Group(); pole.name = 'poleA'; pole.userData.noOcclude = true;
+  const p = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.05, 1.8, 6), lam(0x556068));
+  p.position.y = 0.9; pole.add(p); place(pole, D(0.22)); }        // on the ray but exempt
+place(tree('treeB'), D(0.55));                                    // past the ray → stays opaque
+place(tree('treeC'), new THREE.Vector3(0.28, 0.95, 0.08).normalize());
+place(house('houseB'), new THREE.Vector3(-0.32, 0.94, -0.05).normalize());
+place(new THREE.Mesh(new THREE.DodecahedronGeometry(0.5, 1), lam(0x9aa0a8)), D(0.26), 0.15);
+{ // instanced grass tufts (a few land on the ray) — must never be faded
+  const g = new THREE.ConeGeometry(0.035, 0.22, 3); g.translate(0, 0.11, 0);
+  const im = new THREE.InstancedMesh(g, lam(0x8fce62), 260), m = new THREE.Matrix4(),
+    q = new THREE.Quaternion(), s = new THREE.Vector3(1, 1, 1);
+  for (let i = 0; i < 260; i++) {
+    const d = new THREE.Vector3(rand() * 2 - 1, rand() * 2 - 1, rand() * 2 - 1).normalize();
+    q.setFromUnitVectors(UP, d);
+    m.compose(d.clone().multiplyScalar(surf(d) - 0.02), q, s); im.setMatrixAt(i, m);
+  }
+  world.add(im);
+}
+// hero — a group directly under `scene`, like game.js
+const hero = new THREE.Group(); hero.name = 'hero';
+{
+  const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.2, 0.3, 4, 10), lam(0xd8b04a));
+  body.position.y = 0.58; hero.add(body);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.2, 14, 12), lam(0xf0c8a0));
+  head.position.y = 1.02; hero.add(head);
+  const hat = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.26, 0.03, 14), lam(0x7a4a3a));
+  hat.position.y = 1.12; hero.add(hat);
+  scene.add(hero);
+}
+const P = new THREE.Vector3(0, 1, 0), F = new THREE.Vector3(0, 0, 1), P0 = P.clone();
+function seatHero(dir) {  // put hero on the surface at `dir`, basis like the game
+  P.copy(dir);
+  hero.position.copy(dir).multiplyScalar(surf(dir));
+  const X = new THREE.Vector3().crossVectors(dir, F);
+  hero.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(X, dir, F));
+}
+seatHero(P0);
+// fixed camera like the game's follow: raised, behind hero along -F, aimed at the head
+function seatCam() {
+  camera.position.copy(hero.position).addScaledVector(P, 1.25).addScaledVector(F, -5.2);
+  camera.up.copy(P); camera.lookAt(hero.position.clone().addScaledVector(P, 0.95).addScaledVector(F, 0.4));
+}
+seatCam();
+const dbg = document.getElementById('dbg');
+let T = 0;
+window.tick = dt => {
+  T += dt;
+  if (ORB) { // slow walk around the planet, game-style follow cam
+    seatHero(P.clone().applyAxisAngle(new THREE.Vector3(1, 0, 0), -dt * 0.35).normalize());
+    const want = hero.position.clone().addScaledVector(P, 2.4).addScaledVector(F, -4.6);
+    camera.position.copy(want); camera.up.copy(P);
+    camera.lookAt(hero.position.clone().addScaledVector(P, 0.8).addScaledVector(F, 1.0));
+  }
+  if (OCC) updateOcclusion(camera, hero, scene);
+  renderer.render(scene, camera);
+  dbg.textContent = 'faded: ' + JSON.stringify(window.__occ ? window.__occ.faded() : null);
+};
+for (let i = 0; i < WARM; i++) window.tick(1 / 30);   // let the fade reach ~0.7
+window.__seat = (x, y, z) => seatHero(new THREE.Vector3(x, y, z).normalize()); // test hook
+if (SHIFT) seatHero(new THREE.Vector3(0.35, 0.935, 0).normalize()); // occluders leave the ray
+window.tick(1 / 30);
+window.ready = true;
+</script></body></html>

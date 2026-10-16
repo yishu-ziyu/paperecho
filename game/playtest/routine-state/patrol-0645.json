@@ -1,0 +1,40 @@
+{
+ "run_at": "2026-10-16T06:54:00+08:00",
+ "fired_utc": "2026-10-15T22:44:17.122Z",
+ "posted_group": "pending_WakeParent",
+ "posted_user": "pending_WakeParent",
+ "version": "v6.3 md5 243e8830 snap-gb-0645 (live moved to 484c4759 mid-run)",
+ "video": "playtest/patrol-0645/firstplay-v63.mp4",
+ "report": "playtest/patrol-0645/report.md",
+ "stills": [
+  "playtest/patrol-0645/still-1-deliver3.jpg",
+  "playtest/patrol-0645/still-2-empty-bag.jpg",
+  "playtest/patrol-0645/still-3-lightsout-12s.jpg"
+ ],
+ "top3": [
+  "morning package still v6.1 broken lights-out -> sun re-capture before 09:00 (prefer live 484c4759)",
+  "empty-bag ~14s before 3rd letter (was 26s) -> Grok Bot/sun letterNear pacing",
+  "lights-out epilogue still quit-at-12s; live already ND_LEN=14 -> sun finish + Codex cull stacked lines"
+ ],
+ "good": "desync FIXED (0); lights-out still works; empty stall improved 26s->14s",
+ "quit_at": "lights-out ~12s f608 — done but still walking + recycling lines",
+ "quiet_30m_ping": [
+  "Ìtùtù art@06:02 (~52m)",
+  "Codex copy@06:03 (~50m)"
+ ],
+ "quiet_ok": [
+  "àṣẹ playable-ase sill shots @06:50",
+  "sun repro/play game.js live iterating"
+ ],
+ "quiet_ask_done": [
+  "island ~217m",
+  "i18n ~135m"
+ ],
+ "game_js_md5_playtested": "243e8830ae83967e590cdd024a90dfdb",
+ "game_js_md5_live_now": "484c47594a5c006bb18149986475811c",
+ "pageerrors": 0,
+ "desync_count": 0,
+ "max_empty_stall_s": 14.25,
+ "duration_s": 75,
+ "prior_v62_patrol": "playtest/patrol-0630 also pending_WakeParent (superseded by this report for desync/empty metrics)"
+}

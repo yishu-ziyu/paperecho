@@ -1,0 +1,65 @@
+{
+ "frames": 718,
+ "fps": 12,
+ "cycle": 48,
+ "game_js_md5": "e631ff87a1111b92013f1824ebfe9db4",
+ "pageerrors": [],
+ "quit_note": "f422 lights-out ~11.0s nd=[11.000000000000009, 9, 6.0422432697997985, '灯一盏一盏关了。', '1']",
+ "empty_gaps_s": [
+  0.92,
+  3.33
+ ],
+ "empty_gaps_raw": [
+  [
+   51,
+   62,
+   0.9166666666666666
+  ],
+  [
+   574,
+   614,
+   3.3333333333333335
+  ]
+ ],
+ "deliver_frames": [
+  93,
+  159,
+  246,
+  615
+ ],
+ "logs": [
+  "f0 tod0 hud=信 0 ★ 送了 0/3 第 1 天 纸鹤 0/3 nd=None",
+  "f6 toast: 又是一封没写门牌号的……",
+  "f21 toast: 又是一封没写门牌号的……算了，先往亮灯那边走。",
+  "f51 tod1 hud=信 0 ★ 送了 0/3 第 1 天 纸鹤 1/3 nd=None",
+  "f93 deliver1 hud=信 1 ★ 送了 1/3 第 1 晚 纸鹤 1/3 nd=None",
+  "f100 toast: 米婆婆：「这盆叫春生，那盆叫秋生，那边那盆……",
+  "f114 toast: 米婆婆：「这盆叫春生，那盆叫秋生，那边那盆……也叫秋生，我忘了。」",
+  "f159 deliver2 hud=信 1 ★ 送了 2/3 第 1 晚 纸鹤 1/3 nd=None",
+  "f166 toast: 阿汀：「这是我放出去的第一百只船，它回来了！……",
+  "f180 toast: 阿汀：「这是我放出去的第一百只船，它回来了！……好吧，是第九十九只，被风吹回来的。」",
+  "f183 tod2 hud=信 1 ★ 送了 2/3 第 1 晚 纸鹤 1/3 nd=None",
+  "f246 deliver3 hud=信 0 ★ 送完了。 去篱笆看看 第 1 晚 纸鹤 2/3 留下的 1 nd=None",
+  "f253 toast: 小满：「今晚一共三百一十二颗，我数了两遍。……",
+  "f267 toast: 小满：「今晚一共三百一十二颗，我数了两遍。……第二遍是三百零九，你别跟别人说。」",
+  "f290 lightsout-start hud=信 0 ★ 送完了。 （N）睡觉 第 1 晚 纸鹤 2/3 留下的 1 nd=[0, 114, 10.658391863944656, '小满：「今晚一共', '1']",
+  "f325 toast: 「借你家窗台晾一晚。」 — 阿汀",
+  "f325 keepsake hud=信 0 ★ 送完了。 （N）睡觉 第 1 晚 纸鹤 2/3 留下的 1 nd=[2.9166666666666674, 68, 12.873217308467064, '「借你家窗台晾一', '1']",
+  "f358 toast: 阿汀：「井边那根绳子……",
+  "f372 toast: 阿汀：「井边那根绳子……明天你去看，它不在了。」",
+  "f415 toast: 灯一盏一盏关了。……",
+  "f415 lightsout-line hud=信 0 ★ 送完了。 （N）睡觉 第 1 晚 纸鹤 2/3 留下的 1 nd=[10.416666666666671, 9, 7.0198051386666815, '灯一盏一盏关了。', '1']",
+  "f422 sill-11s hud=信 0 ★ 送完了。 （N）睡觉 第 1 晚 纸鹤 2/3 留下的 1 nd=[11.000000000000009, 9, 6.0422432697997985, '灯一盏一盏关了。', '1']",
+  "f422 debugWindows=[{'i': 0, 'her': False, 'visible': False, 'names': ['window', 'window', 'window', 'window'], 'on': 0}, {'i': 1, 'her': False, 'visible': True, 'names': ['window', 'window', 'window', 'window'], 'on': 0}, {'i': 2, 'her': False, 'visible': False, 'names': ['window', 'window', 'window', 'window', 'window'], 'on': 0}, {'i': 3, 'her': False, 'visible': True, 'names': ['window', 'window', 'window', 'window', 'window'], 'on': 0}, {'i': 4, 'her': False, 'visible': True, 'names': ['window', 'window', 'window', 'window'], 'on': 0}, {'i': 5, 'her': False, 'visible': True, 'names': ['window', 'window', 'window', 'window', 'window'], 'on': 0}, {'i': 6, 'her': False, 'visible': True, 'names': ['window', 'window', 'window', 'window', 'window'], 'on': 0}, {'i': 7, 'her': False, 'visible': True, 'names': ['window', 'window', 'window', 'window', 'window'], 'on': 0}, {'i': 8, 'her': False, 'visible': True, 'names': ['window', 'window', 'window', 'window'], 'on': 0}, {'i': 9, 'her': False, 'visible': True, 'names': ['window', 'window', 'window', 'window', 'window'], 'on': 0}, {'i': 10, 'her': False, 'visible': True, 'names': ['window', 'window', 'window', 'window'], 'on': 1}, {'i': 11, 'her': True, 'visible': True, 'names': ['window', 'window', 'window'], 'on': 1}, {'i': 12, 'her': False, 'visible': True, 'names': ['window', 'window', 'window', 'window'], 'on': 0}, {'i': 13, 'her': False, 'visible': True, 'names': ['window', 'window', 'window', 'window', 'window'], 'on': 0}, {'i': 14, 'her': False, 'visible': False, 'names': ['window', 'window', 'window', 'window', 'window'], 'on': 0}, {'i': 15, 'her': False, 'visible': True, 'names': ['window', 'window', 'window', 'window'], 'on': 0}, {'i': 16, 'her': False, 'visible': True, 'names': ['window', 'window', 'window', 'window', 'window'], 'on': 1}, {'i': 17, 'her': False, 'visible': True, 'names': ['window', 'window', 'window', 'window', 'window'], 'on': 0}]",
+  "f429 toast: 灯一盏一盏关了。……还亮着的那几扇，今晚有我的信。",
+  "f429 lightsout-line hud=信 0 ★ 送完了。 （N）睡觉 第 1 晚 纸鹤 2/3 留下的 1 nd=[11.583333333333346, 9, 5.035914288930263, '灯一盏一盏关了。', '1']",
+  "f476 tod0 hud=信 0 ★ 送完了。 （N）睡觉 第 1 晚 纸鹤 2/3 留下的 1 nd=[15.50000000000004, 0, 4.825619826391537, '灯一盏一盏关了。', '0']",
+  "f574 player-skips-to-dusk carry=0",
+  "f574 tod1 hud=信 0 ★ 送了 0/4 第 2 天 纸鹤 3/6 留下的 1 nd=None",
+  "f614 toast: 老周：「明晚路过，敲两下门。……",
+  "f615 deliver1 hud=信 0 ★ 送了 1/4 第 2 晚 纸鹤 6/6 留下的 1 nd=None",
+  "f628 toast: 老周：「明晚路过，敲两下门。……一下我以为是风，三下我以为是收电费的。」",
+  "f698 tod2 hud=信 0 ★ 送了 1/4 第 2 晚 纸鹤 6/6 留下的 1 nd=None",
+  "f718 stop 12s into night2"
+ ]
+}
