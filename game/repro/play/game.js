@@ -311,7 +311,7 @@ const pillar=new THREE.Mesh(new THREE.CylinderGeometry(0.25,0.25,6,16,1,true),ne
  vertexShader:'out float vH;void main(){vH=uv.y;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}',
  fragmentShader:'precision highp float;in float vH;uniform float uOp;uniform vec3 uCol;layout(location=0) out vec4 o;layout(location=1) out vec4 gi;void main(){float a=uOp*(1.-smoothstep(0.15,1.,vH));o=vec4(uCol*a*2.9,0.);gi=vec4(0.);}'}));
 pillar.geometry.translate(0,3,0);let pillarA=0,pillarH=null;pillar.userData.noOcclude=true;pillar.visible=false;scene.add(pillar);
-let lastProgT=0,letterNight=-1,emptyT=0,shotCW=null,ndPush=null;const pushHidden=new Set();let pushWires=null,pushLamps=null;const fadeEl=document.createElement('div');fadeEl.style.cssText='position:fixed;inset:0;background:#0b1020;opacity:0;pointer-events:none;z-index:5';document.body.appendChild(fadeEl);
+let lastProgT=0,letterNight=-1,emptyT=0,shotCW=null,ndPush=null;const pushHidden=new Set();let pushWires=null;const fadeEl=document.createElement('div');fadeEl.style.cssText='position:fixed;inset:0;background:#0b1020;opacity:0;pointer-events:none;z-index:5';document.body.appendChild(fadeEl);
 const guide=new THREE.Group();{const sh=new THREE.Shape();sh.moveTo(-0.22,-0.1);sh.lineTo(0,0.12);sh.lineTo(0.22,-0.1);sh.lineTo(0.22,-0.02);sh.lineTo(0,0.2);sh.lineTo(-0.22,-0.02);sh.lineTo(-0.22,-0.1);
  const cg=new THREE.ShapeGeometry(sh);cg.rotateX(-Math.PI/2);cg.rotateY(Math.PI);const cm=toon(S.lamp,{kind:5,side:THREE.DoubleSide});for(let i=0;i<3;i++){const c=new THREE.Mesh(cg,cm);c.position.z=i*0.45;c.userData.noOcclude=true;guide.add(c);}}scene.add(guide);guide.visible=false;guide.userData.noOcclude=true;
 // ---- planet changes night to night ----
@@ -491,8 +491,7 @@ let arrowH=null;function prompts(){if(M<2)return;let html='';let nearest=null,nd
  for(const h of state.targets){const top=h.position.clone().addScaledVector(h.userData.dir,h.userData.top+1.4);const pr=proj(top);const dist=P.angleTo(h.userData.dir)*R;
   if((state.carry>0||h.userData.knock)&&dist<nd){nd=dist;nearest=pr;nearestH=h;}
   const facing=top.clone().sub(camera.position).dot(camera.getWorldDirection(new THREE.Vector3()))>0;
-  if(false){const t=state.carry>0?''+TXT[LANG].here:TXT[LANG].none;
-   html+=`<div style="position:fixed;left:${pr.x}px;top:${pr.y}px;transform:translate(-50%,-100%);background:#fffaf0;color:#373f42;border:2px solid #373f42;border-radius:8px;padding:2px 8px;font-size:${dist<4?20:16}px;white-space:nowrap">${t} · ${dist.toFixed(0)}m</div>`;}}
+}
  labels.innerHTML=html;
  /* v6.4: arrow target with hysteresis (switch only if another deliverable door is >3 m closer or the current one is gone); direction from a point 2 m along the ground toward it, so it doesn't flip behind the camera */
  if(nearestH){if(!arrowH||!state.targets.includes(arrowH)||!(state.carry>0||arrowH.userData.knock))arrowH=nearestH; /* v6.5: locked on one recipient (nearest by ground distance at lock time) until delivered; pickups/refills never retarget */
@@ -587,10 +586,7 @@ function step(dt){for(const tm of [...timers])if(T>=tm.t){timers.splice(timers.i
  if(shotW>0.3&&!ndPush){if(!pushWires){pushWires=[];planet.traverse(o=>{if(o.isMesh&&o.geometry.type==='TubeGeometry')pushWires.push({o,pts:o.geometry.parameters.path.getPoints(16)});});}
   const v=new THREE.Vector3();for(const w of pushWires){if(!w.o.visible)continue;let dmin=1e9;for(const q of w.pts){v.copy(q).applyMatrix4(w.o.matrixWorld);dmin=Math.min(dmin,v.distanceTo(camera.position));}if(dmin<4){w.o.visible=false;pushHidden.add(w.o);}}
   for(const m of wireLanterns){if(m.visible){m.getWorldPosition(v);if(v.distanceTo(camera.position)<4){m.visible=false;pushHidden.add(m);}}}} /* M: string-light wires/lanterns crossing the push frame too */
- if(false){if(!pushLamps){pushLamps=[];planet.traverse(o=>{if(o.name==='lamp_pole'&&o.parent)pushLamps.push(o.parent);});}
-  const segD=(p,a,b)=>{const ab=b.clone().sub(a);const t=THREE.MathUtils.clamp(p.clone().sub(a).dot(ab)/Math.max(ab.lengthSq(),1e-6),0,1);return p.distanceTo(a.clone().addScaledVector(ab,t));};const v=new THREE.Vector3();
-  camera.updateMatrixWorld();const pushFr=new THREE.Frustum().setFromProjectionMatrix(new THREE.Matrix4().multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse));
-  for(const g of pushLamps){if(!g.visible)continue;g.getWorldPosition(v);const top=v.clone().addScaledVector(v.clone().normalize(),1.7);if(Math.min(segD(v,ndPush.cw0,shotLook),segD(top,ndPush.cw0,shotLook),segD(v,camera.position,shotLook),segD(top,camera.position,shotLook))<2.2||v.distanceTo(camera.position)<4.5||(v.distanceTo(camera.position)<8&&pushFr.containsPoint(top))){g.visible=false;pushHidden.add(g);}}} /* lamp posts near the whole push path (wide start -> sill) are hidden for the shot */}
+ }
  // v5: never let the camera sink into the ground or a canopy (flat green frame)
  {const cd=camera.position.clone().normalize();const cl=surf(cd)+0.6;if(camera.position.length()<cl)camera.position.setLength(cl);
   for(const o of treeList){const c=o.position.clone().addScaledVector(o.position.clone().normalize(),o.userData.s||1.3);const dv=camera.position.clone().sub(c);const r=1.05;if(dv.length()<r)camera.position.copy(c).addScaledVector(dv.lengthSq()>1e-6?dv.normalize():cd,r);}}
@@ -612,7 +608,7 @@ function step(dt){for(const tm of [...timers])if(T>=tm.t){timers.splice(timers.i
  state.shown-=dt;
  for(const h of [...state.targets]){const mk=markers.get(h);mk.visible=nightOpen()&&!clueOn();mk.rotation.y=T*2;{const dd=P.angleTo(h.userData.dir)*R;const k=THREE.MathUtils.clamp(1-(dd-2)/6,0,1);mk.userData.ring.visible=nightOpen()&&(state.carry>0||h.userData.knock)&&!clueOn();mk.userData.ring.scale.setScalar(1+0.05*Math.sin(T*6)*k);mk.scale.setScalar(1+0.6*k);}mk.position.y=h.userData.top+0.9+Math.sin(T*3)*0.12;
   if(nightOpen()&&(state.carry>0||h.userData.knock)&&P.angleTo(h.userData.dir)*R<2.5){deliverT=0.6;nudge.copy(P).multiplyScalar(0.12);h.userData.win.userData.u.uGlow.value=1.5;if(!h.userData.knock)state.carry--;state.delivered++;state.deliveredNight=(state.deliveredNight||0)+1;window.PaperEcho.deliveredThisNight.push(houses.indexOf(h));hop=0.45;h.userData.doneN=true;h.userData.done=true;h.userData.glowT=1.6;
-   h.remove(mk);h.remove(mk.userData.ring);markers.delete(h);{const rm=roofMarkers[houseId(h)];if(rm&&N2()){rm.delivered=true;try{window.onMarkerDelivered?.(houseId(h));}catch(e){}}}state.targets.splice(state.targets.indexOf(h),1);
+   h.remove(mk);h.remove(mk.userData.ring);markers.delete(h);{const rm=roofMarkers[houseId(h)];if(rm&&N2()){rm.delivered=true;try{window.onMarkerDelivered?.(houseId(h));}catch{/* optional hook */}}}state.targets.splice(state.targets.indexOf(h),1);
    const line=recipientLine(h);lastLine=line;/* v6.7: night-2 nudge line removed (user feedback) */if(M>=3&&(state.deliveredNight||0)>=quota()){dropLastOne();dropDeliv(true);}setTimeoutSim(()=>toast(line,'deliv'),0.45);lastDeliverT=T;lastProgT=T;lastRealDeliverT=T;h.userData.knock=false;if(M>=3?(state.deliveredNight>=quota()):h===herHouse){np.onDelivered();if(M>=3){state.holdNight=true;beginFenceBeat();}else if(pendingKeep){const k=pendingKeep;setTimeoutSim(()=>{camShot=2.6;const n=KEEP_NOTE[k.id];toast((n?n[LANG]:k[LANG]));pendingKeep=null;},toastDur(lastLine)+0.5);}}
    burst(h.position.clone().addScaledVector(h.userData.dir,h.userData.top),h.userData.dir,30);pop('★',h.position.clone().addScaledVector(h.userData.dir,h.userData.top+0.5));chooseTarget();}}
  for(const h of houses){if(h.userData.glowT!=null){h.userData.glowT=Math.max(0,h.userData.glowT-dt);const q=h.userData.glowT/1.6;const g=q>0?0.9*q*q:0;
@@ -695,9 +691,9 @@ window.houseIdOf=houseId;
   else if(kind==='wellLamp'){light=lightM(0x8fe3d0,0.07,[0,0,0]);} /* lamp on the well roof (attached below) */
   else{g.add(mk(new THREE.CylinderGeometry(0.015,0.02,0.9,5),0x5b4a3c,[0,ry+0.3,0]));g.add(mk(new THREE.BoxGeometry(0.16,0.1,0.01),0xd9c9a8,[0.09,ry+0.6,0]));light=lightM(0xffcf6a,0.05,[0,ry+0.8,0]);} /* placeholder vane */
   g.add(light);g.visible=false;for(const c of g.children)c.position.y-=ry;if(kind==='wellLamp'&&u.well){g.position.y=1.15;g.scale.setScalar(2.2);u.well.add(g);}else{g.position.y=ry;g.scale.setScalar(2.4);h.add(g);} /* pivot at the ridge, scaled up so it reads above the horizon from across the neighbourhood */roofMarkers[id]={house:h,group:g,light,kind,delivered:false};}}
-function markerColours(){const MC=window.MARKER_COLOR;if(!MC)return;for(const id in roofMarkers){const c=MC[id];if(c!=null){try{roofMarkers[id].light.material.userData.u.uCol.value.set(c);}catch(e){}}}}
+function markerColours(){const MC=window.MARKER_COLOR;if(!MC)return;for(const id in roofMarkers){const c=MC[id];if(c!=null){try{roofMarkers[id].light.material.userData.u.uCol.value.set(c);}catch{/* marker not built yet */}}}}
 let CLUES=null;window.night2Clues=()=>CLUES;
-(async()=>{for(const url of ['copy/night2-clues.json','../copy/night2-clues.json','../../copy/night2-clues.json']){try{const r=await fetch(url,{cache:'no-store'});if(r.ok){const j=await r.json();if(j&&typeof j==='object'){CLUES=j;console.log('night2 clues from',url);return;}}}catch(e){}}})(); /* {houseId: clue}; missing file -> old behaviour */
+(async()=>{for(const url of ['copy/night2-clues.json','../copy/night2-clues.json','../../copy/night2-clues.json']){try{const r=await fetch(url,{cache:'no-store'});if(r.ok){const j=await r.json();if(j&&typeof j==='object'){CLUES=j;console.log('night2 clues from',url);return;}}}catch{/* try next path */}}})(); /* {houseId: clue}; missing file -> old behaviour */
 function clueFor(h){if(!CLUES||!h)return null;const C=CLUES.clues||CLUES;const c=C[houseId(h)];return typeof c==='string'?c:null;} /* keys = recipient names (HOF(name)) */
 function keepsakeReply(h){if(!CLUES||!CLUES.keepsakeReply||!N2())return null;const nm=houseId(h),line=CLUES.keepsakeReply[nm];if(typeof line!=='string')return null;let k=null;try{const N=window.nightProgress||np;k=N&&typeof N.keepsakeFor==='function'?N.keepsakeFor(nm):null;}catch(e){k=null;}if(k==null)return null;if(typeof k==='object')k=k.name||k.zh||k.id;return line.split('{keepsake}').join(String(k));} /* {keepsake} <- nightProgress.keepsakeFor(name); null -> original reply */ /* night 2: replaces this recipient's reply (same line count) when àṣẹ's nightProgress recorded a night-1 keepsake for them */
 const clueOn=()=>N2()&&!!CLUES&&!nightDone; /* clue mode active */
@@ -720,7 +716,7 @@ const arrowAllowed=()=>!clueOn()||hintSt.h2;
 window.debugLetters=()=>letters.filter(l=>l.visible).map(l=>l.getWorldPosition(new THREE.Vector3()).toArray()); /* what a player can see: letter positions */
 window.debugView=()=>({p:P.toArray(),f:camF.toArray()});
 window.gameState=()=>({nightDone,tq:toastQ.length,postBeat,night:nightN,quota:quota(),dn:state.deliveredNight||0,targets:state.targets.map(h=>h.userData.person&&h.userData.person.name.zh),areaOpen,crCap:craneCap(),tod:todIdx(),occ:window.__occ?window.__occ.faded():null,found,carry:state.carry,delivered:state.delivered,ph:PH,nights:nightN,np:np.state});
-window.__force=(o={})=>{if(o.ph!=null){tOff=o.ph/3*CYCLE-T;PH=((T+tOff)/CYCLE*3)%3;prevPH=PH;}if(o.dn!=null)state.deliveredNight=o.dn;if(o.carry!=null)state.carry=o.carry;if(o.night!=null)nightN=o.night;if(o.finished)window.PaperEcho.finished=true;if(o.toast)toast(o.toast);hud();return gameState();};
+window.__force=(o={})=>{if(o.ph!=null){tOff=o.ph/3*CYCLE-T;PH=((T+tOff)/CYCLE*3)%3;prevPH=PH;}if(o.dn!=null)state.deliveredNight=o.dn;if(o.carry!=null)state.carry=o.carry;if(o.night!=null)nightN=o.night;if(o.finished)window.PaperEcho.finished=true;if(o.toast)toast(o.toast);hud();return window.gameState();};
 
 window.tick=(dt)=>{step(dt);render();};window.stepOnly=(dt)=>step(dt);
 if(M>=3)startNight();

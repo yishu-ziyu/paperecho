@@ -40,7 +40,7 @@ function buildKeepsake(id, mat) {
     const tea = new THREE.Mesh(new THREE.CircleGeometry(0.03, 10), mat(0x9a5a2a)); tea.rotation.x = -Math.PI / 2; tea.position.y = 0.058; g.add(tea);
   } else {                         // star hung from a thread
     const s = new THREE.Shape(); for (let i = 0; i < 10; i++) { const r = i % 2 ? 0.03 : 0.07, a = i / 10 * 6.283 + Math.PI / 2;
-      i ? s.lineTo(Math.cos(a) * r, Math.sin(a) * r) : s.moveTo(Math.cos(a) * r, Math.sin(a) * r); }
+      if (i) s.lineTo(Math.cos(a) * r, Math.sin(a) * r); else s.moveTo(Math.cos(a) * r, Math.sin(a) * r); }
     const star = new THREE.Mesh(new THREE.ExtrudeGeometry(s, { depth: 0.015, bevelEnabled: false }), mat(0xe0a83a)); star.position.y = 0.25; g.add(star);
     const th = new THREE.Mesh(new THREE.CylinderGeometry(0.002, 0.002, 0.18, 3), mat(0x6b5a48)); th.position.y = 0.41; g.add(th);
   }
@@ -58,10 +58,10 @@ export function createNightProgress(opts = {}) {
   const key = opts.storageKey === undefined ? 'paper_echo_night_progress' : opts.storageKey;
   const mat = opts.material || basic, gmat = opts.glowMaterial || glowMat, lampHex = opts.lampHex ?? LAMP_HEX;
   let saved = { night: 1, finished: 0, deliveredTonight: false, deliveries: [] };
-  try { if (key) Object.assign(saved, JSON.parse(localStorage.getItem(key) || '{}')); } catch {}
+  try { if (key) Object.assign(saved, JSON.parse(localStorage.getItem(key) || '{}')); } catch { /* no or bad save */ }
   const st = saved; const listeners = {}; if (!Array.isArray(st.deliveries)) st.deliveries = [];
   const emit = (e, d) => (listeners[e] || []).forEach(f => f(d));
-  const save = () => { try { key && localStorage.setItem(key, JSON.stringify(st)); } catch {} };
+  const save = () => { try { if (key) localStorage.setItem(key, JSON.stringify(st)); } catch { /* storage unavailable */ } };
   let root = null, lampT = st.deliveredTonight ? 1 : 0, lampOn = st.deliveredTonight, popT = 0;
   const parts = {};
   // drop-in: tonight's new keepsake stays off the sill until onPushStart(); then falls from the window and bounces once.
@@ -191,9 +191,9 @@ export function createNightProgress(opts = {}) {
     const planet = anchorRef && anchorRef.parent; if (!planet) return [];
     return planet.children.filter(o => o.userData && o.userData.win && Array.isArray(o.userData.mats));
   }
-  function idOf(h, i) { try { if (typeof window !== 'undefined' && window.houseIdOf) return window.houseIdOf(h); } catch {} return h && h.userData.person ? h.userData.person.name.zh : 'house' + i; }
+  function idOf(h, i) { try { if (typeof window !== 'undefined' && window.houseIdOf) return window.houseIdOf(h); } catch { /* fall back below */ } return h && h.userData.person ? h.userData.person.name.zh : 'house' + i; }
   function syncDeliveries() {
-    let arr; try { arr = window.PaperEcho && window.PaperEcho.deliveredThisNight; } catch {}
+    let arr; try { arr = window.PaperEcho && window.PaperEcho.deliveredThisNight; } catch { /* no game hook */ }
     if (!Array.isArray(arr)) return;
     if (arr.length < seen) seen = 0; // game cleared the list (new night)
     if (st.night !== 1) { seen = arr.length; return; }
@@ -211,7 +211,7 @@ export function createNightProgress(opts = {}) {
   }
   function doorFor(d, hs) {
     if (doorMap && (doorMap[d.recipient] || doorMap[d.houseId])) return doorMap[d.recipient] || doorMap[d.houseId];
-    let h = null; try { if (d.recipient && typeof window !== 'undefined' && typeof window.HOF === 'function') h = window.HOF(d.recipient) || null; } catch {}
+    let h = null; try { if (d.recipient && typeof window !== 'undefined' && typeof window.HOF === 'function') h = window.HOF(d.recipient) || null; } catch { /* no game hook */ }
     if (!h) { h = hs[d.houseIndex]; if (!h || idOf(h, d.houseIndex) !== d.houseId) h = hs.find((x, i) => idOf(x, i) === d.houseId); }
     if (!h) return null;
     let door = null; h.children.forEach(c => { const p = c.isMesh && c.geometry && c.geometry.parameters; if (p && Math.abs(p.width - 0.24) < 1e-3 && Math.abs(p.height - 0.44) < 1e-3) door = c; });
@@ -251,6 +251,6 @@ export function createNightProgress(opts = {}) {
     get state() { return { dropPending: pendingIdx >= 0, dropping: !!drop, night: st.night, finished: st.finished, deliveredTonight: st.deliveredTonight, keepsakes: keepsakeCount(), lampLevel: lampT }; },
     get root() { return root; },
   };
-  try { if (typeof window !== 'undefined') window.nightProgress = api; } catch {} // debug/capture handle (game.js keeps its own np)
+  try { if (typeof window !== 'undefined') window.nightProgress = api; } catch { /* no window */ } // debug/capture handle (game.js keeps its own np)
   return api;
 }
