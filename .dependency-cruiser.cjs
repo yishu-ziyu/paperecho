@@ -51,8 +51,7 @@ module.exports = {
      * - src/lib/db.ts → scripts/migration-plan.mjs：迁移计划与 db.ts 的
      *   glob 范围必须一致（见两处源码注释）。
      * - src/lib/auth/client.ts → scripts/sign-out-plan.mjs：签出时序逻辑
-     *   为可单测而住在 scripts/（模板作者的选择，auth 域标明 do-not-
-     *   rewrite）。正确的家是 src/lib/auth/，搬动需要 auth 域专项改造。
+     *   住在 scripts/（模板作者的选择，auth 域标明 do-not-rewrite）。正确的家是 src/lib/auth/，搬动需要 auth 域专项改造。
      * 例外被精确雕刻为「这一个文件 → 这一个脚本」，不放松其他任何边。
      */
     {
@@ -86,7 +85,7 @@ module.exports = {
      */
     {
       name: "game-core-not-to-ui",
-      comment: "状态与逻辑层不 import UI。反向依赖会让 store 的测试需要 React 才能跑。",
+      comment: "状态与逻辑层不 import UI。反向依赖会让逻辑层离不开 React。",
       severity: "error",
       from: { path: "^src/game/[^/]+\\.ts$" },
       to: { path: "^src/game/(phases|components)/" },
@@ -94,8 +93,7 @@ module.exports = {
 
     /* ── 5. 孤儿模块：无入边也无出边的死代码 ──────────────────
      * 本项目已经历过一轮死代码清理（删 pi-echo / graph.ts，经过见 git 历史），这条防复发。
-     * 例外是真实的入口点：测试文件（由 node --test 发现）、约定式注册的
-     * nitro 中间件（server/middleware/ 由构建工具自动接线）。
+     * 例外是真实的入口点：约定式注册的 nitro 中间件（server/middleware/ 由构建工具自动接线）。
      */
     {
       name: "no-orphans",
@@ -104,7 +102,6 @@ module.exports = {
       from: {
         orphan: true,
         pathNot: [
-          "\\.test\\.ts$",
           "^server/middleware/",
           "\\.d\\.ts$",
           "\\.json$",

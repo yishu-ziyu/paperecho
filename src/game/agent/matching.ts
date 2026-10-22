@@ -20,8 +20,8 @@
  * - fusion：fused = TEXT_WEIGHT·(cov/maxCov) + emoOverlap + REGION_WEIGHT·sameRegion，
  *   maxCov=0（query 无有效 token）时 text 项整体为 0 → fallbackEcho 的空 query 路径
  *   自然退化为「emotion+region 决定」。
- *   为什么不是纯 RRF（k=10）：同一套 18 条 fixture、同一套 rank 函数下的实测对照
- *   （见 docs/matching-eval.md）：dense 变体在 textW=1..5 全部 17/18——f14 无解
+ *   为什么不是纯 RRF（k=10）：同一套 18 条 fixture、同一套 rank 函数下的实测对照：
+ *   dense 变体在 textW=1..5 全部 17/18——f14 无解
  *   （它要 emotion 的 2v1 差让 s6 压过 text 近并列的替代者，rank 融合里「text#1 vs #2」
  *   只差一档，权重再大也只是同比例放大）；ordinal 变体 17/18（f14 仍落榜，落到哪个替代者随故事库文案变）；
  *   k=60 时 f04 也丢。把 text 保留为连续分数、emotion/region 用原始计数/二元偏好，
@@ -66,7 +66,7 @@ export interface MatchDecision {
   evidence: CandidateEvidence[];
 }
 
-/** text 项计 3 倍：eval 定出的最小可行权重（见文件头与 docs/matching-eval.md）。 */
+/** text 项计 3 倍：eval 定出的最小可行权重（见文件头）。 */
 export const TEXT_WEIGHT = 3;
 /** region 是偏好不是过滤：同区 +0.3，远小于 baseline 的 1.4。 */
 export const REGION_WEIGHT = 0.3;

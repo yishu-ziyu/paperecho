@@ -10,8 +10,6 @@
  *
  * Reuses (read-only, no product changes):
  * - scripts/play-gestures.mjs — pull / dragToken player verbs.
- * - scripts/qa-full-journey.mjs — UI choreography per phase (adapted: no
- *   absolute /workspace paths, no networkidle, state assertions over sleeps).
  * - runtime-acceptance/title-reload/acceptance-loop.mjs — readiness pattern
  *   (fresh document + window.__echoGame + expected phase); React private fiber
  *   fields are deliberately NOT used.
@@ -72,11 +70,9 @@ function parseArgs(argv) {
 /**
  * Verbatim mirror of the product出口 guard (src/game/agent/exchange.ts:
  * META_LEAK + SOURCE_LEAK, the two halves of hasMetaLeak()). Source of truth
- * stays in the product + its unit tests (session.test.ts / exchange.test.ts);
- * this copy only lets the browser journey fail fast on visible leaks without
- * a real model. If the product rule changes, this mirror AND its unit test
- * below must change with it — scripts/e2e/game-release-smoke.test.mjs pins
- * both the leak hits and the must-not-kill night talk.
+ * stays in the product; this copy only lets the browser journey fail fast on
+ * visible leaks without a real model. If the product rule changes, this mirror
+ * must change with it.
  */
 const META_LEAK =
   /世界档案|工具调用|检索结果|检索到|tool\s*call|\b(?:search_cases|search_archive|remember|prompt)\b|(?:在|从|去)(?:我|咱|我们|咱们)?的?素材库[^。？！]{0,12}(?:看到|查到|搜到|翻到|找(?:到|过))|素材库[^。？！，]{0,6}(?:里|内)[^。？！，]{0,8}有(?:一条|一个|几条|个|个人|个案)/i;
@@ -1016,4 +1012,3 @@ if (isMainModule(import.meta.url)) {
   process.exit(code);
 }
 
-export { META_LEAK, STATIC_HOSTS, buildGateServerEnv, parseArgs, scrubbedCredentialNames, serverFnOf, acquireGateLock, releaseGateLock, readGateLock, isPidAlive, isPathInsideRoot, resolveScratchDir, DOTENV_BAK, DOTENV_LOCK, SCRATCH_ROOT_ENV };

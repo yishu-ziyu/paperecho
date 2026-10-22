@@ -181,7 +181,7 @@ const hero=new THREE.Group();const heroLegs=[];const heroArms=[];
   const a=add(new THREE.CapsuleGeometry(0.05,0.2,3,6),S.coat,[sx*0.25,0.62,0]);a.geometry.translate(0,-0.12,0);a.position.y=0.74;heroArms.push(a);}
  scene.add(hero);}
 // recipients: each has a small fixation; line changes on each visit (night). Original copy.
-// recipients: copy/recipients-draft.md (àṣẹ v0.1, VOICE v2), 5 people x 3 nights; 老周 night 3 uses 3b
+// recipients (àṣẹ v0.1, VOICE v2): 5 people x 3 nights; 老周 night 3 uses 3b
 const visits=new Map();
 const PEOPLE=[
  {name:{zh:'小满',en:'Xiaoman'},zh:['三百一十二颗，我数了两遍。……第二遍是三百零九。','昨晚少的那三颗，我找到了，躲在云后面。……今晚云更厚了，算了。','送你一颗，我折的，算在我的总数里。……所以今晚是三百一十一颗。'],
@@ -335,7 +335,7 @@ function finale(){ // end line already shown on the last delivery (merged; no se
 const bursts=[];
 const CONF=[S.envelope,S.scarf,S.lamp,S.roof[0]];function burst(at,n,cnt=14,scl=1){for(let i=0;i<cnt;i++){const m=new THREE.Mesh(new THREE.PlaneGeometry(0.14,0.1),toon(CONF[i%4],{gap:1,side:THREE.DoubleSide,kind:i%4==2?5:0}));m.position.copy(at);
  const v=n.clone().multiplyScalar(2+rand()*1.5).add(new THREE.Vector3(rand()-.5,rand()-.5,rand()-.5).multiplyScalar(2.2));m.scale.setScalar(scl);m.userData={scl,v,life:1.3,spin:new THREE.Vector3(rand(),rand(),rand()).multiplyScalar(8)};scene.add(m);bursts.push(m)}}
-// copy v2 (copy/VOICE.md): courier speaks little (opening / lost / night end); recipients get a quirky line with a twist. Original lines.
+// copy v2: courier speaks little (opening / lost / night end); recipients get a quirky line with a twist. Original lines.
 const TXT={zh:{carry:'包里的信',deliv:'送了',hint:'WASD 走 · L 中/EN',full:'包满了……',
   open:'又是一封没写门牌号的……算了，先往亮灯那边走。',lost:'咦，这棵树刚才是不是见过？',end:'包空了。今天就到这儿吧。',
   dusk:'天黑得好快，路灯一盏一盏亮起来了。',night2:'昨天那户的窗台上……好像多了点什么。',
@@ -515,7 +515,7 @@ function nightEnd(){nightEndPre();nightEnded=true;for(const hh of houses)hh.user
   if(nightN<NIGHTS_TOTAL){{const ph0=nightN>=2?0.8:0;if(ph0>0){tOff+=ph0/3*CYCLE;}} // day 2: ~15 s of daylight for the rope unlock; day 3 starts at dusk
   growPlanet(nightN);if(nightN===1)openArea();cranes.forEach(c=>{if(c.day<=nightN&&!c.found)c.g.visible=true;});startNight();}else finale();}const pe=window.PaperEcho;const info={night:pe.nightIndex,delivered:state.delivered,houses:[...pe.deliveredThisNight]};
  for(const fn of pe.onNightEnd){try{fn(info)}catch(e){console.error('onNightEnd hook',e)}}pe.nightIndex++;pe.deliveredThisNight=[];}
-// ---- v6 'night done' phase (interface for Ìtùtù's lights-out in daynight.js; see PROGRESS.md) ----
+// ---- v6 'night done' phase (interface for Ìtùtù's lights-out in daynight.js) ----
 // scene.userData.nightDone: true while the phase runs; scene.userData.deliveredTonight: [house Group] that got letters tonight (keep lit)
 // scene.userData.nightDoneT: seconds since the phase began. Ends at 14 s (ND_LEN), on any key, or at dawn -> skips to the next morning.
 const ND_LEN=14,ND_WAIT=13; /* nightDone waits for story lines up to 13 s after the last delivery; line on by nightDone 10 s -> gap <=23 s */ let ndLineT=0,toastEndT=0;let nightDone=false,nightDoneT=0,ndLine=false,skipPending=0;

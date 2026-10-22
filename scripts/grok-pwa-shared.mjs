@@ -1,6 +1,6 @@
 /**
  * Single source of truth for platform head chrome (PWA, OG),
- * shared by the Vite plugin and Nitro middleware. Plain ESM so `node --test`
+ * shared by the Vite plugin and Nitro middleware. Plain ESM so the Vite plugin
  * and the Nitro bundler can both consume it.
  */
 import { existsSync, readFileSync } from "node:fs";

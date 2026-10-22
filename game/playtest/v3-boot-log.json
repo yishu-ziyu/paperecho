@@ -1,8 +1,0 @@
-[
- "HTTP 404 http://localhost:8802/play/occlusion.js",
- "error: Failed to load resource: the server responded with a status of 404 (File not found)",
- "log: occlusion.js not present yet",
- "error: Failed to load resource: the server responded with a status of 404 (File not found)",
- "BOOT_OK load=2.0s",
- "state {\"found\": 0, \"carry\": 0, \"delivered\": 0, \"ph\": 0, \"nights\": 0, \"np\": {\"night\": 1, \"finished\": 0, \"deliveredTonight\": false, \"keepsakes\": 0, \"lampLevel\": 0}}"
-]

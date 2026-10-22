@@ -8,7 +8,7 @@ export const LAMP_HEX = 0xffcf6a;
 export const FENCE_HEX = 0xffcf6a;
 export const SILHOUETTE_HEX = 0x373f42; // keepsakes read as dark shapes against the lit window // Ìtùtù night update (was #d97757)
 // keepsake order; cycles after the last one
-// each keepsake carries the short line its recipient left with it (copy/recipients-draft.md)
+// each keepsake carries the short line its recipient left with it
 export const KEEPSAKES = [
   { id: 'boat',   from: '阿汀',   zh: '「借你家窗台晾一晚。……它下午掉进水坑了。」',   en: '"Drying it on your sill tonight. …It fell in a puddle."' },
   { id: 'flower', from: '米婆婆', zh: '「它叫春生。……也可能叫秋生。」',             en: '"This is Spring. …Or Autumn."' },
@@ -16,7 +16,7 @@ export const KEEPSAKES = [
   { id: 'star',   from: '小满',   zh: '「第三百一十二颗。……这颗你帮我记着。」',     en: '"Number 312. …You keep count of this one."' },
 ];
 
-// Chinese caption names (copy/recipients-draft.md)
+// Chinese caption names
 export const KEEPSAKE_ZH = { boat: '纸船', flower: '小花', cup: '茶杯', star: '纸星星' };
 
 const basic = (hex) => new THREE.MeshLambertMaterial({ color: hex });

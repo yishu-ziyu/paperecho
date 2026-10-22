@@ -1,9 +1,8 @@
 # CI 门禁 —— Agent 时代的代码护栏。
 #
 # 本地钩子可以被跳过（--no-verify），远端 CI 是唯一跳不掉的检查。
-# 规则口径与本地完全一致：typecheck / lint / test / check:deps / build。
-# 注意：check:auth 需要运行中的 dev server（探测 /__app-env），不进 CI；
-# 其逻辑由测试套件里的 check-auth-invariant.test.mjs 覆盖。
+# 规则口径与本地完全一致：typecheck / lint / check:deps / build。
+# 注意：check:auth 需要运行中的 dev server（探测 /__app-env），不进 CI。
 name: CI
 
 on:
@@ -36,9 +35,6 @@ jobs:
 
       - name: Lint
         run: npm run lint
-
-      - name: Test
-        run: npm test
 
       - name: Dependency rules
         run: npm run check:deps

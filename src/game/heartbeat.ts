@@ -46,7 +46,7 @@ export function isCannedDay(text: string): boolean {
   return CANNED_DAY.test(text.trim());
 }
 
-/** 产品路径把这一天交给模型；单测注入假回复。空则这一天不写。 */
+/** 产品路径把这一天交给模型。空则这一天不写。 */
 export type DaySpeaker = (input: {
   date: string;
   prev: string;
