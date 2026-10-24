@@ -18,6 +18,9 @@ const PALS=await Promise.all(['day','dusk','night'].map(n=>loadPal(`../palettes/
 // Ìtùtù's day/night module (repro/play/daynight.js, applyTimeOfDay(scene,tod) tod 0..2). Used when present; built-in fallback otherwise.
 let npBack=null;let OCC=null;try{OCC=await import('./occlusion.js');}catch(e){console.log('occlusion.js not present yet');}
 let DN=null;try{DN=await import('./daynight.js');}catch(e){console.log('daynight.js not present, using built-in TOD');}
+// house-kit preview (opt-in): ?kit=<name> loads ../assets/<name>/kit.json {files:[...glb]} and swaps every house except herHouse for those models (see swapHousesToKit). No param = procedural houses, unchanged.
+const KIT=/^[a-z0-9_-]+$/.test(Q.get('kit')||'')?Q.get('kit'):null;let KITS=null;
+if(KIT){try{const {GLTFLoader}=await import('three/addons/loaders/GLTFLoader.js');const man=await (await fetch(`../assets/${KIT}/kit.json`)).json();const L=new GLTFLoader();KITS=await Promise.all(man.files.map(f=>L.loadAsync(`../assets/${KIT}/${f}`).then(g=>g.scene)));}catch(e){console.warn('kit',KIT,'failed to load; keeping procedural houses',e);KITS=null;}}
 const TODQ=Q.get('tod');
 let PH=TODQ!==null&&TODQ!=='auto'?parseFloat(TODQ):FIXPAL?({day:0,dusk:1,night:2}[FIXPAL]??0):0; // 0 day,1 dusk,2 night, wraps at 3
 // time-of-day logic ported from Ìtùtù's art/palette-test/main.js (setTod): PH 0..2 day->dusk->night, 2..3 night->day
@@ -211,6 +214,21 @@ const CRANE_CAP=[3,6,10];const herHouse=RECIP[2];herHouse.name='herHouse';{const
  add(ww,wy-wh/2,t,wx,(wy-wh/2)/2,u.d/2-t/2);add(ww,u.h-(wy+wh/2),t,wx,(wy+wh/2+u.h)/2,u.d/2-t/2);
  herHouse.children.filter(c=>c.material===u.win&&c.position.z>u.d/2-0.05&&Math.abs(c.position.x-wx)<0.4).forEach(c=>herHouse.remove(c));
  u.npWin={x:wx,y:wy,w:ww,h:wh};}
+// ?kit=: replace each house's procedural meshes with a kit model, keeping the house Group, its footprint (colliders, lamps, rings already placed) and the userData contract (win/mats/top).
+// Kit material NAME = role (wall, roof, trim, door, window, chimney, stone, wood, metal, cloth, plant, paper) -> palette slot; 'window' faces become the house's switchable window.
+// Runs after herHouse is chosen and rebuilt, so herHouse (window hole, room, keepsakes) stays procedural. Builds the procedural houses first, so rand() and the layout are unchanged.
+if(KITS){const ROLE={wall:k=>S.wall[k%3],roof:k=>S.roof[k%4],door:()=>S.door,trim:()=>S.frame,frame:()=>S.frame,chimney:()=>S.chimney,fence:()=>S.fence,stone:()=>S.rock,wood:()=>S.trunk,metal:()=>S.lampmetal,cloth:()=>S.scarf,plant:()=>S.leaf[0],paper:()=>S.envelope,glass:()=>S.glass};
+ const roleOf=m=>(m&&m.name||'wall').toLowerCase().replace(/^pal_\d+_*/,'').split(/[_.\d]/).filter(Boolean)[0]||'wall';
+ houses.forEach((h,hi)=>{if(h===herHouse)return;const u=h.userData;
+  for(const c of [...h.children]){if(c!==u.gRing)h.remove(c);}
+  {const i=SWITCH.indexOf(u.win);if(i>=0)SWITCH.splice(i,1);}
+  const k=(hi*7919+13)%997;const model=KITS[k%KITS.length].clone(true);
+  const bb=new THREE.Box3().setFromObject(model);model.scale.setScalar(Math.min(u.w/(bb.max.x-bb.min.x),u.d/(bb.max.z-bb.min.z))*1.15);
+  const win=toon(S.glass,{kind:4});win.name='window';SWITCH.push(win);const cache={};const mats=[];
+  model.traverse(o=>{if(!o.isMesh)return;const r=roleOf(o.material);o.castShadow=o.receiveShadow=true;
+   if(r==='window'){o.material=win;o.name='window';o.userData.noOcclude=true;return;}
+   if(!cache[r]){cache[r]=toon((ROLE[r]||ROLE.wall)((k>>2)+(r==='roof'?1:0)));cache[r].userData.u.uDim.value=1;mats.push(cache[r]);}o.material=cache[r];}); // one material per role per house = one outline id per role
+  h.add(model);const b2=new THREE.Box3().setFromObject(model);u.top=b2.max.y-b2.min.y;u.win=win;u.mats=mats;});}
 // well beside 老周's house + paper-ribbon rope around the closed district
 {const z=zhouHouse.userData;const wd=nearDir(z.dir,(z.size*0.7+1.0)/R,(z.size*0.7+0.8)/R);const w=new THREE.Group();const st=toon(S.rock,{kind:2});
  const ring=new THREE.Mesh(new THREE.CylinderGeometry(0.32,0.36,0.36,10,1,true),st);ring.position.y=0.18;w.add(ring);ring.material.side=THREE.DoubleSide;
