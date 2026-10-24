@@ -18,6 +18,9 @@ const PALS=await Promise.all(['day','dusk','night'].map(n=>loadPal(`../palettes/
 // Ìtùtù's day/night module (repro/play/daynight.js, applyTimeOfDay(scene,tod) tod 0..2). Used when present; built-in fallback otherwise.
 let npBack=null;let OCC=null;try{OCC=await import('./occlusion.js');}catch(e){console.log('occlusion.js not present yet');}
 let DN=null;try{DN=await import('./daynight.js');}catch(e){console.log('daynight.js not present, using built-in TOD');}
+// house-kit preview (opt-in): ?kit=<name> loads ../assets/<name>/kit.json {files:[...glb]} and swaps every house except herHouse for those models (see swapHousesToKit). No param = procedural houses, unchanged.
+const KIT=/^[a-z0-9_-]+$/.test(Q.get('kit')||'')?Q.get('kit'):null;let KITS=null;
+if(KIT){try{const {GLTFLoader}=await import('three/addons/loaders/GLTFLoader.js');const man=await (await fetch(`../assets/${KIT}/kit.json`)).json();const L=new GLTFLoader();KITS=await Promise.all(man.files.map(f=>L.loadAsync(`../assets/${KIT}/${f}`).then(g=>g.scene)));}catch(e){console.warn('kit',KIT,'failed to load; keeping procedural houses',e);KITS=null;}}
 const TODQ=Q.get('tod');
 let PH=TODQ!==null&&TODQ!=='auto'?parseFloat(TODQ):FIXPAL?({day:0,dusk:1,night:2}[FIXPAL]??0):0; // 0 day,1 dusk,2 night, wraps at 3
 // time-of-day logic ported from Ìtùtù's art/palette-test/main.js (setTod): PH 0..2 day->dusk->night, 2..3 night->day
@@ -45,7 +48,7 @@ float h3(vec3 p){p=fract(p*.3183+.1);p*=17.;return fract(p.x*p.y*p.z*(p.x+p.y+p.
 float vnoise(vec3 x){vec3 i=floor(x),f=fract(x);f=f*f*(3.-2.*f);
 return mix(mix(mix(h3(i),h3(i+vec3(1,0,0)),f.x),mix(h3(i+vec3(0,1,0)),h3(i+vec3(1,1,0)),f.x),f.y),mix(mix(h3(i+vec3(0,0,1)),h3(i+vec3(1,0,1)),f.x),mix(h3(i+vec3(0,1,1)),h3(i+vec3(1,1,1)),f.x),f.y),f.z);}
 vec2 encN(vec3 n){float p=sqrt(n.z*8.+8.);return n.xy/p+.5;}`;
-const G={uNight:{value:0},uWarm:{value:new THREE.Color('#ffcf6a')}};
+const G={uNight:{value:0},uWarm:{value:new THREE.Color('#ffcf6a')},uShade:{value:new THREE.Color(1,1,1)}}; // uShade: shadow tint = sky-top colour normalised (cool by day, violet at dusk, navy at night)
 let idk=0;const nextId=()=>{idk++;return 0.05+((idk*0.61803)%1)*0.9;};
 // kind: 0 plain,1 ground,2 rock stripes,3 leaf clumps,4 window,5 marker(always lit)
 function toon(slot,{kind=0,id=nextId(),gap=0.32,side=THREE.FrontSide,hex=null}={}){
@@ -53,7 +56,7 @@ function toon(slot,{kind=0,id=nextId(),gap=0.32,side=THREE.FrontSide,hex=null}={
   if(hex!=null)m.color.set(hex);else regColor(m.color,slot);
   const u={uGlow:{value:0},uLit:{value:0},uOn:{value:0},uDim:{value:0},uCol:{value:new THREE.Color(1,1,1)},uUseCol:{value:0}};m.userData.u=u;
   m.onBeforeCompile=s=>{
-    Object.assign(s.uniforms,{uId:{value:id},uKind:{value:kind},uGap:{value:gap},uNight:G.uNight,uWarm:G.uWarm,uGlow:u.uGlow,uLit:u.uLit,uOn:u.uOn,uDim:u.uDim,uCol:u.uCol,uUseCol:u.uUseCol});
+    Object.assign(s.uniforms,{uId:{value:id},uKind:{value:kind},uGap:{value:gap},uNight:G.uNight,uWarm:G.uWarm,uShade:G.uShade,uGlow:u.uGlow,uLit:u.uLit,uOn:u.uOn,uDim:u.uDim,uCol:u.uCol,uUseCol:u.uUseCol});
     s.vertexShader=s.vertexShader.replace('#include <common>','#include <common>\nvarying vec3 vW;varying vec3 vNv;varying vec2 vZW;')
       .replace('#include <project_vertex>',`#include <project_vertex>
       vec4 wp=vec4(transformed,1.);
@@ -62,15 +65,15 @@ function toon(slot,{kind=0,id=nextId(),gap=0.32,side=THREE.FrontSide,hex=null}={
       #endif
       vW=(modelMatrix*wp).xyz;vNv=normalize(transformedNormal);vZW=gl_Position.zw;`);
     s.fragmentShader=s.fragmentShader.replace('#include <common>',`#include <common>
-uniform float uId,uGap,uNight,uGlow,uLit,uOn,uDim,uUseCol;uniform vec3 uWarm,uCol;uniform int uKind;varying vec3 vW;varying vec3 vNv;varying vec2 vZW;layout(location=1) out vec4 gInfo;${common}`)
+uniform float uId,uGap,uNight,uGlow,uLit,uOn,uDim,uUseCol;uniform vec3 uWarm,uCol,uShade;uniform int uKind;varying vec3 vW;varying vec3 vNv;varying vec2 vZW;layout(location=1) out vec4 gInfo;${common}`)
       .replace('#include <opaque_fragment>',`
       float L=reflectedLight.directDiffuse.r;
       vec3 base=diffuseColor.rgb;float sid=uId;base*=mix(vec3(1.),vec3(.40,.45,.56),uDim*uNight);
       float nB=vnoise(vW*7.1);
       if(uKind==1){float p=step(0.58,vnoise(vW*0.9));base*=mix(1.0,1.08,p);base*=0.94+0.12*vnoise(vW*5.);} // calm: tone only, no id lines
       if(uKind==2){float st=step(0.5,fract(length(vW)*2.6+vnoise(vW*1.5)*0.8));sid+=st*0.06;base*=mix(1.0,0.86,st);}
-      if(uKind==3){float lobe=floor(vnoise(vW*2.4+uId*5.)*3.);sid+=lobe*0.05;L+=(lobe-1.)*0.12;base*=(0.95+lobe*0.05)*(0.92+0.16*nB);}
-      vec3 hs=rgb2hsv(base);hs.x+=-0.03;hs.y=min(1.,hs.y*1.15);hs.z*=0.52;vec3 shade=hsv2rgb(hs);
+      if(uKind==3){float lobe=floor(vnoise(vW*2.4+uId*5.)*3.);L+=(lobe-1.)*0.12; /* lobes are tone only now; their id lines made every canopy a scribble. Clumps still ink where blobs meet */base*=(0.95+lobe*0.05)*(0.92+0.16*nB);}
+      vec3 hs=rgb2hsv(base);hs.x+=-0.03;hs.y=min(1.,hs.y*1.12);hs.z*=0.64;vec3 shade=hsv2rgb(hs)*mix(vec3(1.),uShade,0.38); // lighter, sky-tinted shadow side (was a flat 52% darken): forms read, nothing goes muddy
       vec3 col=mix(shade,base,smoothstep(0.18,0.32,L));
       col+=smoothstep(0.01,0.012,reflectedLight.directSpecular.r)*0.05;
       col+=reflectedLight.indirectDiffuse*0.18;
@@ -91,12 +94,13 @@ uniform float uId,uGap,uNight,uGlow,uLit,uOn,uDim,uUseCol;uniform vec3 uWarm,uCo
 
 // ---------- world ----------
 const R=8;const planet=new THREE.Group();scene.add(planet);
+const GROUND_ID=nextId(); // ground and grass blades share one surface id, so blades never get id outlines (they read as ground texture, not debris)
 let rnd=11;const rand=()=>((rnd=(rnd*16807)%2147483647)/2147483647);const pick=a=>a[Math.floor(rand()*a.length)];
 const UP=new THREE.Vector3(0,1,0);
 const hgt=v=>Math.sin(v.x*.7)*Math.cos(v.z*.6)*0.12+Math.sin(v.y*1.3+v.x)*0.08;
 const surf=d=>R+hgt(d.clone().multiplyScalar(R));
 {const pg=new THREE.IcosahedronGeometry(R,40);const p=pg.attributes.position,v=new THREE.Vector3();for(let i=0;i<p.count;i++){v.fromBufferAttribute(p,i);v.setLength(R+hgt(v));p.setXYZ(i,v.x,v.y,v.z)}pg.computeVertexNormals();
- const g=new THREE.Mesh(pg,toon(S.grass,{kind:1,gap:0.55}));g.receiveShadow=true;planet.add(g);}
+ const g=new THREE.Mesh(pg,toon(S.grass,{kind:1,gap:0.55,id:GROUND_ID}));g.receiveShadow=true;planet.add(g);}
 const START=new THREE.Vector3(0,1,0);
 const usedDirs=[START.clone()];const obstacles=[];
 function randDir(minAng=0){for(let k=0;k<300;k++){const d=new THREE.Vector3(rand()*2-1,rand()*2-1,rand()*2-1);if(d.lengthSq()>1||d.lengthSq()<.01)continue;d.normalize();if(usedDirs.every(u=>u.angleTo(d)>minAng)){if(minAng)usedDirs.push(d);return d}}return new THREE.Vector3(1,0,0)}
@@ -117,7 +121,7 @@ function house(){const g=new THREE.Group();const w=1.0+rand()*0.6,d=0.9+rand()*0
  if(rand()<0.5){const fm=T(S.fence);for(let i=0;i<6;i++){const p=new THREE.Mesh(new THREE.BoxGeometry(0.04,0.22,0.04),fm);p.position.set(-w/2+i*w/5,0.11,d/2+0.4);g.add(p)}
   const rl=new THREE.Mesh(new THREE.BoxGeometry(w,0.03,0.03),fm);rl.position.set(0,0.17,d/2+0.4);g.add(rl)}
  g.userData={mats,win,top:h+rh,size:Math.max(w,d),w,h,d};return g}
-function canopy(size,slot){const g=new THREE.Group();for(let i=0;i<5;i++){const s=new THREE.Mesh(new THREE.IcosahedronGeometry(size*0.62,3),toon(slot,{kind:3}));
+function canopy(size,slot){const g=new THREE.Group();const cm=toon(slot,{kind:3}); /* one material = one outline id per canopy: the tree inks as one mass, blobs still separate by depth/normal edges */for(let i=0;i<5;i++){const s=new THREE.Mesh(new THREE.IcosahedronGeometry(size*0.62,3),cm);
  const a=i/5*6.28;s.position.set(Math.cos(a)*size*0.45,(i%2)*size*0.35-0.1,Math.sin(a)*size*0.45);if(i==4)s.position.set(0,size*0.55,0);s.scale.y=1.1;g.add(s)}return g}
 function tree(){const g=new THREE.Group();const s=0.5+rand()*0.35;const t=new THREE.Mesh(new THREE.CylinderGeometry(0.07,0.11,0.9,6),toon(S.trunk));t.position.y=0.45;g.add(t);
  const c=canopy(s,pick(S.leaf));c.position.y=0.85+s*0.8;g.add(c);return g}
@@ -139,7 +143,7 @@ for(const h of houses){const m=new THREE.Mesh(new THREE.PlaneGeometry(3.2,3.2),n
  vertexShader:'out vec2 vU;void main(){vU=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}',
  fragmentShader:'precision highp float;in vec2 vU;uniform sampler2D map;uniform float opacity;layout(location=0) out vec4 o;layout(location=1) out vec4 gi;void main(){vec4 t=texture(map,vU);o=vec4(t.rgb*t.a*opacity,0.);gi=vec4(0.);}'}));m.rotation.x=-Math.PI/2;m.position.y=0.04;m.userData.noOcclude=true;h.add(m);h.userData.gRing=m;}
 const LSCALE=parseFloat(Q.get("wl")??"1");const winLights=[];for(let i=0;i<6;i++){const L=new THREE.PointLight(0xffcf6a,0,5,2.0);scene.add(L);winLights.push(L);}
-function updateNightLights(){const nt=G.uNight.value;const hp=hero.getWorldPosition(new THREE.Vector3());const lit=[];
+function updateNightLights(){const nt=ss(0.8,1.3,todT(PH)); /* light pools follow the window switch-on, not the dim term */const hp=hero.getWorldPosition(new THREE.Vector3());const lit=[];
  for(const h of houses){const u=h.userData.win&&h.userData.win.userData.u;const on=u?Math.max(u.uOn.value,u.uLit.value):0;h.userData.gRing.material.uniforms.opacity.value=0.09*on*nt;if(on*nt>0.05)lit.push([h.getWorldPosition(new THREE.Vector3()).distanceTo(hp),h,on*nt]);}
  lit.sort((a,b)=>a[0]-b[0]);winLights.forEach((L,i)=>{const e=lit[i];if(!e){L.intensity=0;return;}const h=e[1];L.position.copy(h.localToWorld(new THREE.Vector3(0,h.userData.size*0.3,h.userData.size*0.62+1.1)));L.intensity=0.9*LSCALE*e[2];});}
 
@@ -162,7 +166,7 @@ for(let i=0;i<12;i++){const s=0.3+rand()*0.5;place(new THREE.Mesh(new THREE.Dode
  for(let i=0;i<poles.length;i++){if(!pvis[i])continue;let best=-1,bd=1e9;for(let j=0;j<poles.length;j++){if(j===i||!pvis[j])continue;const dd=poles[i].distanceTo(poles[j]);if(dd<bd&&dd<6.5){bd=dd;best=j}}
   if(best<0)continue;const a=poles[i],b=poles[best];const pts=[];for(let k=0;k<=12;k++){const t=k/12;const p=a.clone().lerp(b,t);p.add(p.clone().normalize().multiplyScalar(-Math.sin(t*Math.PI)*0.25));pts.push(p)}
   planet.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts),16,0.012,4),wm))}}
-{const tg=new THREE.ConeGeometry(0.035,0.22,3);tg.translate(0,0.11,0);const N=1800;const im=new THREE.InstancedMesh(tg,toon(S.grass_light,{gap:0.75}),N);const m=new THREE.Matrix4(),q=new THREE.Quaternion(),e=new THREE.Euler();
+{const tg=new THREE.ConeGeometry(0.035,0.22,3);tg.translate(0,0.11,0);for(let i=0;i<tg.attributes.normal.count;i++)tg.attributes.normal.setXYZ(i,0,1,0); /* blades take the turf normal: no ink dash at their feet */const N=1800;const im=new THREE.InstancedMesh(tg,toon(S.grass_light,{gap:2,id:GROUND_ID}),N);const m=new THREE.Matrix4(),q=new THREE.Quaternion(),e=new THREE.Euler();
  for(let i=0;i<N;i++){const d=randDir();q.setFromUnitVectors(UP,d);e.set((rand()-.5)*0.6,rand()*6,(rand()-.5)*0.6);q.multiply(new THREE.Quaternion().setFromEuler(e));const s=0.6+rand()*0.9;m.compose(d.clone().multiplyScalar(surf(d)-0.02),q,new THREE.Vector3(s,s,s));im.setMatrixAt(i,m)}
  im.receiveShadow=true;planet.add(im);}
 
@@ -210,6 +214,21 @@ const CRANE_CAP=[3,6,10];const herHouse=RECIP[2];herHouse.name='herHouse';{const
  add(ww,wy-wh/2,t,wx,(wy-wh/2)/2,u.d/2-t/2);add(ww,u.h-(wy+wh/2),t,wx,(wy+wh/2+u.h)/2,u.d/2-t/2);
  herHouse.children.filter(c=>c.material===u.win&&c.position.z>u.d/2-0.05&&Math.abs(c.position.x-wx)<0.4).forEach(c=>herHouse.remove(c));
  u.npWin={x:wx,y:wy,w:ww,h:wh};}
+// ?kit=: replace each house's procedural meshes with a kit model, keeping the house Group, its footprint (colliders, lamps, rings already placed) and the userData contract (win/mats/top).
+// Kit material NAME = role (wall, roof, trim, door, window, chimney, stone, wood, metal, cloth, plant, paper) -> palette slot; 'window' faces become the house's switchable window.
+// Runs after herHouse is chosen and rebuilt, so herHouse (window hole, room, keepsakes) stays procedural. Builds the procedural houses first, so rand() and the layout are unchanged.
+if(KITS){const ROLE={wall:k=>S.wall[k%3],roof:k=>S.roof[k%4],door:()=>S.door,trim:()=>S.frame,frame:()=>S.frame,chimney:()=>S.chimney,fence:()=>S.fence,stone:()=>S.rock,wood:()=>S.trunk,metal:()=>S.lampmetal,cloth:()=>S.scarf,plant:()=>S.leaf[0],paper:()=>S.envelope,glass:()=>S.glass};
+ const roleOf=m=>(m&&m.name||'wall').toLowerCase().replace(/^pal_\d+_*/,'').split(/[_.\d]/).filter(Boolean)[0]||'wall';
+ houses.forEach((h,hi)=>{if(h===herHouse)return;const u=h.userData;
+  for(const c of [...h.children]){if(c!==u.gRing)h.remove(c);}
+  {const i=SWITCH.indexOf(u.win);if(i>=0)SWITCH.splice(i,1);}
+  const model=KITS[hi%KITS.length].clone(true);const ci=hi+Math.floor(hi/KITS.length); // every variant gets used evenly (a fixed-stride hash hit only 3 of 6); ci shifts wall/roof colours so a variant isn't always the same colour
+  const bb=new THREE.Box3().setFromObject(model);model.scale.setScalar(Math.min(u.w/(bb.max.x-bb.min.x),u.d/(bb.max.z-bb.min.z))*1.15);
+  const win=toon(S.glass,{kind:4});win.name='window';SWITCH.push(win);const cache={};const mats=[];
+  model.traverse(o=>{if(!o.isMesh)return;const r=roleOf(o.material);o.castShadow=o.receiveShadow=true;
+   if(r==='window'){o.material=win;o.name='window';o.userData.noOcclude=true;return;}
+   if(!cache[r]){cache[r]=toon((ROLE[r]||ROLE.wall)(ci+(r==='roof'?1:0)));cache[r].userData.u.uDim.value=1;mats.push(cache[r]);}o.material=cache[r];}); // one material per role per house = one outline id per role
+  h.add(model);const b2=new THREE.Box3().setFromObject(model);u.top=b2.max.y-b2.min.y;u.win=win;u.mats=mats;});}
 // well beside 老周's house + paper-ribbon rope around the closed district
 {const z=zhouHouse.userData;const wd=nearDir(z.dir,(z.size*0.7+1.0)/R,(z.size*0.7+0.8)/R);const w=new THREE.Group();const st=toon(S.rock,{kind:2});
  const ring=new THREE.Mesh(new THREE.CylinderGeometry(0.32,0.36,0.36,10,1,true),st);ring.position.y=0.18;w.add(ring);ring.material.side=THREE.DoubleSide;
@@ -424,8 +443,8 @@ const keys={};addEventListener('keydown',e=>{if(nightDone&&nightDoneT>1){skipPen
 const kd=(...k)=>k.some(x=>keys[x]);
 
 // ---------- post: outline B + LUT A + glow ----------
-function grade(r,g,b){const l=0.299*r+0.587*g+0.114*b;const sat=1.18;let o=[l+(r-l)*sat,l+(g-l)*sat,l+(b-l)*sat];
- const sh=(1-l)*(1-l)*0.22,hi=l*l*0.18;o=[o[0]-sh*0.6+hi*0.35,o[1]+sh*0.15+hi*0.25,o[2]+sh*0.35+hi*0.02];return o.map(c=>Math.round(255*Math.min(1,Math.max(0,c))));}
+function grade(r,g,b){const l=0.299*r+0.587*g+0.114*b;const sat=1.05;let o=[l+(r-l)*sat,l+(g-l)*sat,l+(b-l)*sat]; // was 1.18: the palette carries the colour, the grade only nudges
+ const sh=(1-l)*(1-l)*0.14,hi=l*l*0.12;o=[o[0]-sh*0.6+hi*0.35,o[1]+sh*0.15+hi*0.25,o[2]+sh*0.35+hi*0.02];return o.map(c=>Math.round(255*Math.min(1,Math.max(0,c))));}
 const LS=33;const lutData=new Uint8Array(LS*LS*LS*4);
 for(let z=0;z<LS;z++)for(let y=0;y<LS;y++)for(let x=0;x<LS;x++){const o=grade(x/(LS-1),y/(LS-1),z/(LS-1));lutData.set([o[0],o[1],o[2],255],4*(x+y*LS+z*LS*LS))}
 const lut=new THREE.Data3DTexture(lutData,LS,LS,LS);lut.minFilter=lut.magFilter=THREE.LinearFilter;lut.unpackAlignment=1;lut.needsUpdate=true;
@@ -452,9 +471,10 @@ void main(){vec2 px=2.0*(res.y/800.)/res;
  float dI=length(vec2(id[1]-id[2],id[3]-id[4]));
  float dD=length(vec2(dp[1]-dp[2],dp[3]-dp[4]))/max(dp[0],0.02);
  float dN=length(vec2(distance(nr[1],nr[0])-distance(nr[2],nr[0]),distance(nr[3],nr[0])-distance(nr[4],nr[0])));
- float e=max(max(fit(dI,0.003,0.01),fit(dD,0.06,0.12)),fit(dN,0.45,0.7));
- float c=ct[0];float m=dp[0];for(int i=1;i<5;i++)if(dp[i]<m){m=dp[i];c=max(c,ct[i]);}
- e*=c;
+ float d0=min(dp[0],min(min(dp[1],dp[2]),min(dp[3],dp[4])));float fk=fit(d0,0.09,0.16); // nearest surface around this pixel; distance thins lines by fading (a px rescale on the nearest-filtered G-buffer only stepped)
+ float e=max(max(fit(dI,0.003,0.01)*(1.-0.75*fk),fit(dD,0.06,0.12)),fit(dN,0.45,0.7)*(1.-0.6*fk)); // far away only silhouettes survive; interior id/normal lines (leaf lobes, rock stripes) drop out instead of turning to noise
+ float c=ct[0];float m=dp[0];for(int i=1;i<5;i++)if(dp[i]<m){m=dp[i];c=ct[i];} // the FRONT surface decides whether its silhouette is inked (was max(): ground pixels inked the grass blades in front of them)
+ e*=c*(1.-0.45*fk);
  if(texture(tC,vUv).a<0.)e*=0.2; // v6: outlines don't eat small lit windows/lamps at distance
  vec4 c0=texture(tC,vUv);vec4 i0=texture(tI,vUv);
  bool sky=i0.r<=0.0001&&i0.g==0.&&i0.b==0.;
@@ -462,9 +482,14 @@ void main(){vec2 px=2.0*(res.y/800.)/res;
  if(sky){vec2 su=vUv*vec2(res.x/res.y,1.);float t=vUv.y;
   col=mix(uSkyHor,uSkyTop,smoothstep(0.15,0.95,t));
   float st=step(0.996,h2(floor(su*180.)))*uNightK*smoothstep(0.3,0.8,t);col+=st;
-  float cl=fbm(su*vec2(2.6,5.)+vec2(time*0.02,0.));cl+=0.25*smoothstep(0.4,0.9,t);
-  col=mix(col,uCloud*0.92,smoothstep(0.68,0.695,cl));col=mix(col,uCloud,smoothstep(0.75,0.765,cl));}
- col=mix(col,uLine,clamp(e,0.,1.));
+  vec2 cp=su*vec2(1.7,3.4)+vec2(time*0.012,0.);float cb=0.12*smoothstep(0.45,0.95,t)-0.03; // fewer, broader, flatter puffs; most of the sky stays open
+  float cl=fbm(cp)+cb,below=0.;if(cl>0.62)below=fbm(cp-vec2(0.,0.16))+cb; // cloud continues underneath -> sunlit upper body; cloud edge below -> flat shaded underside
+  float wc=fwidth(cl),wb=fwidth(below);float body=smoothstep(0.65-wc,0.65+wc,cl),lit=body*smoothstep(0.63-wb,0.63+wb,below); // hard two-tone, ~1px AA
+  col=mix(col,mix(uCloud,uSkyTop,0.45),body);col=mix(col,uCloud,lit);}
+ vec3 hz=mix(uSkyHor,uSkyTop,smoothstep(0.15,0.95,vUv.y));bool glow=c0.a<0.; // haze toward the sky actually behind the pixel; glow sources (markers, lit windows, lamps) punch through
+ if(!sky&&!glow)col=mix(col,hz,fit(dp[0],0.10,0.17)*0.42); // aerial perspective: surface sinks by its own depth
+ vec3 lc=mix(uLine,col*0.42,0.3);if(!sky)lc=mix(lc,hz,fit(d0,0.10,0.17)*0.42); // ink sinks by the nearest depth, same on both sides of a silhouette
+ col=mix(col,lc,clamp(e,0.,1.));
  col=texture(tL,clamp(col,0.,1.)*(32./33.)+0.5/33.).rgb;
  col+=texture(tB,vUv).rgb*uGlow*(1.-0.6*e);
  o=vec4(col,1.);}`});
@@ -526,15 +551,15 @@ function endNightDone(){ndPush=null;fadeEl.style.opacity=0;pushHidden.forEach(o=
 const timers=[];function setTimeoutSim(f,t){timers.push({f,t:T+t});}
 function step(dt){for(const tm of [...timers])if(T>=tm.t){timers.splice(timers.indexOf(tm),1);tm.f();}
  T+=dt;
- if(M>=3&&!FIXPAL&&(TODQ===null||TODQ==='auto')){if(PH<0.8)tOff+=(nightN===1?(0.8*CYCLE/3/15-1):2)*dt;/* v6.2: daytime runs 3x; F: day 2 lasts ~15 s */PH=((T+tOff)/CYCLE*3)%3;if(!skipNight&&(state.targets.length||state.holdNight)&&PH>2.2){tOff-=(PH-2.2)/3*CYCLE;PH=2.2;}if(skipNight){const tgt=(state.targets.length&&!nightDone&&PH<0.8)?0.8:2.999;tOff+=(tgt-PH)/3*CYCLE;skipNight=false;PH=((T+tOff)/CYCLE*3)%3;}}
+ if(M>=3&&!FIXPAL&&(TODQ===null||TODQ==='auto')){if(PH<0.8)tOff+=(nightN===1?(0.8*CYCLE/3/15-1):2)*dt;/* v6.2: daytime runs 3x; F: day 2 lasts ~15 s */PH=((T+tOff)/CYCLE*3)%3;if(!skipNight&&(state.targets.length||state.holdNight)&&PH>2.2){tOff-=(PH-2.2)/3*CYCLE;PH=2.2;}if(skipNight){const held=(state.targets.length||state.holdNight)&&!nightDone;const tgt=(state.targets.length&&!nightDone&&PH<0.8)?0.8:held?PH:3.001;tOff+=(tgt-PH)/3*CYCLE;skipNight=false;PH=((T+tOff)/CYCLE*3)%3;if(tgt>3)prevPH=3;}} /* skip wraps straight into the next morning (3.001 -> PH≈0.001; prevPH=3 so the wrap test below fires nightEnd this frame even when the night was finished early, at PH<1.5). It used to stop at 2.999, and the holdNight clamp pulled it back to 2.2 next frame unless one frame's dt was >= 0.08 s; the real loop caps dt at 0.05, so the game never left night 1. While letters remain, N at night is a no-op (was a one-frame jump) */
  if(prevPH>1.5&&PH<prevPH-1)nightEnd();prevPH=PH;
- const nf=PH<1?THREE.MathUtils.smoothstep(PH,0.55,0.95):PH<2.55?1:1-THREE.MathUtils.smoothstep(PH,2.55,2.9);
- G.uNight.value=nf;post.uniforms.uNightK.value=PH>1.5&&PH<2.8?Math.min(1,(PH-1.5)*3)*(1-THREE.MathUtils.smoothstep(PH,2.5,2.8)):0;
+ const nf=PH<2.55?THREE.MathUtils.smoothstep(PH,1.05,1.7):1-THREE.MathUtils.smoothstep(PH,2.55,2.9); // night dim starts after dusk (dusk used to render fully dimmed: grey houses, muddy clouds)
+ G.uNight.value=nf;{const s=palRGB(S.skytop),mx=Math.max(...s,1e-3);G.uShade.value.setRGB(s[0]/mx,s[1]/mx,s[2]/mx);}post.uniforms.uNightK.value=PH>1.5&&PH<2.8?Math.min(1,(PH-1.5)*3)*(1-THREE.MathUtils.smoothstep(PH,2.5,2.8)):0;
  if(!DN){ updatePalette();{const t=todT(PH);const N=SWITCH.length;SWITCH.forEach((m,i)=>{const k=(i*7919%N)/Math.max(N-1,1);const t0=0.8+k*(0.5-0.06);m.userData.u.uOn.value=ss(t0,t0+0.06,t);});
   post.uniforms.uGlow.value=GLOW*Math.max(0.35,ss(0.7,1.7,t));}{const w=palRGB(S.winlight,1.5);G.uWarm.value.set('#ffcf6a');}
  for(const [k,u] of [[S.skytop,'uSkyTop'],[S.skyhor,'uSkyHor'],[S.cloud,'uCloud'],[S.outline,'uLine']])setP3([k,post.uniforms[u].value]);
  {const t=todT(PH);const bh=Math.sin(Math.PI*ss(1,2,t))*0.6;post.uniforms.uSkyTop.value.lerp(new THREE.Vector3(...BH_TOP),bh);post.uniforms.uSkyHor.value.lerp(new THREE.Vector3(...BH_HOR),bh);}}
- else{DN.applyTimeOfDay(scene,todT(PH));for(const u of ["uSkyTop","uSkyHor","uCloud","uLine"]){const v=post.uniforms[u].value;v.set(Math.pow(v.x,1/2.2),Math.pow(v.y,1/2.2),Math.pow(v.z,1/2.2));}post.uniforms.uCloud.value.multiplyScalar(1-0.5*G.uNight.value);} // daynight.js gives linear colours; our sky/line maths runs in sRGB
+ else{DN.applyTimeOfDay(scene,todT(PH));G.uNight.value=nf; /* game.js owns the night term: full night through the 2.2 hold */for(const u of ["uSkyTop","uSkyHor","uCloud","uLine"]){const v=post.uniforms[u].value;v.set(Math.pow(v.x,1/2.2),Math.pow(v.y,1/2.2),Math.pow(v.z,1/2.2));}post.uniforms.uCloud.value.multiplyScalar(1-0.5*G.uNight.value);} // daynight.js gives linear colours; our sky/line maths runs in sRGB
  // v5: windows guaranteed on by deep night (todT>=1.3) whatever the switch schedule did; delivered houses stay lit (uLit)
  if(nightEnded&&todT(PH)>=0.8&&PH<2)nightEnded=false;{const t=todT(PH);for(const h of houses){const u=h.userData.win.userData.u;if(h.userData.done&&t>=0.8&&!nightEnded)u.uLit.value=1;}}
  sun.intensity=[2.4,2.0,0.7][Math.floor(PH)]*(1-(PH%1))+[2.0,0.7,2.4][Math.floor(PH)]*(PH%1);hemi.intensity=0.5;

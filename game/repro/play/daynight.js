@@ -48,7 +48,7 @@ export function applyTimeOfDay(scene,tod){
   else if(m.emissive){const lamp=switches.find(s=>s.material===m&&LAMP_RE.test(s.name));
    m.emissive.copy(col(lamp?SLOT.lamp_glow:SLOT.window_light,t)).multiplyScalar(on);}});
  if(ud.palReg)for(const r of ud.palReg)r.color.copy(col(r.slot,t));
- if(ud.uNight)ud.uNight.value=ss(0.55,0.95,t);
+ if(ud.uNight)ud.uNight.value=ss(1.05,1.7,t); // dusk keeps its warm light; the night dim/shade term only comes in after the sun is down
  const glow=(ud.glowMax??1.2)*ss(0.7,1.7,t);const p=ud.post&&ud.post.uniforms;
  if(p){setU(p.uSkyTop,col(SLOT.sky_top,t).lerp(BH_TOP,bh*0.6));setU(p.uSkyHor,col(SLOT.sky_horizon,t).lerp(BH_HOR,bh*0.6));
   setU(p.uCloud,col(SLOT.cloud,t));setU(p.uLine,col(SLOT.outline,t));if(p.uGlow)p.uGlow.value=glow;if(p.uNightK)p.uNightK.value=ss(1.5,1.85,t);}
