@@ -90,7 +90,7 @@ export function createNightProgress(opts = {}) {
     const sillW = win.w + 0.5, sillD = 0.2, sillTop = win.y - win.h / 2, sillZ = d / 2 + sillD / 2 - 0.01;
     const sill = new THREE.Mesh(new THREE.BoxGeometry(sillW, 0.04, sillD), mat(0xf3ead8)); sill.position.set(win.x, sillTop - 0.02, sillZ); root.add(sill);
     // spill light + pool on the ground in front
-    const light = new THREE.PointLight(lampHex, 0, 5, 2.0) /* Ìtùtù v2: shorter, dimmer spill */; light.position.set(win.x, win.y + win.h / 2 + 0.05, d / 2 + 0.55); // above & in front of the sill so window light falls onto the keepsakes root.add(light);
+    const light = new THREE.PointLight(lampHex, 0, 5, 2.0) /* Ìtùtù v2: shorter, dimmer spill */; light.position.set(win.x, win.y + win.h / 2 + 0.05, d / 2 + 0.55); root.add(light); // above & in front of the sill so window light falls onto the keepsakes (root.add used to sit inside this comment, so the spill light never existed)
     const poolM = gmat(lampHex); poolM.transparent = true; poolM.opacity = 0; poolM.depthWrite = false; poolM.userData.glow = false;
     const pool = new THREE.Mesh(new THREE.CircleGeometry(0.7, 24), poolM); pool.rotation.x = -Math.PI / 2; pool.position.set(win.x, 0.02, d / 2 + 0.7); pool.scale.set(1, 0.6, 1); root.add(pool);
     // keepsake slots (table, sill, table, hanging)
