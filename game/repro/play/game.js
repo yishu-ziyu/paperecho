@@ -222,12 +222,12 @@ if(KITS){const ROLE={wall:k=>S.wall[k%3],roof:k=>S.roof[k%4],door:()=>S.door,tri
  houses.forEach((h,hi)=>{if(h===herHouse)return;const u=h.userData;
   for(const c of [...h.children]){if(c!==u.gRing)h.remove(c);}
   {const i=SWITCH.indexOf(u.win);if(i>=0)SWITCH.splice(i,1);}
-  const k=(hi*7919+13)%997;const model=KITS[k%KITS.length].clone(true);
+  const model=KITS[hi%KITS.length].clone(true);const ci=hi+Math.floor(hi/KITS.length); // every variant gets used evenly (a fixed-stride hash hit only 3 of 6); ci shifts wall/roof colours so a variant isn't always the same colour
   const bb=new THREE.Box3().setFromObject(model);model.scale.setScalar(Math.min(u.w/(bb.max.x-bb.min.x),u.d/(bb.max.z-bb.min.z))*1.15);
   const win=toon(S.glass,{kind:4});win.name='window';SWITCH.push(win);const cache={};const mats=[];
   model.traverse(o=>{if(!o.isMesh)return;const r=roleOf(o.material);o.castShadow=o.receiveShadow=true;
    if(r==='window'){o.material=win;o.name='window';o.userData.noOcclude=true;return;}
-   if(!cache[r]){cache[r]=toon((ROLE[r]||ROLE.wall)((k>>2)+(r==='roof'?1:0)));cache[r].userData.u.uDim.value=1;mats.push(cache[r]);}o.material=cache[r];}); // one material per role per house = one outline id per role
+   if(!cache[r]){cache[r]=toon((ROLE[r]||ROLE.wall)(ci+(r==='roof'?1:0)));cache[r].userData.u.uDim.value=1;mats.push(cache[r]);}o.material=cache[r];}); // one material per role per house = one outline id per role
   h.add(model);const b2=new THREE.Box3().setFromObject(model);u.top=b2.max.y-b2.min.y;u.win=win;u.mats=mats;});}
 // well beside 老周's house + paper-ribbon rope around the closed district
 {const z=zhouHouse.userData;const wd=nearDir(z.dir,(z.size*0.7+1.0)/R,(z.size*0.7+0.8)/R);const w=new THREE.Group();const st=toon(S.rock,{kind:2});

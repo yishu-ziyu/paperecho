@@ -1,0 +1,112 @@
+[
+ {
+  "name": "chunky_loaf",
+  "tris": 2274,
+  "roles": [
+   "chimney",
+   "door",
+   "roof",
+   "wall",
+   "window"
+  ],
+  "bbox": [
+   1.914,
+   1.552,
+   1.901
+  ],
+  "zmin": -0.03,
+  "centre": [
+   0.0,
+   0.0
+  ],
+  "bytes": 54244
+ },
+ {
+  "name": "chunky_tall",
+  "tris": 2212,
+  "roles": [
+   "door",
+   "roof",
+   "wall",
+   "window",
+   "wood"
+  ],
+  "bbox": [
+   1.598,
+   1.43,
+   2.366
+  ],
+  "zmin": 0.0,
+  "centre": [
+   0.0,
+   0.0
+  ],
+  "bytes": 56504
+ },
+ {
+  "name": "chunky_shop",
+  "tris": 1280,
+  "roles": [
+   "cloth",
+   "door",
+   "roof",
+   "wall",
+   "window"
+  ],
+  "bbox": [
+   1.638,
+   1.575,
+   1.741
+  ],
+  "zmin": -0.01,
+  "centre": [
+   0.0,
+   0.0
+  ],
+  "bytes": 35044
+ },
+ {
+  "name": "chunky_barn",
+  "tris": 1840,
+  "roles": [
+   "door",
+   "roof",
+   "stone",
+   "wall",
+   "window"
+  ],
+  "bbox": [
+   1.473,
+   1.635,
+   1.995
+  ],
+  "zmin": -0.03,
+  "centre": [
+   0.0,
+   0.0
+  ],
+  "bytes": 46484
+ },
+ {
+  "name": "chunky_porch",
+  "tris": 2414,
+  "roles": [
+   "door",
+   "roof",
+   "wall",
+   "window",
+   "wood"
+  ],
+  "bbox": [
+   1.764,
+   1.61,
+   1.638
+  ],
+  "zmin": 0.0,
+  "centre": [
+   0.0,
+   0.0
+  ],
+  "bytes": 58184
+ }
+]
