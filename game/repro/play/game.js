@@ -143,7 +143,7 @@ for(const h of houses){const m=new THREE.Mesh(new THREE.PlaneGeometry(3.2,3.2),n
  vertexShader:'out vec2 vU;void main(){vU=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}',
  fragmentShader:'precision highp float;in vec2 vU;uniform sampler2D map;uniform float opacity;layout(location=0) out vec4 o;layout(location=1) out vec4 gi;void main(){vec4 t=texture(map,vU);o=vec4(t.rgb*t.a*opacity,0.);gi=vec4(0.);}'}));m.rotation.x=-Math.PI/2;m.position.y=0.04;m.userData.noOcclude=true;h.add(m);h.userData.gRing=m;}
 const LSCALE=parseFloat(Q.get("wl")??"1");const winLights=[];for(let i=0;i<6;i++){const L=new THREE.PointLight(0xffcf6a,0,5,2.0);scene.add(L);winLights.push(L);}
-function updateNightLights(){const nt=G.uNight.value;const hp=hero.getWorldPosition(new THREE.Vector3());const lit=[];
+function updateNightLights(){const nt=ss(0.8,1.3,todT(PH)); /* light pools follow the window switch-on, not the dim term */const hp=hero.getWorldPosition(new THREE.Vector3());const lit=[];
  for(const h of houses){const u=h.userData.win&&h.userData.win.userData.u;const on=u?Math.max(u.uOn.value,u.uLit.value):0;h.userData.gRing.material.uniforms.opacity.value=0.09*on*nt;if(on*nt>0.05)lit.push([h.getWorldPosition(new THREE.Vector3()).distanceTo(hp),h,on*nt]);}
  lit.sort((a,b)=>a[0]-b[0]);winLights.forEach((L,i)=>{const e=lit[i];if(!e){L.intensity=0;return;}const h=e[1];L.position.copy(h.localToWorld(new THREE.Vector3(0,h.userData.size*0.3,h.userData.size*0.62+1.1)));L.intensity=0.9*LSCALE*e[2];});}
 
@@ -166,7 +166,7 @@ for(let i=0;i<12;i++){const s=0.3+rand()*0.5;place(new THREE.Mesh(new THREE.Dode
  for(let i=0;i<poles.length;i++){if(!pvis[i])continue;let best=-1,bd=1e9;for(let j=0;j<poles.length;j++){if(j===i||!pvis[j])continue;const dd=poles[i].distanceTo(poles[j]);if(dd<bd&&dd<6.5){bd=dd;best=j}}
   if(best<0)continue;const a=poles[i],b=poles[best];const pts=[];for(let k=0;k<=12;k++){const t=k/12;const p=a.clone().lerp(b,t);p.add(p.clone().normalize().multiplyScalar(-Math.sin(t*Math.PI)*0.25));pts.push(p)}
   planet.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts),16,0.012,4),wm))}}
-{const tg=new THREE.ConeGeometry(0.035,0.22,3);tg.translate(0,0.11,0);const N=1800;const im=new THREE.InstancedMesh(tg,toon(S.grass_light,{gap:2,id:GROUND_ID}),N);const m=new THREE.Matrix4(),q=new THREE.Quaternion(),e=new THREE.Euler();
+{const tg=new THREE.ConeGeometry(0.035,0.22,3);tg.translate(0,0.11,0);for(let i=0;i<tg.attributes.normal.count;i++)tg.attributes.normal.setXYZ(i,0,1,0); /* blades take the turf normal: no ink dash at their feet */const N=1800;const im=new THREE.InstancedMesh(tg,toon(S.grass_light,{gap:2,id:GROUND_ID}),N);const m=new THREE.Matrix4(),q=new THREE.Quaternion(),e=new THREE.Euler();
  for(let i=0;i<N;i++){const d=randDir();q.setFromUnitVectors(UP,d);e.set((rand()-.5)*0.6,rand()*6,(rand()-.5)*0.6);q.multiply(new THREE.Quaternion().setFromEuler(e));const s=0.6+rand()*0.9;m.compose(d.clone().multiplyScalar(surf(d)-0.02),q,new THREE.Vector3(s,s,s));im.setMatrixAt(i,m)}
  im.receiveShadow=true;planet.add(im);}
 
@@ -466,13 +466,12 @@ float n2(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(h2(i)
 float fbm(vec2 p){float s=0.,a=.5;for(int i=0;i<5;i++){s+=a*n2(p);p=p*2.03+7.1;a*=.5;}return s;}
 void main(){vec2 px=2.0*(res.y/800.)/res;
  vec2 dirs[5]=vec2[5](vec2(0),vec2(-1,0),vec2(1,0),vec2(0,-1),vec2(0,1));
- float d0=1.;for(int i=0;i<5;i++)d0=min(d0,lin(1.-texture(tI,vUv+px*dirs[i]).r)); // nearest surface around this pixel (so a silhouette against the sky gets the object's weight on both sides)
- float fk=fit(d0,0.05,0.12);px*=mix(1.2,0.6,fk); // line weight by distance: heavier up close, hairline on the far side of the planet
  float id[5],dp[5],ct[5];vec3 nr[5];
  for(int i=0;i<5;i++){vec4 n=texture(tI,vUv+px*dirs[i]);dp[i]=lin(1.-n.r);nr[i]=decN(n.gb);ct[i]=n.a;id[i]=abs(texture(tC,vUv+px*dirs[i]).a);}
  float dI=length(vec2(id[1]-id[2],id[3]-id[4]));
  float dD=length(vec2(dp[1]-dp[2],dp[3]-dp[4]))/max(dp[0],0.02);
  float dN=length(vec2(distance(nr[1],nr[0])-distance(nr[2],nr[0]),distance(nr[3],nr[0])-distance(nr[4],nr[0])));
+ float d0=min(dp[0],min(min(dp[1],dp[2]),min(dp[3],dp[4])));float fk=fit(d0,0.09,0.16); // nearest surface around this pixel; distance thins lines by fading (a px rescale on the nearest-filtered G-buffer only stepped)
  float e=max(max(fit(dI,0.003,0.01)*(1.-0.75*fk),fit(dD,0.06,0.12)),fit(dN,0.45,0.7)*(1.-0.6*fk)); // far away only silhouettes survive; interior id/normal lines (leaf lobes, rock stripes) drop out instead of turning to noise
  float c=ct[0];float m=dp[0];for(int i=1;i<5;i++)if(dp[i]<m){m=dp[i];c=ct[i];} // the FRONT surface decides whether its silhouette is inked (was max(): ground pixels inked the grass blades in front of them)
  e*=c*(1.-0.45*fk);
@@ -484,11 +483,13 @@ void main(){vec2 px=2.0*(res.y/800.)/res;
   col=mix(uSkyHor,uSkyTop,smoothstep(0.15,0.95,t));
   float st=step(0.996,h2(floor(su*180.)))*uNightK*smoothstep(0.3,0.8,t);col+=st;
   vec2 cp=su*vec2(1.7,3.4)+vec2(time*0.012,0.);float cb=0.12*smoothstep(0.45,0.95,t)-0.03; // fewer, broader, flatter puffs; most of the sky stays open
-  float cl=fbm(cp)+cb,below=fbm(cp-vec2(0.,0.16))+cb; // cloud continues underneath -> sunlit upper body; cloud edge below -> flat shaded underside
-  float body=smoothstep(0.64,0.655,cl),lit=body*smoothstep(0.6,0.66,below);
-  col=mix(col,mix(uCloud,uSkyTop,0.3),body);col=mix(col,uCloud,lit);}
- col=mix(col,mix(uLine,col*0.42,0.3),clamp(e,0.,1.)); // line picks up a little of the local colour instead of one flat grey
- if(!sky)col=mix(col,uSkyHor,fit(d0,0.06,0.14)*0.42); // aerial perspective: the far side of the planet sinks into the horizon colour
+  float cl=fbm(cp)+cb,below=0.;if(cl>0.62)below=fbm(cp-vec2(0.,0.16))+cb; // cloud continues underneath -> sunlit upper body; cloud edge below -> flat shaded underside
+  float wc=fwidth(cl),wb=fwidth(below);float body=smoothstep(0.65-wc,0.65+wc,cl),lit=body*smoothstep(0.63-wb,0.63+wb,below); // hard two-tone, ~1px AA
+  col=mix(col,mix(uCloud,uSkyTop,0.45),body);col=mix(col,uCloud,lit);}
+ vec3 hz=mix(uSkyHor,uSkyTop,smoothstep(0.15,0.95,vUv.y));bool glow=c0.a<0.; // haze toward the sky actually behind the pixel; glow sources (markers, lit windows, lamps) punch through
+ if(!sky&&!glow)col=mix(col,hz,fit(dp[0],0.10,0.17)*0.42); // aerial perspective: surface sinks by its own depth
+ vec3 lc=mix(uLine,col*0.42,0.3);if(!sky)lc=mix(lc,hz,fit(d0,0.10,0.17)*0.42); // ink sinks by the nearest depth, same on both sides of a silhouette
+ col=mix(col,lc,clamp(e,0.,1.));
  col=texture(tL,clamp(col,0.,1.)*(32./33.)+0.5/33.).rgb;
  col+=texture(tB,vUv).rgb*uGlow*(1.-0.6*e);
  o=vec4(col,1.);}`});
@@ -558,7 +559,7 @@ function step(dt){for(const tm of [...timers])if(T>=tm.t){timers.splice(timers.i
   post.uniforms.uGlow.value=GLOW*Math.max(0.35,ss(0.7,1.7,t));}{const w=palRGB(S.winlight,1.5);G.uWarm.value.set('#ffcf6a');}
  for(const [k,u] of [[S.skytop,'uSkyTop'],[S.skyhor,'uSkyHor'],[S.cloud,'uCloud'],[S.outline,'uLine']])setP3([k,post.uniforms[u].value]);
  {const t=todT(PH);const bh=Math.sin(Math.PI*ss(1,2,t))*0.6;post.uniforms.uSkyTop.value.lerp(new THREE.Vector3(...BH_TOP),bh);post.uniforms.uSkyHor.value.lerp(new THREE.Vector3(...BH_HOR),bh);}}
- else{DN.applyTimeOfDay(scene,todT(PH));for(const u of ["uSkyTop","uSkyHor","uCloud","uLine"]){const v=post.uniforms[u].value;v.set(Math.pow(v.x,1/2.2),Math.pow(v.y,1/2.2),Math.pow(v.z,1/2.2));}post.uniforms.uCloud.value.multiplyScalar(1-0.5*G.uNight.value);} // daynight.js gives linear colours; our sky/line maths runs in sRGB
+ else{DN.applyTimeOfDay(scene,todT(PH));G.uNight.value=nf; /* game.js owns the night term: full night through the 2.2 hold */for(const u of ["uSkyTop","uSkyHor","uCloud","uLine"]){const v=post.uniforms[u].value;v.set(Math.pow(v.x,1/2.2),Math.pow(v.y,1/2.2),Math.pow(v.z,1/2.2));}post.uniforms.uCloud.value.multiplyScalar(1-0.5*G.uNight.value);} // daynight.js gives linear colours; our sky/line maths runs in sRGB
  // v5: windows guaranteed on by deep night (todT>=1.3) whatever the switch schedule did; delivered houses stay lit (uLit)
  if(nightEnded&&todT(PH)>=0.8&&PH<2)nightEnded=false;{const t=todT(PH);for(const h of houses){const u=h.userData.win.userData.u;if(h.userData.done&&t>=0.8&&!nightEnded)u.uLit.value=1;}}
  sun.intensity=[2.4,2.0,0.7][Math.floor(PH)]*(1-(PH%1))+[2.0,0.7,2.4][Math.floor(PH)]*(PH%1);hemi.intensity=0.5;
